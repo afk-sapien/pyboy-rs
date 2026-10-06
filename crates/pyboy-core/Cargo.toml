@@ -1,0 +1,10 @@
+[package]
+name = "pyboy-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Native Rust translation of PyBoy emulator components"
+
+[features]
+profile = []

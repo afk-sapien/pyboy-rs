@@ -1,0 +1,332 @@
+{
+  "description": "Paired component and end-to-end measurements before and after the renderer optimization",
+  "cpu_model": "Intel Core i7-10700K",
+  "cpu_affinity": 7,
+  "frames_per_trial": 6000,
+  "repeats": 5,
+  "profile_mode": "Repeat all 144 background scanlines, then all sprite scanlines, on the static frame-600 checkpoint",
+  "limitations": "Component timings are isolated static rendering workloads, not a sampled profile of dynamic gameplay",
+  "rom_sha256": "5ca7ba01642a3b27b0cc0b5349b52792795b62d3ed977e98a09390659af96b7b",
+  "checkpoint_sha256": "95ff5d5bbbb3810a4c3e21b2a230be512d58e6e30593f563bcc49911bc5ad2d7",
+  "before_binary_sha256": "4fc8c00521b0aa9d712f3485a5a04c7c9e21438901e2425abb409be14ca78414",
+  "after_binary_sha256": "8ce2b6aee5096c85822896af47b9d805e626819fd17500b39889c264efa1078a",
+  "samples": [
+    {
+      "version": "after",
+      "mode": "render",
+      "repeat": 1,
+      "seconds": 0.446261262
+    },
+    {
+      "version": "before",
+      "mode": "render",
+      "repeat": 1,
+      "seconds": 0.96497073
+    },
+    {
+      "version": "after",
+      "mode": "audio",
+      "repeat": 2,
+      "seconds": 0.562633764
+    },
+    {
+      "version": "before",
+      "mode": "audio",
+      "repeat": 2,
+      "seconds": 1.065611898
+    },
+    {
+      "version": "after",
+      "mode": "audio",
+      "repeat": 1,
+      "seconds": 0.554369351
+    },
+    {
+      "version": "before",
+      "mode": "audio",
+      "repeat": 1,
+      "seconds": 1.077440427
+    },
+    {
+      "version": "after",
+      "mode": "render",
+      "repeat": 2,
+      "seconds": 0.440124332
+    },
+    {
+      "version": "before",
+      "mode": "render",
+      "repeat": 2,
+      "seconds": 0.956917483
+    },
+    {
+      "version": "before",
+      "mode": "audio",
+      "repeat": 0,
+      "seconds": 1.070828745
+    },
+    {
+      "version": "after",
+      "mode": "audio",
+      "repeat": 0,
+      "seconds": 0.558184356
+    },
+    {
+      "version": "after",
+      "mode": "profile",
+      "repeat": 3,
+      "background_seconds": 0.124825518,
+      "sprites_seconds": 0.049927888
+    },
+    {
+      "version": "before",
+      "mode": "profile",
+      "repeat": 3,
+      "background_seconds": 0.612185802,
+      "sprites_seconds": 0.068291511
+    },
+    {
+      "version": "after",
+      "mode": "render",
+      "repeat": 3,
+      "seconds": 0.442188689
+    },
+    {
+      "version": "before",
+      "mode": "render",
+      "repeat": 3,
+      "seconds": 0.95540977
+    },
+    {
+      "version": "after",
+      "mode": "audio",
+      "repeat": 4,
+      "seconds": 0.5594066
+    },
+    {
+      "version": "before",
+      "mode": "audio",
+      "repeat": 4,
+      "seconds": 1.450319942
+    },
+    {
+      "version": "before",
+      "mode": "profile",
+      "repeat": 0,
+      "background_seconds": 0.611443597,
+      "sprites_seconds": 0.067137006
+    },
+    {
+      "version": "after",
+      "mode": "profile",
+      "repeat": 0,
+      "background_seconds": 0.123579078,
+      "sprites_seconds": 0.049183353
+    },
+    {
+      "version": "after",
+      "mode": "profile",
+      "repeat": 4,
+      "background_seconds": 0.122254305,
+      "sprites_seconds": 0.050441628
+    },
+    {
+      "version": "before",
+      "mode": "profile",
+      "repeat": 4,
+      "background_seconds": 0.611354002,
+      "sprites_seconds": 0.067217398
+    },
+    {
+      "version": "after",
+      "mode": "render",
+      "repeat": 4,
+      "seconds": 0.446559951
+    },
+    {
+      "version": "before",
+      "mode": "render",
+      "repeat": 4,
+      "seconds": 0.959212814
+    },
+    {
+      "version": "after",
+      "mode": "profile",
+      "repeat": 1,
+      "background_seconds": 0.123327223,
+      "sprites_seconds": 0.049778363
+    },
+    {
+      "version": "before",
+      "mode": "profile",
+      "repeat": 1,
+      "background_seconds": 0.612105703,
+      "sprites_seconds": 0.067380263
+    },
+    {
+      "version": "before",
+      "mode": "render",
+      "repeat": 0,
+      "seconds": 0.960003289
+    },
+    {
+      "version": "after",
+      "mode": "render",
+      "repeat": 0,
+      "seconds": 0.443790071
+    },
+    {
+      "version": "after",
+      "mode": "profile",
+      "repeat": 2,
+      "background_seconds": 0.126955899,
+      "sprites_seconds": 0.050355521
+    },
+    {
+      "version": "before",
+      "mode": "profile",
+      "repeat": 2,
+      "background_seconds": 0.611953276,
+      "sprites_seconds": 0.068024893
+    },
+    {
+      "version": "after",
+      "mode": "audio",
+      "repeat": 3,
+      "seconds": 0.552719774
+    },
+    {
+      "version": "before",
+      "mode": "audio",
+      "repeat": 3,
+      "seconds": 1.058769154
+    }
+  ],
+  "python_profile": {
+    "before": {
+      "frames": 6000,
+      "total_seconds": 1.1921102190000001,
+      "functions": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'run_frame' of 'pyboy_rs._native.Machine' objects>",
+          "calls": 6000,
+          "internal_seconds": 1.103969592,
+          "cumulative_seconds": 1.103969592
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'screen' of 'pyboy_rs._native.Machine' objects>",
+          "calls": 6000,
+          "internal_seconds": 0.031412349,
+          "cumulative_seconds": 0.031412349
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'audio_buffer' of 'pyboy_rs._native.Machine' objects>",
+          "calls": 6000,
+          "internal_seconds": 0.001905194,
+          "cumulative_seconds": 0.001905194
+        },
+        {
+          "file": "pyboy.py",
+          "line": 232,
+          "function": "tick",
+          "calls": 6000,
+          "internal_seconds": 0.014245024,
+          "cumulative_seconds": 1.1920946220000002
+        },
+        {
+          "file": "pyboy.py",
+          "line": 97,
+          "function": "_refresh",
+          "calls": 6000,
+          "internal_seconds": 0.0302531,
+          "cumulative_seconds": 0.061665449000000004
+        },
+        {
+          "file": "pyboy.py",
+          "line": 130,
+          "function": "_refresh",
+          "calls": 6000,
+          "internal_seconds": 0.003379548,
+          "cumulative_seconds": 0.005284742
+        },
+        {
+          "file": "pyboy.py",
+          "line": 200,
+          "function": "_refresh",
+          "calls": 6000,
+          "internal_seconds": 0.0032550260000000003,
+          "cumulative_seconds": 0.070205217
+        }
+      ]
+    },
+    "after": {
+      "frames": 6000,
+      "total_seconds": 0.6076154550000001,
+      "functions": [
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'run_frame' of 'pyboy_rs._native.Machine' objects>",
+          "calls": 6000,
+          "internal_seconds": 0.5701938750000001,
+          "cumulative_seconds": 0.5701938750000001
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'copy_screen' of 'pyboy_rs._native.Machine' objects>",
+          "calls": 6000,
+          "internal_seconds": 0.014599147000000002,
+          "cumulative_seconds": 0.014599147000000002
+        },
+        {
+          "file": "~",
+          "line": 0,
+          "function": "<method 'copy_audio_buffer' of 'pyboy_rs._native.Machine' objects>",
+          "calls": 6000,
+          "internal_seconds": 0.0016585850000000002,
+          "cumulative_seconds": 0.0016585850000000002
+        },
+        {
+          "file": "pyboy.py",
+          "line": 233,
+          "function": "tick",
+          "calls": 6000,
+          "internal_seconds": 0.01210601,
+          "cumulative_seconds": 0.607602433
+        },
+        {
+          "file": "pyboy.py",
+          "line": 98,
+          "function": "_refresh",
+          "calls": 6000,
+          "internal_seconds": 0.001600477,
+          "cumulative_seconds": 0.016199624
+        },
+        {
+          "file": "pyboy.py",
+          "line": 131,
+          "function": "_refresh",
+          "calls": 6000,
+          "internal_seconds": 0.001235186,
+          "cumulative_seconds": 0.0028937710000000003
+        },
+        {
+          "file": "pyboy.py",
+          "line": 201,
+          "function": "_refresh",
+          "calls": 6000,
+          "internal_seconds": 0.0027524370000000004,
+          "cumulative_seconds": 0.021845832000000003
+        }
+      ]
+    }
+  },
+  "python_profile_note": "One cProfile run per version, with instrumentation overhead, separate from the uninstrumented timing suite"
+}

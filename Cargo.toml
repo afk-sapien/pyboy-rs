@@ -1,0 +1,14 @@
+[workspace]
+members = ["crates/pyboy-core", "crates/pyboy-python"]
+default-members = ["crates/pyboy-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "LGPL-3.0-only"
+rust-version = "1.85"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,490 @@
+{
+  "frames": 12000,
+  "repeats": 5,
+  "cpu": 7,
+  "samples": [
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 2,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.269926461
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 2,
+      "backend": "scheduler_only",
+      "seconds": 1.334519411
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 0,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.465306254
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 0,
+      "backend": "scheduler_only",
+      "seconds": 0.515026733
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 1,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.418385646
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 1,
+      "backend": "scheduler_only",
+      "seconds": 1.498795995
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 1,
+      "backend": "scheduler_only",
+      "seconds": 0.511920609
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 1,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.463365321
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 3,
+      "backend": "scheduler_only",
+      "seconds": 0.738195598
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 3,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.732820111
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 2,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.88479537
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 2,
+      "backend": "scheduler_only",
+      "seconds": 0.92993497
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 4,
+      "backend": "scheduler_only",
+      "seconds": 1.109890459
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 4,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.995976405
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 0,
+      "backend": "scheduler_only",
+      "seconds": 1.104396056
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 0,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.001108691
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 3,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.987270369
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 3,
+      "backend": "scheduler_only",
+      "seconds": 1.109953084
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 1,
+      "backend": "scheduler_only",
+      "seconds": 1.335280716
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 1,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.249155119
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 4,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.456865981
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 4,
+      "backend": "scheduler_only",
+      "seconds": 0.519773911
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 2,
+      "backend": "scheduler_only",
+      "seconds": 1.477605282
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 2,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.40064626
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 4,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.873277528
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 4,
+      "backend": "scheduler_only",
+      "seconds": 0.923085095
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 3,
+      "backend": "scheduler_only",
+      "seconds": 0.925453326
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 3,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.880671801
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 0,
+      "backend": "scheduler_only",
+      "seconds": 0.921869992
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 0,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.878731522
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 3,
+      "backend": "scheduler_only",
+      "seconds": 1.328974141
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 3,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.26142629
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 2,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.460007413
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 2,
+      "backend": "scheduler_only",
+      "seconds": 0.515874019
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 0,
+      "backend": "scheduler_only",
+      "seconds": 1.46377638
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 0,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.429785009
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 1,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.691867514
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 1,
+      "backend": "scheduler_only",
+      "seconds": 0.730990504
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 4,
+      "backend": "scheduler_only",
+      "seconds": 0.741326613
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 4,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.692210106
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 3,
+      "backend": "scheduler_only",
+      "seconds": 1.467851895
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 3,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.405001121
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 0,
+      "backend": "scheduler_only",
+      "seconds": 0.734221981
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 0,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.689919094
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 4,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.244753571
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 4,
+      "backend": "scheduler_only",
+      "seconds": 1.327944983
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 4,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.40615339
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "repeat": 4,
+      "backend": "scheduler_only",
+      "seconds": 1.472430293
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 3,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.454504324
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "repeat": 3,
+      "backend": "scheduler_only",
+      "seconds": 0.516576705
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 2,
+      "backend": "scheduler_only",
+      "seconds": 0.721621915
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "repeat": 2,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.680468216
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 1,
+      "backend": "scheduler_only",
+      "seconds": 1.105937459
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 1,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.987413654
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 1,
+      "backend": "scheduler_only",
+      "seconds": 0.934698374
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "repeat": 1,
+      "backend": "scheduler_and_sound",
+      "seconds": 0.883464002
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 0,
+      "backend": "scheduler_only",
+      "seconds": 1.319026223
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "repeat": 0,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.254211386
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 2,
+      "backend": "scheduler_only",
+      "seconds": 1.102985105
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "repeat": 2,
+      "backend": "scheduler_and_sound",
+      "seconds": 1.004693623
+    }
+  ],
+  "summary": [
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "batch",
+      "scheduler_only": 0.734221981,
+      "scheduler_and_sound": 0.691867514,
+      "throughput_ratio": 1.061217597506681
+    },
+    {
+      "scenario": "red-navigation-20260914",
+      "mode": "audio",
+      "scheduler_only": 1.328974141,
+      "scheduler_and_sound": 1.254211386,
+      "throughput_ratio": 1.0596093735350607
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "batch",
+      "scheduler_only": 0.925453326,
+      "scheduler_and_sound": 0.880671801,
+      "throughput_ratio": 1.050849277732239
+    },
+    {
+      "scenario": "red-partial-training-20260915",
+      "mode": "audio",
+      "scheduler_only": 1.472430293,
+      "scheduler_and_sound": 1.40615339,
+      "throughput_ratio": 1.0471334802243728
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "batch",
+      "scheduler_only": 0.515874019,
+      "scheduler_and_sound": 0.460007413,
+      "throughput_ratio": 1.1214471863304516
+    },
+    {
+      "scenario": "league-baseline",
+      "mode": "audio",
+      "scheduler_only": 1.105937459,
+      "scheduler_and_sound": 0.995976405,
+      "throughput_ratio": 1.1104052801331172
+    }
+  ],
+  "method": "Sequential randomized native release trials, scheduler fix in both builds, sound optimization only in the after build. Warm 120 frames, restore checkpoint, replay 12000 frames. Exact final state, RGBA, valid audio, and gameplay trace agreement checked outside timer for each pair.",
+  "checkpoints": [
+    {
+      "label": "red-navigation-20260914",
+      "sha256": "2ad58c48e8606086648ae7922fbf0a2a6b5580295d3615bf0b58f56af5345d23"
+    },
+    {
+      "label": "red-partial-training-20260915",
+      "sha256": "23b7b8aabe23f4083c6c26356ac1c4e4f059de546bade20ec89daeb7a4f94354"
+    },
+    {
+      "label": "league-baseline",
+      "sha256": "ec96aa965584ddfa1639f1e02c750480f1a69d014c88a2087bed1369bc6c992c"
+    }
+  ],
+  "binary_sha256": {
+    "scheduler_only": "2919435045cc5c66670de10ca8d209835b965039bf3ede7fca30b38df5f1c0be",
+    "scheduler_and_sound": "359fe54a1aca307aebad1a1c15460efdc28cf2751de4cfd586132f0a1228fc40"
+  }
+}

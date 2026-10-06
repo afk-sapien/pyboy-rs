@@ -1,0 +1,139 @@
+"""Translate the pinned opcode AST without importing or executing upstream code."""
+
+import ast
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "reference/pyboy-2.7.0/pyboy/core/opcodes.py"
+OUTPUT = ROOT / "crates/pyboy-core/src/opcodes.rs"
+OPERATORS = {
+    ast.Add: "+", ast.Sub: "-", ast.BitAnd: "&", ast.BitOr: "|",
+    ast.BitXor: "^", ast.LShift: "<<", ast.RShift: ">>",
+    ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.Gt: ">",
+}
+BOOL_FIELDS = {"cpu.halted", "cpu.bail", "cpu.interrupt_master_enable", "bus.cgb()"}
+
+
+def expr(node):
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool):
+            return "1" if node.value else "0"
+        if isinstance(node.value, int):
+            return str(node.value)
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        name = ast.unparse(node)
+        if name == "cpu.mb.cgb":
+            return "i64::from(bus.cgb())"
+        if name.startswith("cpu.mb."):
+            return name.replace("cpu.mb.", "bus.")
+        name = name.lower()
+        return f"i64::from({name})" if name in BOOL_FIELDS else name
+    if isinstance(node, ast.BinOp):
+        return f"({expr(node.left)} {OPERATORS[type(node.op)]} {expr(node.right)})"
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Invert):
+        return f"(!{expr(node.operand)})"
+    if isinstance(node, ast.Compare):
+        assert len(node.ops) == 1
+        return f"i64::from({expr(node.left)} {OPERATORS[type(node.ops[0])]} {expr(node.comparators[0])})"
+    if isinstance(node, ast.IfExp):
+        return f"(if {expr(node.test)} != 0 {{ {expr(node.body)} }} else {{ {expr(node.orelse)} }})"
+    if isinstance(node, ast.Call):
+        name = ast.unparse(node.func)
+        if name == "logger.critical":
+            return "()"
+        args = [expr(arg) for arg in node.args]
+        if name in {"cpu.mb.getitem", "cpu.mb.getitem_io_ports"}:
+            return f"i64::from(bus.read(({args[0]}) as u16, cpu))"
+        if name in {"cpu.mb.setitem", "cpu.mb.setitem_io_ports"}:
+            return f"bus.write(({args[0]}) as u16, ({args[1]}) as u8, cpu)"
+        if name == "cpu.mb.switch_speed":
+            return "bus.switch_speed(cpu)"
+    raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
+
+def statements(nodes, locals_seen):
+    lines = []
+    for node in nodes:
+        if isinstance(node, ast.Assign):
+            assert len(node.targets) == 1
+            target = node.targets[0]
+            name = ast.unparse(target).lower()
+            value = expr(node.value)
+            if name == value:
+                continue
+            if name == "cpu.hl" and any(isinstance(child, ast.Call) for child in ast.walk(node.value)):
+                # Keep the old register alive across the mutable memory bus call.
+                lines.append("let previous_hl = cpu.hl;")
+                value = value.replace("cpu.hl", "previous_hl")
+            if name.startswith("cpu.mb.breakpoint_"):
+                lines.append(f"bus.{name.rsplit('.', 1)[1]}(({value}) != 0);")
+                continue
+            if name in BOOL_FIELDS:
+                value = f"({value}) != 0"
+            if isinstance(target, ast.Name) and name not in locals_seen:
+                locals_seen.add(name)
+                lines.append(f"let mut {name}: i64 = {value};")
+            else:
+                lines.append(f"{name} = {value};")
+        elif isinstance(node, ast.AugAssign):
+            name = ast.unparse(node.target).lower()
+            lines.append(f"{name} {OPERATORS[type(node.op)]}= {expr(node.value)};")
+        elif isinstance(node, ast.If):
+            lines.append(f"if {expr(node.test)} != 0 {{")
+            # Upstream locals first assigned inside branches are not read outside.
+            lines.extend(statements(node.body, locals_seen.copy()))
+            if node.orelse:
+                lines.append("} else {")
+                lines.extend(statements(node.orelse, locals_seen.copy()))
+            lines.append("}")
+        elif isinstance(node, ast.Expr):
+            lines.append(expr(node.value) + ";")
+        elif isinstance(node, ast.Return):
+            lines.append("return;")
+        else:
+            raise ValueError(f"Unsupported statement: {ast.dump(node)}")
+    return lines
+
+
+def main():
+    manifest = json.loads((ROOT / "reference/manifest.json").read_text())
+    expected = manifest["files"]["pyboy/core/opcodes.py"]
+    if hashlib.sha256(SOURCE.read_bytes()).hexdigest() != expected:
+        raise ValueError("Pinned opcode source digest changed")
+    tree = ast.parse(SOURCE.read_text())
+    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    lengths = next(n.value.args[1] for n in tree.body if isinstance(n, ast.Assign)
+                   and ast.unparse(n.targets[0]) == "OPCODE_LENGTHS")
+    out = [
+        "// Generated by tools/generate_opcodes.py from PyBoy 2.7.0.",
+        "// Original project: https://github.com/Baekalfen/PyBoy",
+        "// SPDX-License-Identifier: LGPL-3.0-only",
+        "#![allow(unused_parens, unused_mut, unused_assignments, unused_variables, clippy::all)]",
+        "use crate::cpu::{Bus, Cpu};",
+        "const FLAGC: i64 = 4;", "const FLAGH: i64 = 5;",
+        "const FLAGN: i64 = 6;", "const FLAGZ: i64 = 7;",
+        f"pub const OPCODE_LENGTHS: [u8; 512] = {ast.literal_eval(lengths)!r};",
+        "pub fn execute<B: Bus>(cpu: &mut Cpu, bus: &mut B, opcode: u16, v: i64) {",
+        "match opcode {",
+    ]
+    dispatch = functions["execute_opcode"].body[0]
+    while isinstance(dispatch, ast.If):
+        opcode = ast.literal_eval(dispatch.test.comparators[0])
+        call = dispatch.body[0].value
+        out.append(f"0x{opcode:03x} => {{")
+        out.extend(statements(functions[call.func.id].body, {"v"}))
+        out.append("}")
+        dispatch = dispatch.orelse[0] if dispatch.orelse else None
+    out.extend(["_ => {}", "}", "}", ""])
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT.write_text("\n".join(out))
+    subprocess.run(["rustfmt", "--edition", "2024", str(OUTPUT)], check=True)
+
+
+if __name__ == "__main__":
+    main()

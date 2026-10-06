@@ -1,0 +1,335 @@
+"""Headless PyBoy API backed by native Rust emulation."""
+
+import heapq
+import operator
+import time
+from pathlib import Path
+
+from ._native import Machine
+
+BUTTONS = ("up", "down", "right", "left", "a", "b", "select", "start")
+
+
+def _read_source(source):
+    if hasattr(source, "read"):
+        return source.read()
+    return Path(source).read_bytes()
+
+
+class Memory:
+    def __init__(self, machine):
+        self._machine = machine
+
+    def __iter__(self):
+        raise TypeError("Request a specific memory range instead of iterating the address space")
+
+    @staticmethod
+    def _key(key):
+        bank, address = key if isinstance(key, tuple) else (None, key)
+        if bank is not None:
+            bank = operator.index(bank)
+        if isinstance(address, slice):
+            if address.start is None or address.stop is None:
+                raise ValueError("Memory slices require explicit start and stop addresses")
+            start, stop = operator.index(address.start), operator.index(address.stop)
+            step = 1 if address.step is None else operator.index(address.step)
+            if not 0 <= start < stop <= 65536 or step <= 0:
+                raise ValueError("Invalid memory slice")
+            return bank, range(start, stop, step), False
+        address = operator.index(address)
+        if not 0 <= address < 65536:
+            raise IndexError("Memory address out of bounds")
+        return bank, range(address, address + 1), True
+
+    def __getitem__(self, key):
+        bank, addresses, single = self._key(key)
+        if bank is None:
+            if single:
+                return self._machine.read(addresses.start)
+            return list(self._machine.read_range(addresses.start, addresses.stop, addresses.step))
+        values = [self._machine.read_bank(bank, i) for i in addresses]
+        return values[0] if single else values
+
+    def __setitem__(self, key, value):
+        bank, addresses, single = self._key(key)
+        if isinstance(value, int):
+            values = [value] * len(addresses)
+        elif single:
+            raise ValueError("A single address requires an integer value")
+        else:
+            values = list(value)
+        if len(values) != len(addresses) or any(not isinstance(v, int) or not 0 <= v <= 255 for v in values):
+            raise ValueError("Expected one byte per selected address")
+        if bank is not None:
+            for i in addresses:
+                self._machine.read_bank(bank, i)
+        for address, byte in zip(addresses, values):
+            if bank is None:
+                self._machine.write(address, byte)
+            else:
+                self._machine.write_bank(bank, address, byte)
+
+
+class Registers:
+    def __init__(self, machine):
+        object.__setattr__(self, "_machine", machine)
+
+    def __getattr__(self, name):
+        if name not in ("A", "F", "B", "C", "D", "E", "HL", "SP", "PC"):
+            raise AttributeError(name)
+        return self._machine.registers()[name]
+
+    def __setattr__(self, name, value):
+        if name not in ("A", "F", "B", "C", "D", "E", "HL", "SP", "PC"):
+            raise AttributeError(name)
+        self._machine.set_register(name, operator.index(value) & (65535 if name in ("HL", "SP", "PC") else 255))
+
+
+class Screen:
+    raw_buffer_dims = (144, 160)
+    raw_buffer_format = "RGBA"
+
+    def __init__(self, machine):
+        self._machine = machine
+        self._buffer = bytearray(160 * 144 * 4)
+        self.raw_buffer = memoryview(self._buffer)
+        self._pixels = self.raw_buffer.cast("I")
+
+    def _refresh(self):
+        self._machine.copy_screen(self._pixels)
+
+    @property
+    def ndarray(self):
+        import numpy as np
+        return np.frombuffer(self._buffer, dtype=np.uint8).reshape(144, 160, 4)
+
+    @property
+    def image(self):
+        from PIL import Image
+        return Image.frombytes("RGBA", (160, 144), bytes(self._buffer))
+
+    @property
+    def tilemap_position_list(self):
+        return self._machine.scanline_parameters()
+
+    @property
+    def tilemap_position(self):
+        m = self._machine
+        return ((m.read(0xff43), m.read(0xff42)), (m.read(0xff4b) - 7, m.read(0xff4a)))
+
+
+class Sound:
+    raw_buffer_format = "b"
+
+    def __init__(self, machine, sample_rate):
+        self._machine = machine
+        self.sample_rate = sample_rate
+        self.raw_buffer_length = (sample_rate // 60 + 1) * 2
+        self._buffer = bytearray(self.raw_buffer_length)
+        self.raw_buffer = memoryview(self._buffer).cast("b")
+
+    def _refresh(self):
+        self._machine.copy_audio_buffer(self._buffer)
+
+    @property
+    def raw_buffer_head(self):
+        return self._machine.audio_head
+
+    @property
+    def ndarray(self):
+        import numpy as np
+        return np.frombuffer(self._buffer, dtype=np.int8).reshape(-1, 2)[:self.raw_buffer_head // 2]
+
+
+class PyBoy:
+    """Run DMG and CGB games in Rust through a headless PyBoy-compatible API.
+
+    Desktop plugins and game wrappers are outside this initial API surface.
+    """
+
+    def __init__(self, gamerom, *, window="null", bootrom=None, cgb=None,
+                 sound_emulated=True, sound_sample_rate=48000, sound_volume=100,
+                 ram_file=None, rtc_file=None, symbols=None, log_level="WARNING",
+                 color_palette=(0xffffff, 0x999999, 0x555555, 0), **kwargs):
+        if window not in ("null", "headless"):
+            raise NotImplementedError("This port currently provides a headless window only")
+        if kwargs:
+            raise TypeError("Unsupported options: " + ", ".join(sorted(kwargs)))
+        if rtc_file is not None:
+            raise NotImplementedError("Separate RTC file I/O is not exposed yet")
+        self._machine = Machine(_read_source(gamerom), None if bootrom is None else _read_source(bootrom),
+                                cgb, sound_emulated, sound_sample_rate)
+        self._machine.set_palette(color_palette)
+        self.memory = Memory(self._machine)
+        self.register_file = Registers(self._machine)
+        self.screen = Screen(self._machine)
+        self.sound = Sound(self._machine, sound_sample_rate)
+        self._ram_file = ram_file
+        if ram_file is not None and self._machine.battery:
+            data = ram_file.read()
+            if data:
+                self._machine.load_cartridge_ram(data)
+        self._events = []
+        self._queued_input = []
+        self._hooks = {}
+        self._symbols = {}
+        self.stopped = False
+        self.paused = False
+        self._quitting = False
+        self._in_tick = False
+        self.target_emulationspeed = 1
+        if symbols is not None:
+            for line in Path(symbols).read_text().splitlines():
+                fields = line.split()
+                if len(fields) >= 2 and ":" in fields[0]:
+                    bank, address = fields[0].split(":", 1)
+                    self._symbols[fields[1]] = (int(bank, 16), int(address, 16))
+        self._refresh()
+
+    @property
+    def frame_count(self):
+        return self._machine.frame_count
+
+    @property
+    def cartridge_title(self):
+        return self._machine.cartridge_title
+
+    @property
+    def cgb(self):
+        return self._machine.cgb
+
+    def _refresh(self):
+        self.screen._refresh()
+        self.sound._refresh()
+
+    def set_emulation_speed(self, target_speed):
+        if not isinstance(target_speed, (int, float)) or target_speed < 0:
+            raise ValueError("Emulation speed must be nonnegative")
+        self.target_emulationspeed = target_speed
+
+    def button_press(self, button):
+        self.send_input(BUTTONS.index(button) + 1)
+
+    def button_release(self, button):
+        self.send_input(BUTTONS.index(button) + 9)
+
+    def button(self, button, delay=1):
+        if not isinstance(delay, int) or delay <= 0:
+            raise ValueError("Button delay must be a positive integer")
+        self.button_press(button)
+        self.send_input(BUTTONS.index(button) + 9, delay)
+
+    def send_input(self, event, delay=0):
+        event = int(event)
+        if not 0 <= event <= 16:
+            raise NotImplementedError("Only quit and button events are supported")
+        if not isinstance(delay, int) or delay < 0:
+            raise ValueError("Delay must be a nonnegative integer")
+        if delay:
+            heapq.heappush(self._queued_input, (self.frame_count + delay, event))
+        else:
+            self._events.append(event)
+
+    def tick(self, count=1, render=True, sound=True):
+        count = operator.index(count)
+        if count < 0:
+            raise ValueError("Frame count must be nonnegative")
+        if self.stopped or count == 0:
+            return False
+        if self._in_tick:
+            raise RuntimeError("Cannot recursively tick the same emulator from its own hook")
+        start = time.perf_counter()
+        self._in_tick = True
+        try:
+            for index in range(count):
+                for event in self._events:
+                    if event == 0:
+                        self._quitting = True
+                    else:
+                        self._machine.button(BUTTONS[(event - 1) % 8], event <= 8)
+                self._events.clear()
+                if not self.paused:
+                    last = index == count - 1
+                    self._machine.begin_frame(bool(render and last), bool(sound and last))
+                    while not self._machine.run_frame():
+                        self._handle_hook()
+                while self._queued_input and self._queued_input[0][0] == self.frame_count:
+                    self._events.append(heapq.heappop(self._queued_input)[1])
+            self._refresh()
+        finally:
+            self._in_tick = False
+        if self.target_emulationspeed:
+            delay = count / (60 * self.target_emulationspeed) - (time.perf_counter() - start)
+            if delay > 0:
+                time.sleep(delay)
+        return not self._quitting
+
+    def symbol_lookup(self, symbol):
+        return self._symbols[symbol]
+
+    def _location(self, bank, address):
+        if isinstance(address, str):
+            if bank is not None:
+                raise ValueError("A symbol lookup requires bank=None")
+            return self.symbol_lookup(address)
+        return operator.index(bank), operator.index(address)
+
+    def hook_register(self, bank, addr, callback, context):
+        bank, addr = self._location(bank, addr)
+        if not callable(callback):
+            raise TypeError("Hook callback must be callable")
+        if (bank, addr) in self._hooks:
+            raise ValueError("Hook already registered")
+        original = self.memory[bank, addr]
+        if original == 0xdb:
+            raise ValueError("Cannot hook an existing breakpoint opcode")
+        self.memory[bank, addr] = 0xdb
+        self._hooks[bank, addr] = (original, callback, context)
+
+    def hook_deregister(self, bank, addr):
+        key = self._location(bank, addr)
+        original, _, _ = self._hooks.pop(key)
+        self.memory[key] = original
+
+    def _handle_hook(self):
+        key = (self._machine.current_bank(), self.register_file.PC)
+        if key not in self._hooks:
+            raise RuntimeError(f"Unregistered breakpoint at {key}")
+        original, callback, context = self._hooks[key]
+        self.memory[key] = original
+        try:
+            callback(context)
+            self._machine.step_instruction()
+        finally:
+            self._machine.clear_breakpoint()
+            if key in self._hooks:
+                self.memory[key] = 0xdb
+
+    def save_state(self, file_like_object):
+        file_like_object.write(self._machine.save_state())
+
+    def load_state(self, file_like_object):
+        self._machine.load_state(file_like_object.read())
+        self._refresh()
+
+    def _serial(self):
+        return self._machine.serial_output()
+
+    def stop(self, save=True, ram_file=None, rtc_file=None):
+        if rtc_file is not None:
+            raise NotImplementedError("Separate RTC file I/O is not exposed yet")
+        if self.stopped:
+            return
+        stream = self._ram_file if ram_file is None else ram_file
+        if save and stream is not None and self._machine.battery:
+            stream.seek(0)
+            stream.write(self._machine.cartridge_ram())
+            stream.truncate()
+            stream.flush()
+        self.stopped = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.stop()

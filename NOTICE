@@ -1,0 +1,11 @@
+This project contains Rust translations of PyBoy source code.
+Upstream project: https://github.com/Baekalfen/PyBoy
+Upstream author: Mads Ynddal and PyBoy contributors.
+Upstream version: 2.7.0, released 2026-01-24.
+License: GNU Lesser General Public License, version 3 only.
+
+The translated library is licensed under LGPL-3.0-only independently of
+the surrounding PokeSim application. See LICENSE.md and COPYING.
+Original source headers and license text are preserved under reference.
+Rust translations and Python bindings are modifications made on 2026-10-05.
+No endorsement by the PyBoy project is implied.

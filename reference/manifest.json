@@ -1,0 +1,28 @@
+{
+  "version": "2.7.0",
+  "source_url": "https://files.pythonhosted.org/packages/7b/90/60ab95f484d1d792488ea30852b0820c0527b0f79fa555c57f214028c7b7/pyboy-2.7.0.tar.gz",
+  "archive_sha256": "b97db94c366f5e54af04f94641c6107454821543015716b7182df29684ad9180",
+  "files": {
+    "pyboy/core/opcodes.py": "2538898d44bc74deb448b995cc4888b94296fce58ab324f59f8d18ef75b06dd6",
+    "pyboy/core/cpu.py": "e98301fdb20235c3bedd17642d7dbf97fc3d4a95e0e96966f9bd88c89a76fce9",
+    "pyboy/core/timer.py": "ec175a56cbec3dd1d44b27aec50c0b1337258b72be444cf537df38ce6012f097",
+    "pyboy/core/serial.py": "ebcae2726d54aeb23ea7f9fb6e54344ccea3801b2165880954c34318c611a782",
+    "pyboy/core/interaction.py": "46b3a0ba51942f9d6ce7788723b6a0a2f5ca50e8d57540d6ce284633815c9fae",
+    "LICENSE.md": "a27d3e242d91483cc55cd35a3605aaeac2d9a6df7c06a5ffe24eabc9e0ec9d17",
+    "pyboy/core/sound.py": "1e759faa3d19a1830c995343547e6ad166549a5460e7990fc4554d84290ae10b",
+    "pyboy/core/lcd.py": "1f6dee176a053a89e69b486ed46275a2f7a535aa3820df2f4cba282bf0c2b705",
+    "pyboy/core/mb.py": "575eab1589360ba24c78bdc4933c2967b4e7ff87aad50fe73eb0be5b3fb36d36",
+    "pyboy/core/ram.py": "1a5f0ab595bdf2fd3417ca4cf49572eba31d75ac6aa74b55aeff5abd10382724",
+    "pyboy/core/cartridge/mbc2.py": "1cfc729640d99db04c06063cd5a179ae520c9221b1df4ec436f792c83ac8504c",
+    "pyboy/core/cartridge/rtc.py": "9bd9dc26a053a186ef0d8c3b5c74e41e171f1280f30fa5e7e70beb4726d4c60b",
+    "pyboy/core/cartridge/mbc5.py": "d34d55d495a0063f2ff07384d972b44dfbe023dc1e7bb3dfcf4caa8b8bdec043",
+    "pyboy/core/cartridge/base_mbc.py": "b6035393982583f6f2634e45645043da77c72e1588bdbbfb1e8d6547a0e0b0c3",
+    "pyboy/core/cartridge/mbc3.py": "401dc7c36f8b52614e7525881e4b7d1bcbce773974ddf2fc70a609bb1130544f",
+    "pyboy/core/cartridge/__init__.py": "28a39544a55f90b16a3f7dcc3d227356f694e14a8fe35b0ebe2a329bbec70991",
+    "pyboy/core/cartridge/cartridge.py": "cac77057e0e3a1cf0f8522bac2946c75c512bb9a5a247643b00f13c302f479a0",
+    "pyboy/core/cartridge/mbc1.py": "f92801aa5574c6bc20b9ec8476451c36ea645906988e8a50499dde337fbeddfe",
+    "pyboy/core/bootrom_dmg.bin": "8a7f3e5f392309060995f8409f745029cee1da1328f1694859408dc0fdb4bdfc",
+    "pyboy/core/bootrom_cgb.bin": "6cc8fc260cc370d29603e31406e33ba6448292e19abe83bf0fb62bb35bdeb9ce",
+    "pyboy/default_rom.gb": "d2c2627aa7167d58e5e0b0072d9173714de146821f43a9f45102dded191987f9"
+  }
+}

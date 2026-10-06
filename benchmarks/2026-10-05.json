@@ -1,0 +1,2710 @@
+{
+  "metadata": {
+    "date_utc": "2026-10-05T23:48:51Z",
+    "platform": "Linux-6.8.0-35-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "cpu_model": "Intel(R) Core(TM) i7-10700K CPU @ 3.80GHz",
+    "cpu_affinity": 7,
+    "load_average_start": [
+      1.80712890625,
+      1.40234375,
+      1.2646484375
+    ],
+    "pyboy_version": "2.7.0",
+    "rust_python_version": "0.1.0",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "libraries": {
+      "pyboy_cython": {
+        "path": "/home/ty/Repos/pokesim/.venv/lib/python3.12/site-packages/pyboy/core/cpu.cpython-312-x86_64-linux-gnu.so",
+        "sha256": "6ec68ac51a955c62a7bbf368d252b835aa8285e0a36ab7413e2cc352dea39f59"
+      },
+      "rust_python": {
+        "path": "/home/ty/Repos/pokesim/pyboy-rs/.venv/lib/python3.12/site-packages/pyboy_rs/_native.abi3.so",
+        "sha256": "778c92a41c45173f3a25df8e3ed0976167030f7149d044d98ea863982e9457c1"
+      }
+    },
+    "native_sha256": "bf8186a4685bc788b82ae736965dbc6a84391fda531ead9c209f43385e6a04e3",
+    "repeats": 5,
+    "frames": {
+      "batch": 24000,
+      "frame": 12000,
+      "render": 6000,
+      "audio": 6000
+    },
+    "sound_hardware_emulated": true,
+    "sample_rate": 48000,
+    "load_average_end": [
+      3.251953125,
+      2.6298828125,
+      1.80712890625
+    ]
+  },
+  "speed": [
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 12000,
+      "seconds": 1.4755019760050345,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 12000,
+      "seconds": 1.363484133,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 12000,
+      "seconds": 1.2934147500054678,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 24000,
+      "seconds": 0.9863481220090762,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 24000,
+      "seconds": 0.9456425530079287,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 24000,
+      "seconds": 0.956572416,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.1088814539980376,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.4479231290024472,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.364337164,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.381191588996444,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.0099576489883475,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.287010864,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 12000,
+      "seconds": 0.578715612005908,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 12000,
+      "seconds": 0.477763875,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 12000,
+      "seconds": 0.6328346399968723,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 0.955961117,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 0.7138128580118064,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.0388378239877056,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.35452613,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.0979486189899035,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.446405013994081,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.0383687290013768,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 0.7115430400008336,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 0.976310015,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 24000,
+      "seconds": 0.9863261989958119,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 24000,
+      "seconds": 0.9346457959909458,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 24000,
+      "seconds": 0.958769996,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 24000,
+      "seconds": 2.653143675,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 24000,
+      "seconds": 2.560102759001893,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 24000,
+      "seconds": 2.708896233991254,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.3734830470000001,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.4416969279991463,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.1088039580063196,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 12000,
+      "seconds": 0.6284888040099759,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 12000,
+      "seconds": 0.486727387,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 12000,
+      "seconds": 0.5768854769994505,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 0.8625867189985001,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.1670744079892756,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.07372789,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 12000,
+      "seconds": 0.6239213609951548,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 12000,
+      "seconds": 0.5726052000100026,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 12000,
+      "seconds": 0.482228307,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.0389449759968556,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 0.958269212,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 0.7105145899986383,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 0.8757237609970616,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.1540634720004164,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.075074766,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.0141633259918308,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.302773818,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 6000,
+      "seconds": 1.396977500000503,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 24000,
+      "seconds": 2.630526249995455,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 24000,
+      "seconds": 2.672076908,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 24000,
+      "seconds": 2.729045236003003,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 24000,
+      "seconds": 2.70099756300624,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 24000,
+      "seconds": 2.642280654,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 24000,
+      "seconds": 2.6157455099892104,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 12000,
+      "seconds": 1.326826722,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 12000,
+      "seconds": 1.4810666400007904,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 12000,
+      "seconds": 1.292807833000552,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.0157422709889943,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.388145065997378,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.293631305,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.07634208,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.1562660070048878,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 0.8684120020043338,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.294241798,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.382730140001513,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.0170573799987324,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 24000,
+      "seconds": 0.9900211019994458,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 24000,
+      "seconds": 0.973253789,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 24000,
+      "seconds": 0.9711953439982608,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.0217568770021899,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.3979732989973854,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.2864459080000001,
+      "state_sha256": "d97d98ee5b7114c9b298873b491869cc515ac7ccbe2459d97d4b4fbff0e31bfb",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 24000,
+      "seconds": 0.9925902190007037,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 24000,
+      "seconds": 0.955523577,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 24000,
+      "seconds": 0.952797277001082,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 12000,
+      "seconds": 0.5769741209951462,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 12000,
+      "seconds": 0.479767973,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 12000,
+      "seconds": 0.6492362449935172,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 0.875327097994159,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.0777883,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.153352041990729,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.1489684830012266,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 0.8672862350067589,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 6000,
+      "seconds": 1.071124321,
+      "state_sha256": "745d13e20c83c1a494747a6f8481c9c9434e748779b76562126bad3cdf2d4f10",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf",
+      "audio_sha256": "8849f59b20530724729ef57b3705d4575568857ef06ada69b712bb8d5ee09fe5"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 24000,
+      "seconds": 0.9828276010084664,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 24000,
+      "seconds": 0.9588342450006166,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 24000,
+      "seconds": 0.968610953,
+      "state_sha256": "ad80dea531feed5e95723aed2b594f6de043d51d982ce9a5104be77ec5d28005"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 24000,
+      "seconds": 2.561028066003928,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 24000,
+      "seconds": 2.698550411994802,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 24000,
+      "seconds": 2.6345236549999997,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 12000,
+      "seconds": 1.329120052,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 12000,
+      "seconds": 1.489062818000093,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 12000,
+      "seconds": 1.2991190220054705,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 24000,
+      "seconds": 2.6276812180003617,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 24000,
+      "seconds": 2.658531227,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 24000,
+      "seconds": 2.723977161003859,
+      "state_sha256": "0ea546ff415a8cec21db93ec9f11c460acc99bb1ded8fd1dbb7798ff92104476"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.0378325060009956,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 0.7099842149909819,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 0.949627358,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 1,
+      "frames": 12000,
+      "seconds": 1.316403951,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 1,
+      "frames": 12000,
+      "seconds": 1.483190001003095,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 1,
+      "frames": 12000,
+      "seconds": 1.3016304640041199,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 12000,
+      "seconds": 1.324420115997782,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 12000,
+      "seconds": 1.4923333980113966,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 12000,
+      "seconds": 1.316623609,
+      "state_sha256": "713da54e4cf6a8b7cb62c2e1be3167f3f02aef7770e4a79c0f447162b764761a"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_python",
+      "repeat": 0,
+      "frames": 12000,
+      "seconds": 0.6250958309974521,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "repeat": 0,
+      "frames": 12000,
+      "seconds": 0.5688263040065067,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_native",
+      "repeat": 0,
+      "frames": 12000,
+      "seconds": 0.479397127,
+      "state_sha256": "523eb262efa7e6993bf9a934467ecd6fd80185d03b5d7fb297c089321d9c9b58"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.095641356005217,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.4478520959964953,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 3,
+      "frames": 6000,
+      "seconds": 1.357746183,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_native",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 0.97443242,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 0.7065045430063037,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_python",
+      "repeat": 4,
+      "frames": 6000,
+      "seconds": 1.040455116002704,
+      "state_sha256": "0d3dd46aedbbcd6234f12e11468274c5fe2f0907cc5c5c702b0f2c3f95f8fdb2",
+      "screen_sha256": "4c15fce6632043ea845cdb74509d0a007be19852ca4e889f66e34e89d84617cf"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_native",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.385711583,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_python",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.4526528830028838,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "repeat": 2,
+      "frames": 6000,
+      "seconds": 1.1083589339978062,
+      "state_sha256": "4e0d911131bf59ce3ec8283aadaca473cf0796b7c0a1d4ccd82e63186cb2d26e",
+      "screen_sha256": "30f9fa50f2e02b26eb9787a4c8ccde1872814734b4ae2595cb36f5da85a31c49",
+      "audio_sha256": "e61f41d57db208c5f92a35c4ce7198570924a3fc87eeba83441fceee5d6a2865"
+    }
+  ],
+  "memory": [
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 1976,
+        "uss_kib": 492
+      },
+      "retained": {
+        "rss_kib": 2688,
+        "uss_kib": 1140
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 23348,
+        "uss_kib": 12512
+      },
+      "retained": {
+        "rss_kib": 24172,
+        "uss_kib": 13336
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 57024,
+        "uss_kib": 44168
+      },
+      "retained": {
+        "rss_kib": 59640,
+        "uss_kib": 46784
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 56964,
+        "uss_kib": 44088
+      },
+      "retained": {
+        "rss_kib": 59820,
+        "uss_kib": 46944
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 1968,
+        "uss_kib": 484
+      },
+      "retained": {
+        "rss_kib": 2684,
+        "uss_kib": 1136
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 23420,
+        "uss_kib": 12516
+      },
+      "retained": {
+        "rss_kib": 24244,
+        "uss_kib": 13340
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 56976,
+        "uss_kib": 44144
+      },
+      "retained": {
+        "rss_kib": 59676,
+        "uss_kib": 46844
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 1952,
+        "uss_kib": 468
+      },
+      "retained": {
+        "rss_kib": 2688,
+        "uss_kib": 1140
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 23356,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 24180,
+        "uss_kib": 13344
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 1972,
+        "uss_kib": 488
+      },
+      "retained": {
+        "rss_kib": 2688,
+        "uss_kib": 1140
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 56936,
+        "uss_kib": 44052
+      },
+      "retained": {
+        "rss_kib": 59824,
+        "uss_kib": 46940
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 23340,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 24164,
+        "uss_kib": 13344
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 1960,
+        "uss_kib": 476
+      },
+      "retained": {
+        "rss_kib": 2684,
+        "uss_kib": 1136
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 23372,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 24196,
+        "uss_kib": 13352
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 57088,
+        "uss_kib": 44108
+      },
+      "retained": {
+        "rss_kib": 59736,
+        "uss_kib": 46756
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 23396,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 31328,
+        "uss_kib": 20452
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 56796,
+        "uss_kib": 43872
+      },
+      "retained": {
+        "rss_kib": 66864,
+        "uss_kib": 53940
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 1948,
+        "uss_kib": 464
+      },
+      "retained": {
+        "rss_kib": 8604,
+        "uss_kib": 7056
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 1976,
+        "uss_kib": 492
+      },
+      "retained": {
+        "rss_kib": 8604,
+        "uss_kib": 7056
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 23416,
+        "uss_kib": 12512
+      },
+      "retained": {
+        "rss_kib": 31348,
+        "uss_kib": 20444
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 56976,
+        "uss_kib": 44104
+      },
+      "retained": {
+        "rss_kib": 66604,
+        "uss_kib": 53732
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 1956,
+        "uss_kib": 472
+      },
+      "retained": {
+        "rss_kib": 8600,
+        "uss_kib": 7052
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 23416,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 31348,
+        "uss_kib": 20452
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 57144,
+        "uss_kib": 44164
+      },
+      "retained": {
+        "rss_kib": 66792,
+        "uss_kib": 53812
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 57092,
+        "uss_kib": 44084
+      },
+      "retained": {
+        "rss_kib": 67132,
+        "uss_kib": 54124
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 1960,
+        "uss_kib": 476
+      },
+      "retained": {
+        "rss_kib": 8604,
+        "uss_kib": 7056
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 23488,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 31420,
+        "uss_kib": 20452
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 1868,
+        "uss_kib": 384
+      },
+      "retained": {
+        "rss_kib": 8600,
+        "uss_kib": 7052
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 23364,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 31300,
+        "uss_kib": 20456
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 56756,
+        "uss_kib": 43876
+      },
+      "retained": {
+        "rss_kib": 66592,
+        "uss_kib": 53712
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 57048,
+        "uss_kib": 44156
+      },
+      "retained": {
+        "rss_kib": 74240,
+        "uss_kib": 61348
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 1976,
+        "uss_kib": 492
+      },
+      "retained": {
+        "rss_kib": 14328,
+        "uss_kib": 12780
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 23368,
+        "uss_kib": 12524
+      },
+      "retained": {
+        "rss_kib": 38516,
+        "uss_kib": 27672
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 57032,
+        "uss_kib": 44096
+      },
+      "retained": {
+        "rss_kib": 74160,
+        "uss_kib": 61224
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 23400,
+        "uss_kib": 12512
+      },
+      "retained": {
+        "rss_kib": 38548,
+        "uss_kib": 27660
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 1944,
+        "uss_kib": 460
+      },
+      "retained": {
+        "rss_kib": 14324,
+        "uss_kib": 12776
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 23344,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 38492,
+        "uss_kib": 27668
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 1956,
+        "uss_kib": 472
+      },
+      "retained": {
+        "rss_kib": 14324,
+        "uss_kib": 12776
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 56692,
+        "uss_kib": 43820
+      },
+      "retained": {
+        "rss_kib": 74492,
+        "uss_kib": 61620
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 1948,
+        "uss_kib": 464
+      },
+      "retained": {
+        "rss_kib": 14328,
+        "uss_kib": 12780
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 23460,
+        "uss_kib": 12524
+      },
+      "retained": {
+        "rss_kib": 38608,
+        "uss_kib": 27672
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 57016,
+        "uss_kib": 44080
+      },
+      "retained": {
+        "rss_kib": 74172,
+        "uss_kib": 61236
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 1872,
+        "uss_kib": 388
+      },
+      "retained": {
+        "rss_kib": 14328,
+        "uss_kib": 12780
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 23344,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 38492,
+        "uss_kib": 27668
+      }
+    },
+    {
+      "rom": "default_rom",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 56756,
+        "uss_kib": 43880
+      },
+      "retained": {
+        "rss_kib": 73984,
+        "uss_kib": 61108
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 1976,
+        "uss_kib": 492
+      },
+      "retained": {
+        "rss_kib": 3656,
+        "uss_kib": 2108
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 56908,
+        "uss_kib": 44020
+      },
+      "retained": {
+        "rss_kib": 60560,
+        "uss_kib": 47672
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 23376,
+        "uss_kib": 12532
+      },
+      "retained": {
+        "rss_kib": 25364,
+        "uss_kib": 14520
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 1916,
+        "uss_kib": 460
+      },
+      "retained": {
+        "rss_kib": 3628,
+        "uss_kib": 2108
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 57132,
+        "uss_kib": 44240
+      },
+      "retained": {
+        "rss_kib": 60720,
+        "uss_kib": 47828
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 23440,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 25428,
+        "uss_kib": 14516
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 1872,
+        "uss_kib": 388
+      },
+      "retained": {
+        "rss_kib": 3660,
+        "uss_kib": 2112
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 23364,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 25352,
+        "uss_kib": 14508
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 57136,
+        "uss_kib": 44256
+      },
+      "retained": {
+        "rss_kib": 60712,
+        "uss_kib": 47832
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 57052,
+        "uss_kib": 44184
+      },
+      "retained": {
+        "rss_kib": 60628,
+        "uss_kib": 47760
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 1952,
+        "uss_kib": 468
+      },
+      "retained": {
+        "rss_kib": 3660,
+        "uss_kib": 2112
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 23428,
+        "uss_kib": 12516
+      },
+      "retained": {
+        "rss_kib": 25416,
+        "uss_kib": 14504
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 1,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 56800,
+        "uss_kib": 43876
+      },
+      "retained": {
+        "rss_kib": 60676,
+        "uss_kib": 47752
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 1,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 1968,
+        "uss_kib": 484
+      },
+      "retained": {
+        "rss_kib": 3652,
+        "uss_kib": 2104
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 1,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 23380,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 25368,
+        "uss_kib": 14516
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 23360,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 48120,
+        "uss_kib": 37288
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 57148,
+        "uss_kib": 44176
+      },
+      "retained": {
+        "rss_kib": 83904,
+        "uss_kib": 70932
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 1980,
+        "uss_kib": 496
+      },
+      "retained": {
+        "rss_kib": 25400,
+        "uss_kib": 23852
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 1956,
+        "uss_kib": 472
+      },
+      "retained": {
+        "rss_kib": 25396,
+        "uss_kib": 23848
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 57136,
+        "uss_kib": 44252
+      },
+      "retained": {
+        "rss_kib": 83660,
+        "uss_kib": 70776
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 23348,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 48108,
+        "uss_kib": 37288
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 57036,
+        "uss_kib": 44180
+      },
+      "retained": {
+        "rss_kib": 83584,
+        "uss_kib": 70728
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 23344,
+        "uss_kib": 12524
+      },
+      "retained": {
+        "rss_kib": 48104,
+        "uss_kib": 37284
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 1956,
+        "uss_kib": 476
+      },
+      "retained": {
+        "rss_kib": 25392,
+        "uss_kib": 23848
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 57028,
+        "uss_kib": 44020
+      },
+      "retained": {
+        "rss_kib": 83648,
+        "uss_kib": 70640
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 1940,
+        "uss_kib": 456
+      },
+      "retained": {
+        "rss_kib": 25396,
+        "uss_kib": 23848
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 23368,
+        "uss_kib": 12524
+      },
+      "retained": {
+        "rss_kib": 48128,
+        "uss_kib": 37284
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 16,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 57208,
+        "uss_kib": 44216
+      },
+      "retained": {
+        "rss_kib": 83764,
+        "uss_kib": 70772
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 16,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 23352,
+        "uss_kib": 12524
+      },
+      "retained": {
+        "rss_kib": 48112,
+        "uss_kib": 37284
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 16,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 1952,
+        "uss_kib": 468
+      },
+      "retained": {
+        "rss_kib": 25400,
+        "uss_kib": 23852
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 23376,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 71168,
+        "uss_kib": 60320
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 56776,
+        "uss_kib": 43824
+      },
+      "retained": {
+        "rss_kib": 107136,
+        "uss_kib": 94184
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 0,
+      "baseline": {
+        "rss_kib": 1956,
+        "uss_kib": 472
+      },
+      "retained": {
+        "rss_kib": 46992,
+        "uss_kib": 45444
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 56692,
+        "uss_kib": 43828
+      },
+      "retained": {
+        "rss_kib": 107052,
+        "uss_kib": 94188
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 23408,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 71200,
+        "uss_kib": 60312
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 1,
+      "baseline": {
+        "rss_kib": 1952,
+        "uss_kib": 468
+      },
+      "retained": {
+        "rss_kib": 46996,
+        "uss_kib": 45448
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 57048,
+        "uss_kib": 44164
+      },
+      "retained": {
+        "rss_kib": 106848,
+        "uss_kib": 93964
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 1908,
+        "uss_kib": 452
+      },
+      "retained": {
+        "rss_kib": 46964,
+        "uss_kib": 45444
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 2,
+      "baseline": {
+        "rss_kib": 23372,
+        "uss_kib": 12524
+      },
+      "retained": {
+        "rss_kib": 71168,
+        "uss_kib": 60320
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 23368,
+        "uss_kib": 12528
+      },
+      "retained": {
+        "rss_kib": 71164,
+        "uss_kib": 60324
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 1960,
+        "uss_kib": 480
+      },
+      "retained": {
+        "rss_kib": 46992,
+        "uss_kib": 45448
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 3,
+      "baseline": {
+        "rss_kib": 57064,
+        "uss_kib": 44188
+      },
+      "retained": {
+        "rss_kib": 106840,
+        "uss_kib": 93964
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_python",
+      "instances": 32,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 23432,
+        "uss_kib": 12520
+      },
+      "retained": {
+        "rss_kib": 71224,
+        "uss_kib": 60312
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "rust_native",
+      "instances": 32,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 1972,
+        "uss_kib": 488
+      },
+      "retained": {
+        "rss_kib": 46996,
+        "uss_kib": 45448
+      }
+    },
+    {
+      "rom": "pokered",
+      "backend": "pyboy_cython",
+      "instances": 32,
+      "repeat": 4,
+      "baseline": {
+        "rss_kib": 56820,
+        "uss_kib": 43884
+      },
+      "retained": {
+        "rss_kib": 107088,
+        "uss_kib": 94152
+      }
+    }
+  ],
+  "roms": [
+    {
+      "label": "default_rom",
+      "sha256": "d2c2627aa7167d58e5e0b0072d9173714de146821f43a9f45102dded191987f9",
+      "bytes": 32768,
+      "checkpoint_sha256": "a65b80219c71d8646a68af4679c7640a57c177dc1d062696666023f3c9b66e87",
+      "checkpoint_frame": 600
+    },
+    {
+      "label": "pokered",
+      "sha256": "5ca7ba01642a3b27b0cc0b5349b52792795b62d3ed977e98a09390659af96b7b",
+      "bytes": 1048576,
+      "checkpoint_sha256": "95ff5d5bbbb3810a4c3e21b2a230be512d58e6e30593f563bcc49911bc5ad2d7",
+      "checkpoint_frame": 600
+    }
+  ],
+  "summary": [
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "median_seconds": 2.6157455099892104,
+      "min_seconds": 2.560102759001893,
+      "max_seconds": 2.630526249995455,
+      "fps": 9175.204509898593
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_python",
+      "median_seconds": 2.708896233991254,
+      "min_seconds": 2.698550411994802,
+      "max_seconds": 2.729045236003003,
+      "fps": 8859.697059949283
+    },
+    {
+      "rom": "default_rom",
+      "mode": "batch",
+      "backend": "rust_native",
+      "median_seconds": 2.653143675,
+      "min_seconds": 2.6345236549999997,
+      "max_seconds": 2.672076908,
+      "fps": 9045.872723044296
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "median_seconds": 1.2991190220054705,
+      "min_seconds": 1.292807833000552,
+      "max_seconds": 1.324420115997782,
+      "fps": 9237.028937868534
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_python",
+      "median_seconds": 1.483190001003095,
+      "min_seconds": 1.4755019760050345,
+      "max_seconds": 1.4923333980113966,
+      "fps": 8090.669430001746
+    },
+    {
+      "rom": "default_rom",
+      "mode": "frame",
+      "backend": "rust_native",
+      "median_seconds": 1.326826722,
+      "min_seconds": 1.316403951,
+      "max_seconds": 1.363484133,
+      "fps": 9044.135003485406
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "median_seconds": 1.0157422709889943,
+      "min_seconds": 1.0099576489883475,
+      "max_seconds": 1.0217568770021899,
+      "fps": 5907.010244004122
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_python",
+      "median_seconds": 1.388145065997378,
+      "min_seconds": 1.381191588996444,
+      "max_seconds": 1.3979732989973854,
+      "fps": 4322.3148264327965
+    },
+    {
+      "rom": "default_rom",
+      "mode": "render",
+      "backend": "rust_native",
+      "median_seconds": 1.293631305,
+      "min_seconds": 1.2864459080000001,
+      "max_seconds": 1.302773818,
+      "fps": 4638.106682181752
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "median_seconds": 1.1083589339978062,
+      "min_seconds": 1.095641356005217,
+      "max_seconds": 1.1088814539980376,
+      "fps": 5413.408793808555
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_python",
+      "median_seconds": 1.4478520959964953,
+      "min_seconds": 1.4416969279991463,
+      "max_seconds": 1.4526528830028838,
+      "fps": 4144.069699239862
+    },
+    {
+      "rom": "default_rom",
+      "mode": "audio",
+      "backend": "rust_native",
+      "median_seconds": 1.364337164,
+      "min_seconds": 1.35452613,
+      "max_seconds": 1.385711583,
+      "fps": 4397.7399123315245
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "pyboy_cython",
+      "median_seconds": 0.952797277001082,
+      "min_seconds": 0.9346457959909458,
+      "max_seconds": 0.9711953439982608,
+      "fps": 25188.98886396875
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_python",
+      "median_seconds": 0.9863481220090762,
+      "min_seconds": 0.9828276010084664,
+      "max_seconds": 0.9925902190007037,
+      "fps": 24332.179951957325
+    },
+    {
+      "rom": "pokered",
+      "mode": "batch",
+      "backend": "rust_native",
+      "median_seconds": 0.958769996,
+      "min_seconds": 0.955523577,
+      "max_seconds": 0.973253789,
+      "fps": 25032.072447123177
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "pyboy_cython",
+      "median_seconds": 0.5768854769994505,
+      "min_seconds": 0.5688263040065067,
+      "max_seconds": 0.578715612005908,
+      "fps": 20801.35569093453
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_python",
+      "median_seconds": 0.6284888040099759,
+      "min_seconds": 0.6239213609951548,
+      "max_seconds": 0.6492362449935172,
+      "fps": 19093.418885803298
+    },
+    {
+      "rom": "pokered",
+      "mode": "frame",
+      "backend": "rust_native",
+      "median_seconds": 0.479767973,
+      "min_seconds": 0.477763875,
+      "max_seconds": 0.486727387,
+      "fps": 25012.090584045716
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "pyboy_cython",
+      "median_seconds": 0.7105145899986383,
+      "min_seconds": 0.7065045430063037,
+      "max_seconds": 0.7138128580118064,
+      "fps": 8444.583805114402
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_python",
+      "median_seconds": 1.0388378239877056,
+      "min_seconds": 1.0378325060009956,
+      "max_seconds": 1.040455116002704,
+      "fps": 5775.684963961236
+    },
+    {
+      "rom": "pokered",
+      "mode": "render",
+      "backend": "rust_native",
+      "median_seconds": 0.958269212,
+      "min_seconds": 0.949627358,
+      "max_seconds": 0.976310015,
+      "fps": 6261.288503130997
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "pyboy_cython",
+      "median_seconds": 0.8684120020043338,
+      "min_seconds": 0.8625867189985001,
+      "max_seconds": 0.8757237609970616,
+      "fps": 6909.162915933603
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_python",
+      "median_seconds": 1.1540634720004164,
+      "min_seconds": 1.1489684830012266,
+      "max_seconds": 1.1670744079892756,
+      "fps": 5199.02080394226
+    },
+    {
+      "rom": "pokered",
+      "mode": "audio",
+      "backend": "rust_native",
+      "median_seconds": 1.075074766,
+      "min_seconds": 1.071124321,
+      "max_seconds": 1.0777883,
+      "fps": 5581.007191084978
+    }
+  ]
+}

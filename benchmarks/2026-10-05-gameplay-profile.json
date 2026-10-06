@@ -1,0 +1,48 @@
+{
+  "method": "Sample one in approximately 64 scheduler iterations using the optional profile feature",
+  "components": [
+    "scheduler_cpu_and_bus",
+    "sound",
+    "timer_and_serial",
+    "lcd"
+  ],
+  "limitations": "Instrumented timings include clock-read overhead and compiler-layout effects. Use the separate uninstrumented replay benchmark for speedup claims.",
+  "frames": 12000,
+  "checkpoint_sha256": "23b7b8aabe23f4083c6c26356ac1c4e4f059de546bade20ec89daeb7a4f94354",
+  "before": {
+    "seconds": 4.081261061,
+    "samples": 1714461,
+    "iterations": 109734757,
+    "component_nanoseconds": [
+      49465561,
+      59103978,
+      32940201,
+      41220411
+    ]
+  },
+  "sampling_tool_note": "An initial gprofng run identified sound rounding as a candidate but reported a timer warning. Its percentages were not used as quantitative evidence.",
+  "outputs_match": true,
+  "sound_optimization_only": {
+    "seconds": 3.385030576,
+    "samples": 1714461,
+    "iterations": 109734757,
+    "component_nanoseconds": [
+      49875384,
+      46485316,
+      33185491,
+      40813090
+    ]
+  },
+  "after": {
+    "seconds": 1.407431088,
+    "samples": 109375,
+    "iterations": 6995495,
+    "component_nanoseconds": [
+      13189529,
+      7193750,
+      2111201,
+      8200672
+    ]
+  },
+  "scheduler_iteration_reduction": 0.9362508726382837
+}
