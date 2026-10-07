@@ -8,13 +8,28 @@ use pyo3::{
     buffer::PyBuffer,
     exceptions::{PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
-    types::PyBytes,
+    types::{PyBytes, PyDict},
 };
 use std::collections::BTreeMap;
+
+#[cfg(target_os = "linux")]
+fn thread_cpu_ns() -> std::io::Result<u64> {
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // The pointer addresses a valid, writable timespec for the entire call.
+    if unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(time.tv_sec as u64 * 1_000_000_000 + time.tv_nsec as u64)
+}
 
 #[pyclass(module = "pyboy_rs._native", name = "Machine")]
 pub struct Emulator {
     inner: Machine,
+    #[cfg(target_os = "linux")]
+    frame_timing: Option<(u64, u64, u64)>,
 }
 
 #[pymethods]
@@ -29,6 +44,8 @@ impl Emulator {
         sample_rate: u32,
     ) -> PyResult<Self> {
         Ok(Self {
+            #[cfg(target_os = "linux")]
+            frame_timing: None,
             inner: Machine::new(rom, bootrom, cgb, sound_emulated, sample_rate)
                 .map_err(PyValueError::new_err)?,
         })
@@ -37,12 +54,81 @@ impl Emulator {
         self.inner.begin_frame(render, sound);
     }
     fn run_frame(&mut self, py: Python<'_>) -> PyResult<bool> {
+        #[cfg(target_os = "linux")]
+        if self.frame_timing.is_some() {
+            let (complete, cpu, wall) = self.run_frame_profiled(py)?;
+            if let Some(timing) = self.frame_timing.as_mut() {
+                timing.0 += 1;
+                timing.1 += cpu;
+                timing.2 += wall;
+            }
+            return Ok(complete);
+        }
         py.detach(|| self.inner.run_frame()).map_err(|e| {
             PyRuntimeError::new_err(format!(
                 "CPU made no progress at {:#06x}, opcode {:#04x}",
                 e.pc, e.opcode
             ))
         })
+    }
+    #[cfg(target_os = "linux")]
+    fn enable_frame_timing(&mut self) {
+        self.frame_timing = Some((0, 0, 0));
+    }
+    #[cfg(target_os = "linux")]
+    fn frame_timing(&self) -> Option<(u64, u64, u64)> {
+        self.frame_timing
+    }
+    #[cfg(target_os = "linux")]
+    fn run_frame_profiled(&mut self, py: Python<'_>) -> PyResult<(bool, u64, u64)> {
+        let (result, cpu, wall) = py
+            .detach(|| {
+                let cpu = thread_cpu_ns()?;
+                let wall = std::time::Instant::now();
+                let result = self.inner.run_frame();
+                Ok::<_, std::io::Error>((
+                    result,
+                    thread_cpu_ns()? - cpu,
+                    wall.elapsed().as_nanos() as u64,
+                ))
+            })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        result
+            .map(|complete| (complete, cpu, wall))
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!(
+                    "CPU made no progress at {:#06x}, opcode {:#04x}",
+                    error.pc, error.opcode
+                ))
+            })
+    }
+    fn run_frame_read<'py>(
+        &mut self,
+        py: Python<'py>,
+        start: u32,
+        stop: u32,
+    ) -> PyResult<(bool, Option<Bound<'py, PyBytes>>)> {
+        if start > stop || stop > 65536 {
+            return Err(PyValueError::new_err("Invalid memory range"));
+        }
+        let (complete, bytes) = py
+            .detach(|| {
+                self.inner.run_frame().map(|complete| {
+                    let bytes = complete.then(|| {
+                        (start..stop)
+                            .map(|i| self.inner.read(i as u16))
+                            .collect::<Vec<_>>()
+                    });
+                    (complete, bytes)
+                })
+            })
+            .map_err(|error| {
+                PyRuntimeError::new_err(format!(
+                    "CPU made no progress at {:#06x}, opcode {:#04x}",
+                    error.pc, error.opcode
+                ))
+            })?;
+        Ok((complete, bytes.map(|bytes| PyBytes::new(py, &bytes))))
     }
     fn read(&mut self, address: u16) -> u8 {
         self.inner.read(address)
@@ -55,6 +141,18 @@ impl Emulator {
             .step_by(step as usize)
             .map(|i| self.inner.read(i as u16))
             .collect())
+    }
+    fn read_bytes<'py>(
+        &mut self,
+        py: Python<'py>,
+        start: u32,
+        stop: u32,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        if start > stop || stop > 65536 {
+            return Err(PyValueError::new_err("Invalid memory range"));
+        }
+        let bytes: Vec<u8> = (start..stop).map(|i| self.inner.read(i as u16)).collect();
+        Ok(PyBytes::new(py, &bytes))
     }
     fn write(&mut self, address: u16, value: u8) {
         self.inner.write(address, value);
@@ -278,6 +376,51 @@ impl Emulator {
     fn save_state<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let data = self.inner.save_state().map_err(PyValueError::new_err)?;
         Ok(PyBytes::new(py, &data))
+    }
+    fn execution_runtime<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let data = self
+            .inner
+            .save_execution_runtime()
+            .map_err(PyValueError::new_err)?;
+        Ok(PyBytes::new(py, &data))
+    }
+    fn restore_execution(&mut self, data: &[u8], runtime: &[u8], frame: u64) -> PyResult<()> {
+        self.inner
+            .load_execution(data, runtime, frame)
+            .map_err(PyValueError::new_err)
+    }
+    fn has_live_rtc(&self) -> bool {
+        self.inner
+            .mb
+            .cartridge
+            .rtc
+            .as_ref()
+            .is_some_and(|rtc| !rtc.timelock)
+    }
+    fn profile_start(&mut self) {
+        self.inner.profile = Default::default();
+        self.inner.profile.enabled = true;
+    }
+    fn profile_stop(&mut self) {
+        self.inner.profile.enabled = false;
+    }
+    fn profile_snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let profile = &self.inner.profile;
+        let result = PyDict::new(py);
+        result.set_item("enabled", profile.enabled)?;
+        result.set_item("samples", profile.samples)?;
+        result.set_item("iterations", profile.iterations)?;
+        result.set_item("sample_rate", 64)?;
+        result.set_item("clock", "sampled wall nanoseconds")?;
+        let components = PyDict::new(py);
+        for (name, value) in ["cpu_memory_dma", "audio", "serial", "timers", "graphics"]
+            .iter()
+            .zip(profile.nanoseconds)
+        {
+            components.set_item(name, value)?;
+        }
+        result.set_item("components", components)?;
+        Ok(result)
     }
     fn load_state(&mut self, data: &[u8]) -> PyResult<()> {
         self.inner.load_state(data).map_err(PyValueError::new_err)

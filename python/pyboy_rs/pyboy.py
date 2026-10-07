@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from ._native import Machine
+from .execution import Execution
 
 BUTTONS = ("up", "down", "right", "left", "a", "b", "select", "start")
 
@@ -19,6 +20,7 @@ def _read_source(source):
 class Memory:
     def __init__(self, machine):
         self._machine = machine
+        self._rom_original = {}
 
     def __iter__(self):
         raise TypeError("Request a specific memory range instead of iterating the address space")
@@ -50,6 +52,13 @@ class Memory:
         values = [self._machine.read_bank(bank, i) for i in addresses]
         return values[0] if single else values
 
+    def read_bytes(self, start, stop):
+        """Read a contiguous, detached byte block without Python integer lists."""
+        start, stop = operator.index(start), operator.index(stop)
+        if not 0 <= start <= stop <= 65536:
+            raise ValueError("Invalid memory range")
+        return self._machine.read_bytes(start, stop)
+
     def __setitem__(self, key, value):
         bank, addresses, single = self._key(key)
         if isinstance(value, int):
@@ -67,6 +76,10 @@ class Memory:
             if bank is None:
                 self._machine.write(address, byte)
             else:
+                if address < 0x8000:
+                    key = (bank, address if bank == -1 else address % 16384)
+                    if key not in self._rom_original:
+                        self._rom_original[key] = self._machine.read_bank(*key)
                 self._machine.write_bank(bank, address, byte)
 
 
@@ -141,7 +154,7 @@ class Sound:
         return np.frombuffer(self._buffer, dtype=np.int8).reshape(-1, 2)[:self.raw_buffer_head // 2]
 
 
-class PyBoy:
+class PyBoy(Execution):
     """Run DMG and CGB games in Rust through a headless PyBoy-compatible API.
 
     Desktop plugins and game wrappers are outside this initial API surface.
@@ -157,8 +170,11 @@ class PyBoy:
             raise TypeError("Unsupported options: " + ", ".join(sorted(kwargs)))
         if rtc_file is not None:
             raise NotImplementedError("Separate RTC file I/O is not exposed yet")
-        self._machine = Machine(_read_source(gamerom), None if bootrom is None else _read_source(bootrom),
-                                cgb, sound_emulated, sound_sample_rate)
+        rom = _read_source(gamerom)
+        boot = None if bootrom is None else _read_source(bootrom)
+        self._machine = Machine(rom, boot, cgb, sound_emulated, sound_sample_rate)
+        self._execution_init(rom, boot, {'cgb': self._machine.cgb, 'sound_emulated': sound_emulated,
+                                        'sample_rate': sound_sample_rate, 'palette': tuple(color_palette)})
         self._machine.set_palette(color_palette)
         self.memory = Memory(self._machine)
         self.register_file = Registers(self._machine)
@@ -230,7 +246,7 @@ class PyBoy:
         else:
             self._events.append(event)
 
-    def tick(self, count=1, render=True, sound=True):
+    def tick(self, count=1, render=True, sound=True, *, _read_range=None):
         count = operator.index(count)
         if count < 0:
             raise ValueError("Frame count must be nonnegative")
@@ -238,10 +254,18 @@ class PyBoy:
             return False
         if self._in_tick:
             raise RuntimeError("Cannot recursively tick the same emulator from its own hook")
+        if self._sequence is not None and not self._running_sequence:
+            raise RuntimeError('Use run_sequence while a sequence is pending')
+        if self._recording is not None and self.paused:
+            raise RuntimeError('Unpause before advancing a recording')
+        if self._recording is not None and len(self._recording['frames']) + count > self._recording['limit']:
+            raise ValueError('Recording frame limit would be exceeded')
         start = time.perf_counter()
         self._in_tick = True
+        collected = None
         try:
             for index in range(count):
+                recorded_events = list(self._events) if self._recording is not None else None
                 for event in self._events:
                     if event == 0:
                         self._quitting = True
@@ -251,18 +275,41 @@ class PyBoy:
                 if not self.paused:
                     last = index == count - 1
                     self._machine.begin_frame(bool(render and last), bool(sound and last))
-                    while not self._machine.run_frame():
-                        self._handle_hook()
+                    if last and _read_range is not None:
+                        complete, collected = self._machine.run_frame_read(*_read_range)
+                        while not complete:
+                            self._handle_hook()
+                            complete, collected = self._machine.run_frame_read(*_read_range)
+                    else:
+                        while not self._machine.run_frame():
+                            self._handle_hook()
+                    if self._recording is not None:
+                        self._record_frame(recorded_events, bool(render and last), bool(sound and last))
                 while self._queued_input and self._queued_input[0][0] == self.frame_count:
                     self._events.append(heapq.heappop(self._queued_input)[1])
             self._refresh()
+        except BaseException:
+            if self._recording is not None:
+                self._recording['failed'] = True
+            raise
         finally:
             self._in_tick = False
         if self.target_emulationspeed:
             delay = count / (60 * self.target_emulationspeed) - (time.perf_counter() - start)
             if delay > 0:
                 time.sleep(delay)
+        if _read_range is not None:
+            return collected if collected is not None else self.memory.read_bytes(*_read_range)
         return not self._quitting
+
+    def tick_read(self, count, start, stop, *, render=True, sound=True):
+        """Advance with normal input and hook semantics, then collect detached bytes."""
+        count, start, stop = operator.index(count), operator.index(start), operator.index(stop)
+        if count < 1 or not 0 <= start <= stop <= 65536:
+            raise ValueError("Invalid frame count or memory range")
+        if self.stopped:
+            raise RuntimeError("Emulator is stopped")
+        return self.tick(count, render=render, sound=sound, _read_range=(start, stop))
 
     def symbol_lookup(self, symbol):
         return self._symbols[symbol]
@@ -298,7 +345,7 @@ class PyBoy:
         original, callback, context = self._hooks[key]
         self.memory[key] = original
         try:
-            callback(context)
+            self._invoke_callback(callback, context)
             self._machine.step_instruction()
         finally:
             self._machine.clear_breakpoint()
@@ -309,6 +356,8 @@ class PyBoy:
         file_like_object.write(self._machine.save_state())
 
     def load_state(self, file_like_object):
+        if self._recording is not None or self._sequence is not None:
+            raise RuntimeError('Stop recording and cancel the sequence before loading a raw state')
         self._machine.load_state(file_like_object.read())
         self._refresh()
 

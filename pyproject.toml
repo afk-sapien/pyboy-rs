@@ -28,6 +28,7 @@ include = [
   { path = "tests/**/*", format = "sdist" },
   { path = "benchmarks/*.json", format = "sdist" },
   { path = "README.md", format = "sdist" },
+  { path = "EXECUTION.rst", format = "sdist" },
 ]
 exclude = ["**/__pycache__/**", "**/*.pyc"]
 

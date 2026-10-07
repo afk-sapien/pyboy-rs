@@ -434,3 +434,9 @@ The wheel includes the upstream redistributable demo used by installed-runtime
 checks. Commercial ROMs, user checkpoints, and private gameplay artifacts are
 excluded. The source repository is
 [afk-sapien/pyboy-rs](https://github.com/afk-sapien/pyboy-rs).
+
+## Experimental execution procedures
+
+Bounded input sequences, verified input replay, complete execution checkpoints,
+and opt-in native profiling are exposed through Core. See [EXECUTION.rst](EXECUTION.rst)
+for API examples, ownership rules, replay limits and the profiling procedure.

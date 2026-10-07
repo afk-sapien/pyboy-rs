@@ -119,6 +119,81 @@ impl Machine {
         Ok(codec.data)
     }
 
+    /// Runtime fields intentionally absent from the upstream hardware format.
+    pub fn save_execution_runtime(&mut self) -> Result<Vec<u8>, &'static str> {
+        let mut codec = Codec::writer();
+        self.execution_runtime_codec(&mut codec)?;
+        Ok(codec.data)
+    }
+
+    pub fn load_execution(
+        &mut self,
+        state: &[u8],
+        runtime: &[u8],
+        frame: u64,
+    ) -> Result<(), &'static str> {
+        if runtime.len() > 2_000_000 {
+            return Err("Execution runtime is too large");
+        }
+        let mut candidate = self.clone();
+        candidate.load_state(state)?;
+        let mut codec = Codec::reader(runtime);
+        candidate.execution_runtime_codec(&mut codec)?;
+        if codec.position != runtime.len() {
+            return Err("Trailing execution runtime data");
+        }
+        candidate.frame_count = frame;
+        candidate.validate_state()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    fn execution_runtime_codec(&mut self, c: &mut Codec) -> Result<(), &'static str> {
+        let mut version = 1;
+        c.byte(&mut version)?;
+        if version != 1 {
+            return Err("Unsupported execution runtime format");
+        }
+        c.boolean(&mut self.cpu.bail)?;
+        let mb = &mut self.mb;
+        c.boolean(&mut mb.singlestep)?;
+        c.boolean(&mut mb.singlestep_latch)?;
+        let mut length = mb.serialbuffer.len();
+        c.size(&mut length, 8)?;
+        if length > 1_000_000 {
+            return Err("Serial buffer is too large");
+        }
+        if c.reading {
+            mb.serialbuffer.resize(length, 0);
+        }
+        c.bytes(&mut mb.serialbuffer)?;
+        let lcd = &mut mb.lcd;
+        c.boolean(&mut lcd.disable_renderer)?;
+        c.int(&mut lcd.ly_window, 8)?;
+        c.int(&mut lcd.cycles_to_interrupt, 8)?;
+        c.int(&mut lcd.cycles_to_frame, 8)?;
+        if !(-1..=144).contains(&lcd.ly_window) {
+            return Err("Invalid window line counter");
+        }
+        for palette in &mut lcd.palettes {
+            for color in palette {
+                let mut value = i64::from(*color);
+                c.int(&mut value, 4)?;
+                *color = value as u32;
+            }
+        }
+        let cart = &mut mb.cartridge;
+        c.size(&mut cart.rombank_selected_low, 8)?;
+        c.byte(&mut cart.bank_select_register1)?;
+        c.byte(&mut cart.bank_select_register2)?;
+        if let Some(rtc) = &mut cart.rtc {
+            c.boolean(&mut rtc.timelock)?;
+            c.boolean(&mut rtc.latch_enabled)?;
+            c.bytes(&mut rtc.latch)?;
+        }
+        Ok(())
+    }
+
     /// Parse into a private copy so malformed states cannot partially mutate a machine.
     pub fn load_state(&mut self, bytes: &[u8]) -> Result<(), &'static str> {
         if bytes.len() > 2_000_000 {

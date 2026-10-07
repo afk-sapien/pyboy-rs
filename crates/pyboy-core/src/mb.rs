@@ -59,7 +59,8 @@ pub struct Machine {
 #[cfg(feature = "profile")]
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeProfile {
-    pub nanoseconds: [u128; 4],
+    pub enabled: bool,
+    pub nanoseconds: [u128; 5],
     pub samples: u64,
     pub iterations: u64,
     seed: u64,
@@ -69,6 +70,10 @@ pub struct RuntimeProfile {
 #[cfg(feature = "profile")]
 impl RuntimeProfile {
     fn begin(&mut self) {
+        if !self.enabled {
+            self.last = None;
+            return;
+        }
         self.iterations += 1;
         self.seed = self.seed.wrapping_mul(6364136223846793005).wrapping_add(1);
         self.last = if self.seed >> 58 == 0 {
@@ -189,15 +194,17 @@ impl Machine {
             if self.mb.serial.tick(self.cpu.cycles) {
                 self.cpu.set_interruptflag(8);
             }
+            #[cfg(feature = "profile")]
+            self.profile.mark(2);
             if self.mb.timer.tick(self.cpu.cycles) {
                 self.cpu.set_interruptflag(4);
             }
             #[cfg(feature = "profile")]
-            self.profile.mark(2);
+            self.profile.mark(3);
             let interrupt = self.mb.lcd.tick(self.cpu.cycles);
             self.cpu.set_interruptflag(interrupt);
             #[cfg(feature = "profile")]
-            self.profile.mark(3);
+            self.profile.mark(4);
             if self.mb.singlestep {
                 return Ok(false);
             }

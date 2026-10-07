@@ -25,6 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "profile")]
     {
         machine.profile = Default::default();
+        machine.profile.enabled = true;
     }
     let buttons = ["right", "down", "left", "up", "a", "a", "b", "a"];
     let mut observations = Vec::with_capacity(frames / 24 * 4);
