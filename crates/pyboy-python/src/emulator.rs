@@ -389,6 +389,160 @@ impl Emulator {
             .load_execution(data, runtime, frame)
             .map_err(PyValueError::new_err)
     }
+    fn rtc_present(&self) -> bool {
+        self.inner.mb.cartridge.rtc.is_some()
+    }
+    /// The PyBoy 2.7.0 `.rtc` file contents: ten bytes.
+    fn rtc_export<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
+        Ok(PyBytes::new(py, &rtc.to_file()))
+    }
+    fn rtc_import(&mut self, data: &[u8]) -> PyResult<()> {
+        self.inner
+            .rtc_mut()
+            .and_then(|rtc| rtc.load_file(data))
+            .map_err(PyValueError::new_err)
+    }
+    /// Registers derived from the base timestamp at the current clock reading.
+    fn rtc_registers<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
+        let registers = rtc.registers(rtc.clock(now()));
+        let result = PyDict::new(py);
+        result.set_item("seconds", registers.seconds)?;
+        result.set_item("minutes", registers.minutes)?;
+        result.set_item("hours", registers.hours)?;
+        result.set_item("days", registers.days)?;
+        result.set_item("halt", registers.halt)?;
+        result.set_item("day_carry", registers.day_carry)?;
+        Ok(result)
+    }
+    #[pyo3(signature = (seconds=None, minutes=None, hours=None, days=None, halt=None, day_carry=None))]
+    fn rtc_set_registers(
+        &mut self,
+        seconds: Option<u8>,
+        minutes: Option<u8>,
+        hours: Option<u8>,
+        days: Option<u16>,
+        halt: Option<bool>,
+        day_carry: Option<bool>,
+    ) -> PyResult<()> {
+        let rtc = self.inner.rtc_mut().map_err(PyValueError::new_err)?;
+        let wall = now();
+        let at = rtc.clock(wall);
+        let mut registers = rtc.registers(at);
+        registers.seconds = seconds.unwrap_or(registers.seconds);
+        registers.minutes = minutes.unwrap_or(registers.minutes);
+        registers.hours = hours.unwrap_or(registers.hours);
+        registers.days = days.unwrap_or(registers.days);
+        registers.halt = halt.unwrap_or(registers.halt);
+        registers.day_carry = day_carry.unwrap_or(registers.day_carry);
+        rtc.set_registers(registers, at)
+            .map_err(PyValueError::new_err)
+    }
+    /// Base timestamp, latch contents and clock-lock status.
+    fn rtc_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
+        let result = PyDict::new(py);
+        result.set_item("timezero", rtc.timezero)?;
+        result.set_item("halt", rtc.halt)?;
+        result.set_item("day_carry", rtc.day_carry)?;
+        result.set_item("latch_enabled", rtc.latch_enabled)?;
+        result.set_item("latched", rtc.latch.to_vec())?;
+        result.set_item("clock", rtc.clock(now()))?;
+        result.set_item("locked", rtc.lock.is_some())?;
+        result.set_item(
+            "follow_frames",
+            rtc.lock.as_ref().is_some_and(|lock| lock.follow_frames),
+        )?;
+        Ok(result)
+    }
+    fn rtc_set_timezero(&mut self, timezero: f64) -> PyResult<()> {
+        if !timezero.is_finite() {
+            return Err(PyValueError::new_err("Timestamp must be finite"));
+        }
+        self.inner
+            .rtc_mut()
+            .map_err(PyValueError::new_err)?
+            .timezero = timezero;
+        Ok(())
+    }
+    fn clock_now(&self) -> PyResult<f64> {
+        self.inner.clock_now().map_err(PyValueError::new_err)
+    }
+    fn clock_locked(&self) -> bool {
+        self.inner.rtc().is_ok_and(|rtc| rtc.lock.is_some())
+    }
+    /// Freeze the cartridge clock at `at` (default: the current reading).
+    #[pyo3(signature = (at=None, follow_frames=false))]
+    fn lock_clock(&mut self, at: Option<f64>, follow_frames: bool) -> PyResult<()> {
+        let at = match at {
+            Some(at) if at.is_finite() => at,
+            Some(_) => return Err(PyValueError::new_err("Clock must be finite")),
+            None => self.inner.clock_now().map_err(PyValueError::new_err)?,
+        };
+        self.inner
+            .rtc_mut()
+            .map_err(PyValueError::new_err)?
+            .lock_clock(at, follow_frames)
+            .map_err(PyValueError::new_err)
+    }
+    fn unlock_clock(&mut self) -> PyResult<()> {
+        self.inner
+            .rtc_mut()
+            .map_err(PyValueError::new_err)?
+            .unlock_clock(now());
+        Ok(())
+    }
+    /// Exact clock-lock fields, or None when the clock follows the host.
+    fn clock_lock_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
+        let Some(lock) = &rtc.lock else {
+            return Ok(None);
+        };
+        let result = PyDict::new(py);
+        result.set_item("base", lock.base)?;
+        result.set_item("offset", lock.offset)?;
+        result.set_item("frames", lock.frames)?;
+        result.set_item("follow_frames", lock.follow_frames)?;
+        Ok(Some(result))
+    }
+    /// Restore fields from `clock_lock_state` verbatim. None releases the
+    /// lock without shifting the base timestamp, unlike `unlock_clock`.
+    #[pyo3(signature = (state))]
+    fn set_clock_lock_state(&mut self, state: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        let rtc = self.inner.rtc_mut().map_err(PyValueError::new_err)?;
+        let Some(state) = state else {
+            rtc.lock = None;
+            return Ok(());
+        };
+        if state.len() != 4 {
+            return Err(PyValueError::new_err("Invalid clock lock state"));
+        }
+        let field = |name: &str| {
+            state
+                .get_item(name)?
+                .ok_or_else(|| PyValueError::new_err("Invalid clock lock state"))
+        };
+        let base: f64 = field("base")?.extract()?;
+        let offset: f64 = field("offset")?.extract()?;
+        let frames: u64 = field("frames")?.extract()?;
+        let follow_frames: bool = field("follow_frames")?.extract()?;
+        rtc.lock = Some(
+            cartridge::ClockLock::new(base, offset, frames, follow_frames)
+                .map_err(PyValueError::new_err)?,
+        );
+        Ok(())
+    }
+    fn advance_clock(&mut self, seconds: f64) -> PyResult<()> {
+        let lock = self
+            .inner
+            .rtc_mut()
+            .map_err(PyValueError::new_err)?
+            .lock
+            .as_mut()
+            .ok_or_else(|| PyValueError::new_err("The clock is not locked"))?;
+        lock.advance(seconds).map_err(PyValueError::new_err)
+    }
     fn has_live_rtc(&self) -> bool {
         self.inner
             .mb

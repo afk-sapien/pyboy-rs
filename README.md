@@ -3,8 +3,8 @@
 A working, experimental headless Rust port of PyBoy 2.7.0 with PyO3 bindings.
 The emulator runs natively in Rust. It does not invoke Python PyBoy at runtime.
 Maturin builds the Python extension as a separate `pyboy-rs` distribution,
-imported as `pyboy_rs`. PokeSim and pokeagent-bench access this package through
-the shared `pokesim-core` runtime interface.
+imported as `pyboy_rs`. PokeBench does not use PyBoy RS. It is an experimental
+emulator backend for PokeSim, reached through PokeSim Core's runtime interface.
 
 This is not yet a complete one-to-one replacement for the entire PyBoy package.
 The core and the Python API needed for headless emulation are implemented.
@@ -15,14 +15,19 @@ and every public API have been verified.
 
 ## Use from Python
 
-Requires Rust 1.85 or newer and Python 3.11 or newer.
+Requires Rust 1.85 or newer (to build from source) and Python 3.11 or newer.
+The wheels use the stable ABI (`abi3`), so one wheel serves every Python from
+3.11 onward.
 
 ```sh
-cd pyboy-rs
 python -m venv .venv
 .venv/bin/python -m pip install maturin
-.venv/bin/maturin develop --release
+.venv/bin/maturin build --release --out dist
+.venv/bin/python -m pip install dist/pyboy_rs-*.whl
 ```
+
+Released wheels for Linux, macOS and Windows are built by the `Wheels` workflow
+(see `docs/RELEASING.md`).
 
 On Windows, use the equivalent commands under `.venv/Scripts`.
 For NumPy arrays and Pillow images, install the optional `images` extra.
@@ -40,10 +45,63 @@ with PyBoy("game.gb", window="null") as emulator:
         emulator.save_state(stream)
 ```
 
-Use an explicit writable `ram_file` stream to persist battery RAM. This port
-does not automatically create `.sav` or `.rtc` files beside the ROM. Separate
-RTC file I/O is not exposed yet. RTC registers and clock state inside emulator
-checkpoints are implemented.
+`ram_file` and `rtc_file` are binary streams read at construction. This port
+does not create `.sav` or `.rtc` files beside the ROM. To persist battery RAM
+and the clock, pass writable streams to `stop(ram_file=..., rtc_file=...)`,
+which, as in PyBoy 2.7.0, is the only thing that writes them. The `rtc_file`
+format is PyBoy's ten-byte one (little-endian `float64` base timestamp, halt
+byte, day-carry byte). Streams given to the constructor are written at `stop()`
+only when they are writable, so a read-only `open("gold.rtc", "rb")` is fine;
+streams passed to `stop` explicitly must be writable or `stop` raises (after
+marking the emulator stopped). RTC registers and clock state inside emulator
+checkpoints are also implemented.
+
+Feature detection does not need version checks: `pyboy_rs.FEATURES` is a set of
+capability names (`rtc_file`, `clock_lock`, `clock_lock_state`, `advance_clock`,
+`export_rtc`), `pyboy_rs.has_feature(name)` tests one, and `PyBoy.has_rtc` is
+`False`, never an error, on a cartridge without a clock. Builds before 0.1.1 have
+none of these, so `getattr(pyboy_rs, "FEATURES", ())` is the portable test.
+
+### Real-time clock
+
+MBC3 cartridges with a clock read the host clock by default, as in PyBoy. For
+repeatable runs the clock can be made deterministic:
+
+```python
+emulator = PyBoy("gold.gbc", rtc_file=open("gold.rtc", "rb"))
+emulator.lock_clock(at=1_700_000_000.0, follow_frames=True)
+emulator.tick(600)            # ten emulated seconds pass, whatever the host does
+emulator.advance_clock(3600)  # an explicit hour
+emulator.set_rtc_registers(days=3, hours=12)
+open("gold.rtc", "wb").write(emulator.rtc_export())
+```
+
+While locked the cartridge never reads the host clock. Its time is `at` (default
+the current reading) plus `advance_clock` plus, with `follow_frames=True`, 70224
+cycles at 4194304 Hz per completed frame. `unlock_clock` resumes host time
+without a jump. The lock is a runtime setting: it is not stored in save states,
+survives `load_state`, can be saved and restored exactly with `clock_lock_state`
+and `set_clock_lock_state`, and is not recorded or replayed by the execution API,
+which still rejects cartridges with a live clock. Differences from PyBoy: files
+with a non-finite timestamp or a flag other than 0 or 1 are rejected (PyBoy
+loads them and misbehaves), `stop` truncates the stream it writes to, and
+`rtc_file` is ignored on cartridges without a clock, as in PyBoy.
+`rtc_registers`, `set_rtc_registers`, `rtc_state` and `set_rtc_timezero` read and
+write the clock exactly; writes made by the game itself keep PyBoy's upstream
+adjustment arithmetic.
+
+`advance_clock` (and a lock's `at`) reject values that would make the clock
+non-finite or move its magnitude past 1e15 seconds; a rejected call changes
+nothing.
+
+**Clock lock and save states.** A raw save state does not carry the clock lock.
+It stores the base timestamp and latch, but whether the clock was locked, and
+at what instant, lives outside the state. To resume deterministically, store
+`clock_lock_state()` next to every state you save and call
+`set_clock_lock_state(...)` right after `load_state`. Loading a state that was
+saved while locked into an emulator that is not locked (or into PyBoy) makes
+the clock jump by the host time minus the lock base, because the stored base
+timestamp was relative to the locked time.
 
 The Python surface includes `tick`, `button`, `button_press`, `button_release`,
 button events through `send_input`, `memory`, `register_file`, `screen`, `sound`,
@@ -175,6 +233,11 @@ Build distributable artifacts with:
 
 ## Performance measurements
 
+In release 0.1.1 the two benchmark files that recorded extension file paths
+(`benchmarks/2026-10-05.json` and `2026-10-05-optimized.json`) had the author's
+local virtualenv prefix replaced by the placeholder `<venv>`. No measurement
+or hash changed.
+
 ### Active gameplay profiling
 
 The next optimization pass used three Pokemon Red gameplay checkpoints and
@@ -233,7 +296,7 @@ Input is held for 12 frames and released for 12 frames. Headless Python calls
 batch those 12 frames. Rendered calls process one frame with audio at 48 kHz.
 Sound hardware remains enabled in both modes. Traces record map, position, and
 battle status every 24 frames, with four to seven distinct observations per
-replay. These are deterministic local gameplay tests, not complete PokeSim
+replay. These are deterministic local gameplay tests, not complete downstream
 application or agent-throughput measurements. Memory was not remeasured in this
 pass.
 
@@ -355,13 +418,12 @@ separate from the randomized, uninstrumented full-emulator results above.
 System profiling counters were unavailable, so no hardware-counter or sampled
 call-stack attribution is claimed.
 
-Run on Linux from the PokeSim repository root using its local `pyboy-rs`
-convenience link, with both distributions installed
-in the Python environment used for the command:
+Run on Linux from a checkout of this repository, with both distributions
+installed in the Python environment used for the command:
 
 ```sh
-RUSTC_WRAPPER= cargo build --release --manifest-path pyboy-rs/Cargo.toml -p pyboy-core --example benchmark
-python pyboy-rs/tools/benchmark.py run pyboy-rs/reference/pyboy-2.7.0/pyboy/default_rom.gb --output /tmp/pyboy-benchmark.json
+RUSTC_WRAPPER= cargo build --release -p pyboy-core --example benchmark
+python tools/benchmark.py run reference/pyboy-2.7.0/pyboy/default_rom.gb --output /tmp/pyboy-benchmark.json
 ```
 
 Additional ROM paths can follow the demo path. `--cpu` selects a logical CPU,
@@ -417,16 +479,32 @@ than upstream PyBoy. Process memory differences include that difference in scope
 
 ## License
 
-The translated library is LGPL-3.0-only, matching PyBoy. See `LICENSE.md`,
-`COPYING`, and `NOTICE`. This directory is a separately licensed component of
-the surrounding MIT-licensed application. Preserve the notices and corresponding
-source when distributing it. Rebuilds from the included source are supported.
+PyBoy RS is a translation of PyBoy and is licensed LGPL-3.0-only, matching
+PyBoy. See `LICENSE.md`, `COPYING` and `NOTICE`, which ship in both the sdist
+and every wheel. Notices for the Rust crates linked into the wheel are in
+`THIRD_PARTY_NOTICES.md`.
+
+### Replacing the library (LGPL relinking)
+
+Each release is built from the source tagged `vX.Y.Z` at
+<https://github.com/afk-sapien/pyboy-rs> (for example
+<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.1>); the sdist on PyPI is the
+same source. The wheel's `pyboy_rs/_native` extension is the compiled library.
+To run an application against a modified build:
+
+1. Check out the release tag (or unpack the sdist) and edit the source.
+2. Build: `maturin build --release --out dist` (Rust 1.85 or newer, Python 3.11
+   or newer; `Cargo.lock` pins every dependency).
+3. Install over the release: `python -m pip install --force-reinstall dist/pyboy_rs-*.whl`.
+
+The application imports `pyboy_rs` dynamically and needs no relinking of its
+own. Your modified library replaces the released one.
 
 ## Standalone checkout
 
 This repository owns the emulator, bindings, reference tests, and profiling
-tools. Applications import `pokesim_core`, whose optional emulator dependency
-selects this distribution. The native library has no dependency on Core or
+tools. PokeSim Core can select this distribution as an optional, experimental
+emulator backend for PokeSim. The native library has no dependency on Core or
 either application. Upstream PyBoy is a test oracle, not a runtime backend.
 
 Build a local release wheel and corresponding source archive with Maturin.

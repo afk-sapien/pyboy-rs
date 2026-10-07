@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "pyboy-rs"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rust translation of PyBoy emulator components with PyO3 bindings"
 requires-python = ">=3.11"
 license = "LGPL-3.0-only"
-license-files = ["LICENSE.md", "COPYING", "NOTICE"]
+license-files = ["LICENSE.md", "COPYING", "NOTICE", "THIRD_PARTY_NOTICES.md"]
 readme = "README.md"
 
 [project.urls]
@@ -29,6 +29,12 @@ include = [
   { path = "benchmarks/*.json", format = "sdist" },
   { path = "README.md", format = "sdist" },
   { path = "EXECUTION.rst", format = "sdist" },
+  { path = "CHANGELOG.md", format = "sdist" },
+  { path = "docs/*.md", format = "sdist" },
+  { path = "LICENSE.md", format = "sdist" },
+  { path = "COPYING", format = "sdist" },
+  { path = "NOTICE", format = "sdist" },
+  { path = "THIRD_PARTY_NOTICES.md", format = "sdist" },
 ]
 exclude = ["**/__pycache__/**", "**/*.pyc"]
 

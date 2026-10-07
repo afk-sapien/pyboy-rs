@@ -1,0 +1,174 @@
+name: Wheels
+
+# Builds the sdist and wheels. Publishing to PyPI happens only for a pushed
+# tag v*, through trusted publishing; manual runs and pull requests build only.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  SMOKE: |
+    import pathlib, sys
+    import pyboy_rs
+    from pyboy_rs import PyBoy, _native
+    assert pyboy_rs.__version__ == _native.__version__, (pyboy_rs.__version__, _native.__version__)
+    assert pyboy_rs.HAS_CLOCK_CONTROL and pyboy_rs.has_feature("clock_lock_state")
+    rom = pathlib.Path(pyboy_rs.__file__).parent / "assets" / "default_rom.gb"
+    with PyBoy(rom) as emulator:
+        emulator.set_emulation_speed(0)
+        emulator.tick(30)
+        assert emulator.has_rtc is False
+    print("smoke ok", sys.version.split()[0], pyboy_rs.__version__)
+
+jobs:
+  wheels:
+    name: wheel ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: linux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: auto}
+          - {name: linux-aarch64, os: ubuntu-latest, target: aarch64, manylinux: auto}
+          - {name: macos-x86_64, os: macos-15-intel, target: x86_64, manylinux: ''}
+          - {name: macos-arm64, os: macos-14, target: aarch64, manylinux: ''}
+          - {name: windows-x64, os: windows-latest, target: x64, manylinux: ''}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux }}
+          args: --release --locked --out dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wheel-${{ matrix.name }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
+        with:
+          command: sdist
+          args: --out dist
+      - name: Check the sdist carries the licenses and no local paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=$(ls dist/*.tar.gz)
+          tar tzf "$archive" > listing.txt
+          for required in LICENSE.md COPYING NOTICE THIRD_PARTY_NOTICES.md CHANGELOG.md Cargo.lock; do
+            grep -q "/$required$" listing.txt || { echo "missing $required"; exit 1; }
+          done
+          mkdir unpacked && tar xzf "$archive" -C unpacked
+          if grep -rIl "/home/" unpacked; then echo "local path in sdist"; exit 1; fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  smoke:
+    name: smoke ${{ matrix.name }} py${{ matrix.python }}
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [linux-x86_64, linux-aarch64, macos-x86_64, macos-arm64, windows-x64]
+        python: ['3.11', '3.12', '3.13']
+        include:
+          - {name: linux-x86_64, os: ubuntu-latest}
+          - {name: linux-aarch64, os: ubuntu-24.04-arm}
+          - {name: macos-x86_64, os: macos-15-intel}
+          - {name: macos-arm64, os: macos-14}
+          - {name: windows-x64, os: windows-latest}
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: wheel-${{ matrix.name }}
+          path: dist
+      - name: Install the wheel and exercise it
+        shell: bash
+        run: |
+          python -m pip install --no-index --find-links dist pyboy-rs
+          python -c "$SMOKE"
+
+  smoke-sdist:
+    name: smoke sdist build
+    needs: sdist
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: sdist
+          path: dist
+      - name: Build from the sdist and exercise it
+        run: |
+          python -m pip install dist/*.tar.gz
+          python -c "$SMOKE"
+
+  publish:
+    name: publish to PyPI
+    # Only a pushed tag publishes. workflow_dispatch and pull requests never do.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [wheels, sdist, smoke, smoke-sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pyboy-rs/
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: '{wheel-*,sdist}'
+          merge-multiple: true
+          path: dist
+      - name: Check the tag matches the built version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          ls dist
+          for file in dist/*; do
+            case "$(basename "$file")" in
+              pyboy_rs-$version-*|pyboy_rs-$version.tar.gz) ;;
+              *) echo "$file does not match tag $GITHUB_REF_NAME"; exit 1 ;;
+            esac
+          done
+          test "$(ls dist | wc -l)" -eq 6
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+        with:
+          packages-dir: dist
+          attestations: true

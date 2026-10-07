@@ -1,8 +1,8 @@
 Experimental execution APIs
 ===========================
 
-These APIs belong to the isolated PyBoy RS and PokeSim Core experiment.
-Applications call Core. PyBoy RS executes generic controller inputs and Core
+These APIs are experimental. They are designed to be called through PokeSim
+Core, an optional backend for PokeSim, though they can be used directly. PyBoy RS executes generic controller inputs and Core
 interprets Pokemon menus and verifies their effects. No menu policy moves into
 the emulator.
 
@@ -85,7 +85,8 @@ before replay. Arbitrary memory edits, changing hooks, external link activity,
 and other host side effects are not an input recording format. Divergence
 raises an error and leaves the machine at the divergent state for inspection.
 Cartridges with a live wall clock are rejected when starting a recording.
-This API does not virtualize RTC time.
+This API does not virtualize RTC time, and a clock lock set with
+``lock_clock`` is not part of a recording.
 
 Recordings and checkpoints are private local artifacts. They contain game
 state and potentially small ROM overlays. Do not commit or distribute them.

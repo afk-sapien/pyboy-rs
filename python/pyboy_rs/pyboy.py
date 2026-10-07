@@ -17,6 +17,21 @@ def _read_source(source):
     return Path(source).read_bytes()
 
 
+def _writable(stream):
+    check = getattr(stream, "writable", None)
+    try:
+        return bool(check()) if check is not None else hasattr(stream, "write")
+    except (ValueError, OSError):
+        return False
+
+
+def _overwrite(stream, data):
+    stream.seek(0)
+    stream.write(data)
+    stream.truncate()
+    stream.flush()
+
+
 class Memory:
     def __init__(self, machine):
         self._machine = machine
@@ -168,8 +183,6 @@ class PyBoy(Execution):
             raise NotImplementedError("This port currently provides a headless window only")
         if kwargs:
             raise TypeError("Unsupported options: " + ", ".join(sorted(kwargs)))
-        if rtc_file is not None:
-            raise NotImplementedError("Separate RTC file I/O is not exposed yet")
         rom = _read_source(gamerom)
         boot = None if bootrom is None else _read_source(bootrom)
         self._machine = Machine(rom, boot, cgb, sound_emulated, sound_sample_rate)
@@ -185,6 +198,10 @@ class PyBoy(Execution):
             data = ram_file.read()
             if data:
                 self._machine.load_cartridge_ram(data)
+        if rtc_file is not None and self._machine.rtc_present():
+            # PyBoy 2.7.0 reads ten bytes here and fails on short input.
+            self._machine.rtc_import(rtc_file.read())
+        self._rtc_file = rtc_file
         self._events = []
         self._queued_input = []
         self._hooks = {}
@@ -365,17 +382,126 @@ class PyBoy(Execution):
         return self._machine.serial_output()
 
     def stop(self, save=True, ram_file=None, rtc_file=None):
-        if rtc_file is not None:
-            raise NotImplementedError("Separate RTC file I/O is not exposed yet")
+        """Stop the emulator, optionally saving cartridge RAM and the clock.
+
+        Streams passed here are written to, and any error is raised after the
+        emulator is marked stopped. The streams given to the constructor are
+        a convenience for ``save=True`` only: PyBoy 2.7.0 never writes to
+        them, so they are used only if they are writable and a read-only one
+        is skipped silently.
+        """
         if self.stopped:
             return
-        stream = self._ram_file if ram_file is None else ram_file
-        if save and stream is not None and self._machine.battery:
-            stream.seek(0)
-            stream.write(self._machine.cartridge_ram())
-            stream.truncate()
-            stream.flush()
-        self.stopped = True
+        try:
+            if save:
+                machine = self._machine
+                targets = (
+                    (ram_file, self._ram_file, lambda: machine.cartridge_ram() if machine.battery else None),
+                    (rtc_file, self._rtc_file, lambda: machine.rtc_export() if machine.rtc_present() else None),
+                )
+                errors = []
+                for explicit, default, make in targets:
+                    stream = default if explicit is None else explicit
+                    if stream is None or (explicit is None and not _writable(stream)):
+                        continue
+                    try:
+                        data = make()
+                        if data is not None:
+                            _overwrite(stream, data)
+                    except Exception as error:
+                        errors.append(error)
+                if errors:
+                    raise errors[0]
+        finally:
+            self.stopped = True
+
+    # Cartridge real-time clock (MBC3 + RTC). The file format is PyBoy 2.7.0's
+    # ``.rtc`` file: a little-endian float64 base timestamp (Unix seconds at
+    # which the clock read zero), a halt byte and a day-carry byte. Latched
+    # register values are not part of the file.
+
+    @property
+    def has_rtc(self):
+        """Whether the cartridge has a real-time clock. Never raises."""
+        return bool(self._machine.rtc_present())
+
+    @property
+    def rtc_present(self):
+        """Whether the cartridge has a real-time clock."""
+        return self._machine.rtc_present()
+
+    def rtc_export(self):
+        """Return the ten-byte PyBoy 2.7.0 ``.rtc`` file contents."""
+        return self._machine.rtc_export()
+
+    def rtc_import(self, source):
+        """Load a PyBoy 2.7.0 ``.rtc`` file from bytes or a binary file object."""
+        self._machine.rtc_import(source if isinstance(source, (bytes, bytearray, memoryview)) else source.read())
+
+    def rtc_registers(self):
+        """Seconds, minutes, hours, days (0-511), halt and day_carry at the clock's current reading.
+
+        These are derived from the base timestamp and are not the latched values
+        the game reads through the cartridge.
+        """
+        return self._machine.rtc_registers()
+
+    def set_rtc_registers(self, *, seconds=None, minutes=None, hours=None, days=None, halt=None, day_carry=None):
+        """Set any of the clock registers; omitted ones keep their current value.
+
+        This moves the base timestamp so the clock reads the requested values at
+        its current reading. Unlike a game write, it is exact.
+        """
+        self._machine.rtc_set_registers(seconds, minutes, hours, days, halt, day_carry)
+
+    def rtc_state(self):
+        """Base timestamp (``timezero``), halt, day carry, latch contents and lock status."""
+        return self._machine.rtc_state()
+
+    def set_rtc_timezero(self, timezero):
+        """Set the base timestamp: the Unix time at which the clock reads zero."""
+        self._machine.rtc_set_timezero(float(timezero))
+
+    @property
+    def clock_locked(self):
+        return self._machine.clock_locked()
+
+    def clock_now(self):
+        """The Unix time the cartridge currently uses: the locked time, or host time when unlocked."""
+        return self._machine.clock_now()
+
+    def lock_clock(self, at=None, follow_frames=False):
+        """Make the cartridge clock deterministic.
+
+        While locked, the cartridge never reads the host clock. Time is ``at``
+        (default: the current reading, which is host time if previously
+        unlocked) plus whatever ``advance_clock`` adds and, when
+        ``follow_frames`` is true, 70224 cycles at 4194304 Hz for every frame
+        completed by ``tick``/``run_frame``. Pass ``at`` for runs that must
+        repeat exactly. Locking again replaces the previous lock.
+        """
+        self._machine.lock_clock(None if at is None else float(at), bool(follow_frames))
+
+    def unlock_clock(self):
+        """Resume host time, continuing from the frozen reading instead of jumping."""
+        self._machine.unlock_clock()
+
+    def clock_lock_state(self):
+        """Exact lock fields (base, offset, frames, follow_frames), or None when unlocked.
+
+        Save states do not contain the lock. Store this beside a state to
+        resume a deterministic run exactly.
+        """
+        return self._machine.clock_lock_state()
+
+    def set_clock_lock_state(self, state):
+        """Restore ``clock_lock_state`` verbatim. None releases the lock without
+        shifting the base timestamp, unlike ``unlock_clock``."""
+        self._machine.set_clock_lock_state(None if state is None else dict(state))
+
+    def advance_clock(self, seconds):
+        """Advance a locked clock by ``seconds`` (finite, not negative)."""
+        self._machine.advance_clock(float(seconds))
 
     def __enter__(self):
         return self
