@@ -17,6 +17,21 @@ def _read_source(source):
     return Path(source).read_bytes()
 
 
+def _writable(stream):
+    check = getattr(stream, "writable", None)
+    try:
+        return bool(check()) if check is not None else hasattr(stream, "write")
+    except (ValueError, OSError):
+        return False
+
+
+def _overwrite(stream, data):
+    stream.seek(0)
+    stream.write(data)
+    stream.truncate()
+    stream.flush()
+
+
 class Memory:
     def __init__(self, machine):
         self._machine = machine
@@ -367,26 +382,48 @@ class PyBoy(Execution):
         return self._machine.serial_output()
 
     def stop(self, save=True, ram_file=None, rtc_file=None):
+        """Stop the emulator, optionally saving cartridge RAM and the clock.
+
+        Streams passed here are written to, and any error is raised after the
+        emulator is marked stopped. The streams given to the constructor are
+        a convenience for ``save=True`` only: PyBoy 2.7.0 never writes to
+        them, so they are used only if they are writable and a read-only one
+        is skipped silently.
+        """
         if self.stopped:
             return
-        stream = self._ram_file if ram_file is None else ram_file
-        if save and stream is not None and self._machine.battery:
-            stream.seek(0)
-            stream.write(self._machine.cartridge_ram())
-            stream.truncate()
-            stream.flush()
-        clock = self._rtc_file if rtc_file is None else rtc_file
-        if save and clock is not None and self._machine.rtc_present():
-            clock.seek(0)
-            clock.write(self._machine.rtc_export())
-            clock.truncate()
-            clock.flush()
-        self.stopped = True
+        try:
+            if save:
+                machine = self._machine
+                targets = (
+                    (ram_file, self._ram_file, lambda: machine.cartridge_ram() if machine.battery else None),
+                    (rtc_file, self._rtc_file, lambda: machine.rtc_export() if machine.rtc_present() else None),
+                )
+                errors = []
+                for explicit, default, make in targets:
+                    stream = default if explicit is None else explicit
+                    if stream is None or (explicit is None and not _writable(stream)):
+                        continue
+                    try:
+                        data = make()
+                        if data is not None:
+                            _overwrite(stream, data)
+                    except Exception as error:
+                        errors.append(error)
+                if errors:
+                    raise errors[0]
+        finally:
+            self.stopped = True
 
     # Cartridge real-time clock (MBC3 + RTC). The file format is PyBoy 2.7.0's
     # ``.rtc`` file: a little-endian float64 base timestamp (Unix seconds at
     # which the clock read zero), a halt byte and a day-carry byte. Latched
     # register values are not part of the file.
+
+    @property
+    def has_rtc(self):
+        """Whether the cartridge has a real-time clock. Never raises."""
+        return bool(self._machine.rtc_present())
 
     @property
     def rtc_present(self):

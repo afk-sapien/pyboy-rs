@@ -483,8 +483,8 @@ impl Emulator {
         self.inner
             .rtc_mut()
             .map_err(PyValueError::new_err)?
-            .lock_clock(at, follow_frames);
-        Ok(())
+            .lock_clock(at, follow_frames)
+            .map_err(PyValueError::new_err)
     }
     fn unlock_clock(&mut self) -> PyResult<()> {
         self.inner
@@ -527,23 +527,13 @@ impl Emulator {
         let offset: f64 = field("offset")?.extract()?;
         let frames: u64 = field("frames")?.extract()?;
         let follow_frames: bool = field("follow_frames")?.extract()?;
-        if !base.is_finite() || !offset.is_finite() || !(base + offset).is_finite() {
-            return Err(PyValueError::new_err("Clock must be finite"));
-        }
-        rtc.lock = Some(cartridge::ClockLock {
-            base,
-            offset,
-            frames,
-            follow_frames,
-        });
+        rtc.lock = Some(
+            cartridge::ClockLock::new(base, offset, frames, follow_frames)
+                .map_err(PyValueError::new_err)?,
+        );
         Ok(())
     }
     fn advance_clock(&mut self, seconds: f64) -> PyResult<()> {
-        if !seconds.is_finite() || seconds < 0.0 {
-            return Err(PyValueError::new_err(
-                "Advance must be finite and not negative",
-            ));
-        }
         let lock = self
             .inner
             .rtc_mut()
@@ -551,8 +541,7 @@ impl Emulator {
             .lock
             .as_mut()
             .ok_or_else(|| PyValueError::new_err("The clock is not locked"))?;
-        lock.offset += seconds;
-        Ok(())
+        lock.advance(seconds).map_err(PyValueError::new_err)
     }
     fn has_live_rtc(&self) -> bool {
         self.inner

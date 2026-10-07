@@ -379,3 +379,117 @@ def test_lock_state_round_trips_for_exact_resume():
     assert not second.clock_locked
     with pytest.raises(ValueError, match="no real-time clock"):
         rust(0x13).clock_lock_state()
+
+
+class ReadOnly(io.BytesIO):
+    """A stream opened for reading only, like open(path, "rb")."""
+
+    def writable(self):
+        return False
+
+    def write(self, data):
+        raise io.UnsupportedOperation("write")
+
+    def truncate(self, size=None):
+        raise io.UnsupportedOperation("truncate")
+
+
+def test_stop_with_a_read_only_constructor_stream_succeeds_and_marks_stopped():
+    clock = ReadOnly(rtc_file(1_000_000.0))
+    ram = ReadOnly()
+    pb = RustPyBoy(io.BytesIO(cartridge()), bootrom=str(BOOTROM), ram_file=ram, rtc_file=clock)
+    assert pb.has_rtc
+    pb.stop()
+    assert pb.stopped
+    assert clock.getvalue() == rtc_file(1_000_000.0)
+
+
+def test_stop_with_a_real_read_only_file(tmp_path):
+    path = tmp_path / "gold.rtc"
+    path.write_bytes(rtc_file(1_000_000.0))
+    with open(path, "rb") as stream:
+        pb = RustPyBoy(io.BytesIO(cartridge()), bootrom=str(BOOTROM), rtc_file=stream)
+        pb.stop()
+    assert pb.stopped and path.read_bytes() == rtc_file(1_000_000.0)
+
+
+def test_stop_failure_on_an_explicit_stream_raises_but_still_stops_and_writes_the_other():
+    ram = io.BytesIO()
+    pb = rust()
+    with pytest.raises(io.UnsupportedOperation):
+        pb.stop(ram_file=ram, rtc_file=ReadOnly())
+    assert pb.stopped
+    pb.stop()  # still idempotent
+    pb = rust()
+    with pytest.raises(io.UnsupportedOperation):
+        pb.stop(ram_file=ReadOnly(), rtc_file=(out := io.BytesIO()))
+    assert pb.stopped and len(out.getvalue()) == 10
+
+
+def test_explicit_stream_overrides_a_read_only_constructor_stream():
+    pb = RustPyBoy(io.BytesIO(cartridge()), bootrom=str(BOOTROM), rtc_file=ReadOnly(rtc_file(5.0)))
+    out = io.BytesIO()
+    pb.stop(rtc_file=out)
+    assert len(out.getvalue()) == 10 and pb.stopped
+
+
+def test_stop_with_a_closed_constructor_stream_does_not_raise():
+    stream = io.BytesIO(rtc_file(5.0))
+    pb = RustPyBoy(io.BytesIO(cartridge()), bootrom=str(BOOTROM), rtc_file=stream)
+    stream.close()
+    pb.stop()
+    assert pb.stopped
+
+
+def test_has_rtc_never_raises():
+    assert rust(0x10).has_rtc is True
+    assert rust(0x13).has_rtc is False
+
+
+def test_advance_clock_checks_the_running_offset():
+    pb = rust(rtc=rtc_file(1_000_000.0))
+    pb.lock_clock(at=1_000_000.0)
+    for huge in (1e308, 1e16, 1e300):
+        with pytest.raises(ValueError):
+            pb.advance_clock(huge)
+    pb.advance_clock(5e14)
+    with pytest.raises(ValueError):
+        pb.advance_clock(5e14 + 1e9)
+    lock = pb.clock_lock_state()
+    assert lock["offset"] == 5e14 and math.isfinite(pb.clock_now())
+    # The clock stays usable: game writes and exported state remain loadable.
+    pb.tick(2, False)
+    pb.set_rtc_registers(seconds=3)
+    state = io.BytesIO()
+    pb.save_state(state)
+    state.seek(0)
+    rust(rtc=rtc_file(1_000_000.0)).load_state(state)
+    assert math.isfinite(struct.unpack("<d", pb.rtc_export()[:8])[0])
+
+
+def test_lock_inputs_are_range_checked():
+    pb = rust(rtc=rtc_file(1_000_000.0))
+    for bad in (1e308, -1e308, 2e15, float("inf"), float("nan")):
+        with pytest.raises(ValueError):
+            pb.lock_clock(at=bad)
+    assert not pb.clock_locked
+    pb.lock_clock(at=1e9)
+    for bad in ({"base": 1e308, "offset": 1e308, "frames": 0, "follow_frames": False},
+                {"base": 0.0, "offset": 0.0, "frames": 2**64 - 1, "follow_frames": True},
+                {"base": 0.0, "offset": 0.0, "frames": 2**64, "follow_frames": False}):
+        with pytest.raises((ValueError, OverflowError)):
+            pb.set_clock_lock_state(bad)
+    assert pb.clock_lock_state()["base"] == 1e9
+
+
+def test_version_and_features_agree_across_the_build():
+    import pyboy_rs
+    from pyboy_rs import _native
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    if pyproject.exists():
+        assert f'version = "{pyboy_rs.__version__}"' in pyproject.read_text()
+    assert _native.__version__ == pyboy_rs.__version__ == "0.1.1"
+    assert pyboy_rs.HAS_CLOCK_CONTROL and pyboy_rs.has_feature("clock_lock_state")
+    assert not pyboy_rs.has_feature("nonexistent")
+    for name in ("rtc_file", "clock_lock", "advance_clock", "export_rtc"):
+        assert name in pyboy_rs.FEATURES

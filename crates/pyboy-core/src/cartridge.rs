@@ -30,7 +30,58 @@ pub struct ClockLock {
     pub follow_frames: bool,
 }
 
+/// Largest magnitude, in seconds, a locked clock may reach. Anything beyond
+/// this (about 31 million years) is rejected so sums can never overflow to
+/// infinity or NaN and poison exported state.
+pub const CLOCK_LIMIT: f64 = 1e15;
+
 impl ClockLock {
+    /// Build a lock, rejecting fields whose resulting reading is not finite or
+    /// is outside `CLOCK_LIMIT`.
+    pub fn new(
+        base: f64,
+        offset: f64,
+        frames: u64,
+        follow_frames: bool,
+    ) -> Result<Self, &'static str> {
+        let lock = Self {
+            base,
+            offset,
+            frames,
+            follow_frames,
+        };
+        lock.validate()?;
+        Ok(lock)
+    }
+
+    /// Check that every field and the resulting clock reading are finite and
+    /// within `CLOCK_LIMIT`.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let in_range = |value: f64| value.is_finite() && value.abs() <= CLOCK_LIMIT;
+        if in_range(self.base) && in_range(self.offset) && in_range(self.now()) {
+            Ok(())
+        } else {
+            Err("Clock is not finite or is out of range")
+        }
+    }
+
+    /// Add `seconds` to the offset. Fails, leaving the lock unchanged, when
+    /// `seconds` is not finite and non-negative or the result is out of range.
+    pub fn advance(&mut self, seconds: f64) -> Result<(), &'static str> {
+        if !seconds.is_finite() || seconds < 0.0 {
+            return Err("Advance must be finite and not negative");
+        }
+        let candidate = Self {
+            offset: self.offset + seconds,
+            ..self.clone()
+        };
+        candidate
+            .validate()
+            .map_err(|_| "Advance would move the clock out of range")?;
+        *self = candidate;
+        Ok(())
+    }
+
     pub fn now(&self) -> f64 {
         let frames = if self.follow_frames {
             self.frames as f64 * FRAME_SECONDS
@@ -176,13 +227,9 @@ impl Rtc {
 
     /// Freeze the clock. `at` is the instant to freeze at; callers pass the
     /// current reading when the caller has no preference.
-    pub fn lock_clock(&mut self, at: f64, follow_frames: bool) {
-        self.lock = Some(ClockLock {
-            base: at,
-            offset: 0.0,
-            frames: 0,
-            follow_frames,
-        });
+    pub fn lock_clock(&mut self, at: f64, follow_frames: bool) -> Result<(), &'static str> {
+        self.lock = Some(ClockLock::new(at, 0.0, 0, follow_frames)?);
+        Ok(())
     }
 
     /// Release a locked clock so the host clock resumes. The base timestamp
@@ -350,7 +397,7 @@ impl Cartridge {
     /// Advance a frame-following locked clock by one emulated frame.
     pub fn advance_clock_frame(&mut self) {
         if let Some(lock) = self.rtc.as_mut().and_then(|rtc| rtc.lock.as_mut()) {
-            lock.frames += 1;
+            lock.frames = lock.frames.saturating_add(1);
         }
     }
 
@@ -562,7 +609,11 @@ mod tests {
     fn locked_clock_ignores_the_host_time_passed_by_the_caller() {
         let mut cart = Cartridge::new(mbc3_rtc_rom(), 1_000.0).unwrap();
         cart.write(0, 0x0a, 1_000.0);
-        cart.rtc.as_mut().unwrap().lock_clock(1_000.0, false);
+        cart.rtc
+            .as_mut()
+            .unwrap()
+            .lock_clock(1_000.0, false)
+            .unwrap();
         // The host clock races ahead, but the cartridge sees none of it.
         latch(&mut cart, 9_999_999.0);
         assert_eq!(read_register(&mut cart, 8, 9_999_999.0), 0);
@@ -576,12 +627,12 @@ mod tests {
     #[test]
     fn frames_advance_only_a_frame_following_lock() {
         let mut cart = Cartridge::new(mbc3_rtc_rom(), 0.0).unwrap();
-        cart.rtc.as_mut().unwrap().lock_clock(100.0, false);
+        cart.rtc.as_mut().unwrap().lock_clock(100.0, false).unwrap();
         for _ in 0..600 {
             cart.advance_clock_frame();
         }
         assert_eq!(cart.rtc.as_ref().unwrap().clock(0.0), 100.0);
-        cart.rtc.as_mut().unwrap().lock_clock(100.0, true);
+        cart.rtc.as_mut().unwrap().lock_clock(100.0, true).unwrap();
         for _ in 0..16384 {
             cart.advance_clock_frame();
         }
@@ -604,7 +655,7 @@ mod tests {
             500.0,
         )
         .unwrap();
-        rtc.lock_clock(500.0, false);
+        rtc.lock_clock(500.0, false).unwrap();
         rtc.lock.as_mut().unwrap().offset = 30.0;
         let frozen = rtc.registers(rtc.clock(7e9));
         assert_eq!((frozen.seconds, frozen.days), (40, 2));
@@ -617,7 +668,11 @@ mod tests {
     fn register_writes_follow_the_locked_clock() {
         let mut cart = Cartridge::new(mbc3_rtc_rom(), 0.0).unwrap();
         cart.write(0, 0x0a, 0.0);
-        cart.rtc.as_mut().unwrap().lock_clock(2_000.0, false);
+        cart.rtc
+            .as_mut()
+            .unwrap()
+            .lock_clock(2_000.0, false)
+            .unwrap();
         // Upstream's day-register write subtracts `value` seconds, and the
         // locked clock (not the 123.0 host time) decides the elapsed time.
         cart.write(0x4000, 0x0b, 123.0);
@@ -628,5 +683,41 @@ mod tests {
         // 2003 s elapsed at the locked instant: 33 min 23 s.
         assert_eq!(read_register(&mut cart, 8, 456.0), 23);
         assert_eq!(read_register(&mut cart, 9, 456.0), 33);
+    }
+
+    #[test]
+    fn repeated_advances_cannot_overflow_the_clock() {
+        let mut lock = ClockLock::new(1_000.0, 0.0, 0, false).unwrap();
+        assert!(lock.advance(1e308).is_err());
+        assert!(lock.advance(CLOCK_LIMIT).is_err());
+        assert!(lock.advance(f64::NAN).is_err() && lock.advance(-1.0).is_err());
+        assert_eq!((lock.offset, lock.now()), (0.0, 1_000.0));
+        lock.advance(CLOCK_LIMIT / 2.0).unwrap();
+        // The running offset is checked, not just this step.
+        assert!(lock.advance(CLOCK_LIMIT / 2.0 + 1.0e6).is_err());
+        assert_eq!(lock.offset, CLOCK_LIMIT / 2.0);
+        assert!(lock.now().is_finite());
+    }
+
+    #[test]
+    fn locks_reject_values_that_sum_out_of_range() {
+        assert!(ClockLock::new(f64::NAN, 0.0, 0, false).is_err());
+        assert!(ClockLock::new(1e308, 1e308, 0, false).is_err());
+        assert!(ClockLock::new(0.0, 0.0, u64::MAX, true).is_err());
+        assert!(ClockLock::new(0.0, 0.0, u64::MAX, false).is_ok());
+        let mut rtc = Rtc::new(0.0);
+        assert!(rtc.lock_clock(f64::INFINITY, false).is_err() && rtc.lock.is_none());
+    }
+
+    #[test]
+    fn frame_counter_saturates() {
+        let mut cart = Cartridge::new(mbc3_rtc_rom(), 0.0).unwrap();
+        cart.rtc.as_mut().unwrap().lock_clock(0.0, false).unwrap();
+        cart.rtc.as_mut().unwrap().lock.as_mut().unwrap().frames = u64::MAX;
+        cart.advance_clock_frame();
+        assert_eq!(
+            cart.rtc.as_ref().unwrap().lock.as_ref().unwrap().frames,
+            u64::MAX
+        );
     }
 }

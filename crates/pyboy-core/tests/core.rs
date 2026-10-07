@@ -116,7 +116,11 @@ fn machine_clock_lock_counts_completed_frames_only_when_following() {
     for follow in [false, true] {
         let mut machine = Machine::new(mbc3_rtc_demo(), None, None, false, 48000).unwrap();
         assert!(machine.rtc().is_ok());
-        machine.rtc_mut().unwrap().lock_clock(1_000.0, follow);
+        machine
+            .rtc_mut()
+            .unwrap()
+            .lock_clock(1_000.0, follow)
+            .unwrap();
         for _ in 0..30 {
             machine.begin_frame(false, false);
             assert!(machine.run_frame().unwrap());

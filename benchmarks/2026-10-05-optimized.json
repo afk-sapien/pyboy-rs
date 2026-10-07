@@ -15,11 +15,11 @@
     "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
     "libraries": {
       "pyboy_cython": {
-        "path": "/home/ty/Repos/pokesim/.venv/lib/python3.12/site-packages/pyboy/core/cpu.cpython-312-x86_64-linux-gnu.so",
+        "path": "<venv>/lib/python3.12/site-packages/pyboy/core/cpu.cpython-312-x86_64-linux-gnu.so",
         "sha256": "6ec68ac51a955c62a7bbf368d252b835aa8285e0a36ab7413e2cc352dea39f59"
       },
       "rust_python": {
-        "path": "/home/ty/Repos/pokesim/pyboy-rs/.venv/lib/python3.12/site-packages/pyboy_rs/_native.abi3.so",
+        "path": "<venv>/lib/python3.12/site-packages/pyboy_rs/_native.abi3.so",
         "sha256": "2f26c478bf16a244b2ec70ded6fa9c6044883aff265f64c3fa8d0af266c3391f"
       }
     },

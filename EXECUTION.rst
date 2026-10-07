@@ -1,8 +1,8 @@
 Experimental execution APIs
 ===========================
 
-These APIs belong to the isolated PyBoy RS and PokeSim Core experiment.
-Applications call Core. PyBoy RS executes generic controller inputs and Core
+These APIs are experimental. They are designed to be called through PokeSim
+Core, an optional backend for PokeSim, though they can be used directly. PyBoy RS executes generic controller inputs and Core
 interprets Pokemon menus and verifies their effects. No menu policy moves into
 the emulator.
 
