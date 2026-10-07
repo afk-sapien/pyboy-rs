@@ -14,6 +14,14 @@ import time
 
 from .diagnostics import ReplayDivergence, compare, snapshot, validate_checkpoints, validate_ranges
 
+# What a checkpoint needs from the build that restores it: the hardware state
+# layout (PyBoy 2.7.0 format 15) and the execution runtime layout. A rebuilt or
+# other-platform wheel with the same layouts restores it. The build identity is
+# still recorded for provenance but is no longer a condition.
+STATE_FORMAT = 'pyboy-format-15'
+RUNTIME_FORMAT = 1
+COMPAT = {'state_format': STATE_FORMAT, 'runtime_format': RUNTIME_FORMAT}
+
 BUTTONS = ('up', 'down', 'right', 'left', 'a', 'b', 'select', 'start')
 
 
@@ -144,7 +152,9 @@ class Execution:
     def execution_checkpoint(self):
         """Detached hardware and input state. Hook functions are not serialized."""
         self._idle()
-        return deepcopy({'format': 1, 'build': _build_identity(), **self._execution_identity,
+        return deepcopy({'format': 1, 'build': _build_identity(), 'compat': dict(COMPAT),
+                         'clock_lock': self._machine.clock_lock_state() if self._machine.rtc_present() else None,
+                         **self._execution_identity,
                          'state': self._machine.save_state(), 'runtime': self._machine.execution_runtime(),
                          'frame': self.frame_count,
                          'events': self._events, 'scheduled': self._queued_input,
@@ -158,8 +168,16 @@ class Execution:
 
     def _validate_execution(self, checkpoint):
         checkpoint = deepcopy(checkpoint)
-        if checkpoint.get('format') != 1 or checkpoint.get('build') != _build_identity():
-            raise ValueError('Execution checkpoint requires the original build')
+        if checkpoint.get('format') != 1:
+            raise ValueError('Unsupported execution checkpoint')
+        if 'compat' in checkpoint:
+            if checkpoint['compat'] != COMPAT:
+                raise ValueError('Execution checkpoint uses an incompatible state or runtime format')
+        elif checkpoint.get('build') != _build_identity():
+            raise ValueError('Execution checkpoint without format information requires the original build')
+        lock = checkpoint.get('clock_lock')
+        if lock is not None and (type(lock) is not dict or set(lock) != {'base', 'offset', 'frames', 'follow_frames'}):
+            raise ValueError('Invalid execution checkpoint clock lock')
         if any(checkpoint.get(k) != v for k, v in self._execution_identity.items()):
             raise ValueError('Execution checkpoint ROM or settings mismatch')
         if checkpoint.get('hooks') != sorted(self._hooks):
@@ -219,7 +237,19 @@ class Execution:
         if self._recording is not None:
             raise RuntimeError('Stop recording before restoring')
         checkpoint = self._validate_execution(checkpoint)
-        self._machine.restore_execution(checkpoint['state'], checkpoint['runtime'], checkpoint['frame'])
+        # A checkpoint without clock data was saved with a host-following clock. Restoring it
+        # releases any lock (without shifting the base timestamp), so the result never mixes a
+        # fake locked time with a host-relative base. The previous lock returns if the restore fails.
+        has_clock = self._machine.rtc_present()
+        previous = self._machine.clock_lock_state() if has_clock else None
+        if has_clock:
+            self._machine.set_clock_lock_state(checkpoint.get('clock_lock'))
+        try:
+            self._machine.restore_execution(checkpoint['state'], checkpoint['runtime'], checkpoint['frame'])
+        except BaseException:
+            if has_clock:
+                self._machine.set_clock_lock_state(previous)
+            raise
         for key, original in list(self.memory._rom_original.items()):
             self.memory[key] = original
         for bank, address, value in checkpoint['patches']:
@@ -246,7 +276,8 @@ class Execution:
         if self._recording is not None:
             raise RuntimeError('Already recording')
         if self._machine.has_live_rtc():
-            raise ValueError('Deterministic recording requires a cartridge without a live wall clock')
+            raise ValueError('Deterministic recording requires a cartridge without a live wall clock: '
+                             'lock the clock first with lock_clock(at=...)')
         self._recording = {'format': 1, 'initial': self.execution_checkpoint(),
                            'frames': [], 'limit': max_frames, 'failed': False,
                            'diagnostic_interval': diagnostic_interval, 'diagnostic_ranges': ranges, 'checkpoints': []}
@@ -299,7 +330,7 @@ class Execution:
         return True
 
     def replay(self, recording):
-        """Replay trusted local data, rejecting build mismatch and divergence.
+        """Replay trusted local data, rejecting incompatible formats and divergence.
 
         Captures applied inputs and media flags at each emulated frame, including
         inputs generated by sequences. External hook context must be reset by
@@ -322,7 +353,9 @@ class Execution:
                 last_verified = offset
         actual = hashlib.sha256(self._machine.save_state()).hexdigest()
         patches = self.execution_checkpoint()['patches']
-        if actual != recording['final_sha256'] or self._machine.execution_runtime() != final['runtime'] or patches != final['patches']:
+        lock = self._machine.clock_lock_state() if self._machine.rtc_present() else None
+        if (actual != recording['final_sha256'] or self._machine.execution_runtime() != final['runtime']
+                or patches != final['patches'] or lock != final.get('clock_lock')):
             raise ReplayDivergence({'last_verified_offset': last_verified,
                                     'first_failed_offset': len(recording['frames']),
                                     'absolute_frame': self.frame_count,

@@ -430,13 +430,26 @@ class PyBoy(Execution):
         """Whether the cartridge has a real-time clock."""
         return self._machine.rtc_present()
 
-    def rtc_export(self):
-        """Return the ten-byte PyBoy 2.7.0 ``.rtc`` file contents."""
-        return self._machine.rtc_export()
+    def rtc_export(self, *, raw=False):
+        """Return the ten-byte PyBoy 2.7.0 ``.rtc`` file contents.
+
+        While the clock is locked the stored base timestamp is relative to the fake
+        locked time, so the file written is the host-following equivalent: the
+        registers read the frozen value now and keep counting from the host clock,
+        exactly as after ``unlock_clock``. An unlocked emulator, PyBoy or a real
+        cartridge can load it. ``raw=True`` returns the stored base unchanged, only
+        for fixtures that are imported into a clock locked at the same instant.
+        """
+        return self._machine.rtc_export(bool(raw))
 
     def rtc_import(self, source):
         """Load a PyBoy 2.7.0 ``.rtc`` file from bytes or a binary file object."""
+        self._clock_change_allowed()
         self._machine.rtc_import(source if isinstance(source, (bytes, bytearray, memoryview)) else source.read())
+
+    def _clock_change_allowed(self):
+        if self._recording is not None:
+            raise RuntimeError('The clock cannot be changed while recording: a replay would not reproduce it')
 
     def rtc_registers(self):
         """Seconds, minutes, hours, days (0-511), halt and day_carry at the clock's current reading.
@@ -452,6 +465,7 @@ class PyBoy(Execution):
         This moves the base timestamp so the clock reads the requested values at
         its current reading. Unlike a game write, it is exact.
         """
+        self._clock_change_allowed()
         self._machine.rtc_set_registers(seconds, minutes, hours, days, halt, day_carry)
 
     def rtc_state(self):
@@ -460,6 +474,7 @@ class PyBoy(Execution):
 
     def set_rtc_timezero(self, timezero):
         """Set the base timestamp: the Unix time at which the clock reads zero."""
+        self._clock_change_allowed()
         self._machine.rtc_set_timezero(float(timezero))
 
     @property
@@ -480,10 +495,12 @@ class PyBoy(Execution):
         completed by ``tick``/``run_frame``. Pass ``at`` for runs that must
         repeat exactly. Locking again replaces the previous lock.
         """
+        self._clock_change_allowed()
         self._machine.lock_clock(None if at is None else float(at), bool(follow_frames))
 
     def unlock_clock(self):
         """Resume host time, continuing from the frozen reading instead of jumping."""
+        self._clock_change_allowed()
         self._machine.unlock_clock()
 
     def clock_lock_state(self):
@@ -497,10 +514,12 @@ class PyBoy(Execution):
     def set_clock_lock_state(self, state):
         """Restore ``clock_lock_state`` verbatim. None releases the lock without
         shifting the base timestamp, unlike ``unlock_clock``."""
+        self._clock_change_allowed()
         self._machine.set_clock_lock_state(None if state is None else dict(state))
 
     def advance_clock(self, seconds):
         """Advance a locked clock by ``seconds`` (finite, not negative)."""
+        self._clock_change_allowed()
         self._machine.advance_clock(float(seconds))
 
     def __enter__(self):

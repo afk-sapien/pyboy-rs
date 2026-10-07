@@ -18,6 +18,34 @@ Real-time clock support and release hardening.
   and `PyBoy.has_rtc` (False, never an error, without a clock). `pyboy_rs.__version__`
   is new.
 
+### Fixed before the first tag
+
+- `rtc_export()` and `stop(rtc_file=...)` while the clock is locked now write the
+  host-following equivalent. They used to write the base relative to the locked
+  fake time, which an unlocked emulator or a real cartridge read as roughly
+  1000 days off. `rtc_export(raw=True)` keeps the stored base. New features:
+  `rtc_export_follows_host`, `checkpoint_clock_lock`.
+- `has_live_rtc` is false for a locked clock, so execution recording works with
+  a locked clock and still refuses a live one. Clock changes are refused while
+  recording.
+- Execution checkpoints carry the clock lock. Restoring one with no clock data
+  releases any lock (without shifting the clock) instead of keeping it.
+- Execution checkpoints are compatible across builds: they check the state
+  format (`pyboy-format-15`), the runtime format and the cartridge, not the
+  native build. Checkpoints with no format information still need the same build.
+- Profiling code is no longer in release wheels; it is the `profile` cargo
+  feature. Without it `start_profiling` and friends raise `RuntimeError`;
+  `has_feature("profiling")` tells them apart.
+- The release workflow refuses to modify a published release, attaches a
+  `SHA256SUMS` asset (seven assets in all) and prints the hashes in the job summary.
+
+### Known limits
+
+- Using an emulator from another thread during `tick` raises
+  `RuntimeError: Already borrowed`.
+- On Game Boy Color, a save made with sound off is silent when loaded into a
+  sound-on emulator (and the reverse). Load saves with the same `sound_emulated`.
+
 ### Deviations from PyBoy 2.7.0
 
 - Importing an `.rtc` file with a non-finite timestamp (NaN or infinity) or a
@@ -41,7 +69,7 @@ Real-time clock support and release hardening.
 
 ### Limitations
 
-- Raw save states do not carry the clock lock. Store `clock_lock_state()` with
+- Raw save states do not carry the clock lock (execution checkpoints do). Store `clock_lock_state()` with
   each state and restore it with `set_clock_lock_state` after `load_state`.
   Loading a state saved while locked into an unlocked emulator, or into PyBoy,
   makes the clock jump by host time minus the lock base.
@@ -51,7 +79,7 @@ Real-time clock support and release hardening.
 - Version 0.1.1 is `pyproject.toml`, `Cargo.toml` and `pyboy_rs.__version__`.
 - Wheel workflow: sdist, manylinux x86_64 and aarch64, macOS x86_64 and arm64,
   Windows x64, smoke-tested on Python 3.11 and 3.12 and 3.13. A `v*` tag attaches
-  the six files to the GitHub release (the distribution channel); PyPI is a
+  the six files and SHA256SUMS to the GitHub release (the distribution channel); PyPI is a
   manual `workflow_dispatch` option, off by default, never on a tag.
 - `THIRD_PARTY_NOTICES.md`, LGPL relinking instructions, and LICENSE files in
   sdist and wheel. Local filesystem paths removed from two benchmark files.

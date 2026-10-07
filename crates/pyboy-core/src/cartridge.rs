@@ -202,6 +202,20 @@ impl Rtc {
         out
     }
 
+    /// The `.rtc` file a host-clock emulator would hold at `wall`: while a
+    /// lock is set the base timestamp is relative to the fake locked time, so
+    /// it is shifted by the same amount `unlock_clock` would shift it. The
+    /// registers then read the frozen value now and follow the host from here.
+    /// Without a lock this equals `to_file`. Fails if the shift is not finite.
+    pub fn to_file_following_host(&self, wall: f64) -> Result<[u8; RTC_FILE_LEN], &'static str> {
+        let mut host = self.clone();
+        host.unlock_clock(wall);
+        if !host.timezero.is_finite() {
+            return Err("Clock is not finite or is out of range");
+        }
+        Ok(host.to_file())
+    }
+
     /// Load a PyBoy 2.7.0 `.rtc` file. Like PyBoy, the first ten bytes are
     /// used and trailing bytes are ignored, and latched registers are not
     /// part of the file. Unlike PyBoy, a non-finite timestamp or a flag other
@@ -638,6 +652,29 @@ mod tests {
         }
         // 16384 frames * 4389 / 262144 s is exactly 274.3125 s.
         assert_eq!(cart.rtc.as_ref().unwrap().clock(0.0), 374.3125);
+    }
+
+    #[test]
+    fn export_while_locked_matches_what_unlocking_leaves() {
+        let mut rtc = Rtc::new(1_000.0);
+        rtc.lock_clock(5_000_000_000.0, false).unwrap();
+        rtc.lock.as_mut().unwrap().offset = 90.0;
+        let frozen = rtc.registers(rtc.clock(7e9));
+        let wall = 1_800_000_000.0;
+        let exported = rtc.to_file_following_host(wall).unwrap();
+        // The lock itself is untouched, and the stored base is still the locked one.
+        assert!(rtc.lock.is_some());
+        assert_eq!(rtc.to_file()[..8], 1_000.0f64.to_le_bytes());
+        let mut other = Rtc::new(0.0);
+        other.load_file(&exported).unwrap();
+        assert_eq!(other.registers(wall), frozen);
+        // Without a lock both exports agree.
+        rtc.lock = None;
+        assert_eq!(rtc.to_file_following_host(wall).unwrap(), rtc.to_file());
+        // A shift that overflows is refused rather than written.
+        rtc.lock_clock(-1e15, false).unwrap();
+        rtc.timezero = f64::MAX;
+        assert!(rtc.to_file_following_host(f64::MAX).is_err());
     }
 
     #[test]

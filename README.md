@@ -58,7 +58,7 @@ checkpoints are also implemented.
 
 Feature detection does not need version checks: `pyboy_rs.FEATURES` is a set of
 capability names (`rtc_file`, `clock_lock`, `clock_lock_state`, `advance_clock`,
-`export_rtc`), `pyboy_rs.has_feature(name)` tests one, and `PyBoy.has_rtc` is
+`export_rtc`, `rtc_export_follows_host`, `checkpoint_clock_lock`, and `profiling` only in builds with that feature), `pyboy_rs.has_feature(name)` tests one, and `PyBoy.has_rtc` is
 `False`, never an error, on a cartridge without a clock. Builds before 0.1.1 have
 none of these, so `getattr(pyboy_rs, "FEATURES", ())` is the portable test.
 
@@ -79,16 +79,25 @@ open("gold.rtc", "wb").write(emulator.rtc_export())
 While locked the cartridge never reads the host clock. Its time is `at` (default
 the current reading) plus `advance_clock` plus, with `follow_frames=True`, 70224
 cycles at 4194304 Hz per completed frame. `unlock_clock` resumes host time
-without a jump. The lock is a runtime setting: it is not stored in save states,
-survives `load_state`, can be saved and restored exactly with `clock_lock_state`
-and `set_clock_lock_state`, and is not recorded or replayed by the execution API,
-which still rejects cartridges with a live clock. Differences from PyBoy: files
+without a jump. The lock is a runtime setting: it is not stored in raw save
+states, survives `load_state`, and can be saved and restored exactly with
+`clock_lock_state` and `set_clock_lock_state`. Differences from PyBoy: files
 with a non-finite timestamp or a flag other than 0 or 1 are rejected (PyBoy
 loads them and misbehaves), `stop` truncates the stream it writes to, and
 `rtc_file` is ignored on cartridges without a clock, as in PyBoy.
 `rtc_registers`, `set_rtc_registers`, `rtc_state` and `set_rtc_timezero` read and
 write the clock exactly; writes made by the game itself keep PyBoy's upstream
 adjustment arithmetic.
+
+**Exporting while locked.** The stored base timestamp of a locked clock is
+relative to the fake locked time, so writing it as is would make a real
+cartridge or an unlocked emulator read a wildly wrong time. `rtc_export()` and
+`stop(rtc_file=...)` therefore write the host-following equivalent: the file
+that, read on the host clock now, shows the time the locked clock shows now.
+Exporting changes nothing in the emulator. If that time cannot be represented
+the call raises `ValueError`. `rtc_export(raw=True)` writes the stored base
+unchanged; pair it with `clock_lock_state()` to resume a deterministic run
+exactly. Unlocked exports are unchanged.
 
 `advance_clock` (and a lock's `at`) reject values that would make the clock
 non-finite or move its magnitude past 1e15 seconds; a rejected call changes
@@ -102,6 +111,14 @@ at what instant, lives outside the state. To resume deterministically, store
 saved while locked into an emulator that is not locked (or into PyBoy) makes
 the clock jump by the host time minus the lock base, because the stored base
 timestamp was relative to the locked time.
+
+Execution checkpoints (see `EXECUTION.rst`) do carry the lock. Restoring one
+applies its lock, and restoring a checkpoint with no clock data (one saved with
+a live clock, or one that predates the field) releases any lock the emulator
+had, without shifting the clock, so the result is the same every time. Execution
+recording works with a locked clock and refuses a live one; clock changes
+(`advance_clock`, `lock_clock`, `unlock_clock`, `set_*`, `rtc_import`) are
+refused while recording because a replay would not reproduce them.
 
 The Python surface includes `tick`, `button`, `button_press`, `button_release`,
 button events through `send_input`, `memory`, `register_file`, `screen`, `sound`,
@@ -518,3 +535,14 @@ excluded. The source repository is
 Bounded input sequences, verified input replay, complete execution checkpoints,
 and opt-in native profiling are exposed through Core. See [EXECUTION.rst](EXECUTION.rst)
 for API examples, ownership rules, replay limits and the profiling procedure.
+
+## Threads and known limits
+
+An emulator is not thread-safe. Touching it from another thread (memory,
+`save_state`, ...) while `tick` is running raises `RuntimeError: Already borrowed`
+in that thread; the running frame is unaffected. Serialize access yourself.
+
+Saves made with `sound_emulated=False` carry the sound-off scheduler state. On
+Game Boy Color, loading such a save into an emulator with sound on (or the
+reverse) leaves audio silent after the load. Load a save into an emulator
+created with the same `sound_emulated` setting it was saved with.

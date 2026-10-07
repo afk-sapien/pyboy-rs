@@ -86,7 +86,7 @@ def test_rejected_checkpoints_are_atomic():
         emulator.run_sequence(3)
         before = emulator.execution_checkpoint()
         for field, value in [('state', b'bad'), ('frame', -1), ('frame', 2**64),
-                             ('rom_sha256', 'bad'), ('build', {}), ('events', [17]),
+                             ('rom_sha256', 'bad'), ('compat', {}), ('clock_lock', {'base': 1}), ('events', [17]),
                              ('scheduled', [(0, 1)]), ('paused', 1),
                              ('sequence', {'steps': [(('a',), 1)], 'index': 3, 'remaining': 1, 'entered': True})]:
             bad = deepcopy(before)
@@ -115,7 +115,21 @@ def test_record_replay_mixed_ticks_scheduled_inputs_and_sequences(render, sound)
         assert first.execution_checkpoint() == second.execution_checkpoint()
 
 
+def test_release_builds_report_that_profiling_is_not_compiled_in():
+    import pyboy_rs
+    if pyboy_rs.has_feature('profiling'):
+        pytest.skip('profiling build')
+    assert not pyboy_rs.HAS_PROFILING
+    with machine() as emulator:
+        for call in (emulator.start_profiling, emulator.profiling_counters, emulator.stop_profiling):
+            with pytest.raises(RuntimeError, match='not compiled'):
+                call()
+        emulator.tick(2)
+
+
 def test_hooks_still_execute_and_profile_is_opt_in():
+    import pyboy_rs
+    profiling = pyboy_rs.has_feature('profiling')
     with machine() as first, machine() as second:
         hits = [0, 0]
         for index, emulator in enumerate((first, second)):
@@ -125,13 +139,16 @@ def test_hooks_still_execute_and_profile_is_opt_in():
                 emulator.button('b', delay=2)
             emulator.hook_register(0, 0x100, callback, None)
         first.start_recording()
-        first.start_profiling()
+        if profiling:
+            first.start_profiling()
         first.start_sequence([((), 90)])
         first.run_sequence(90)
-        profile = first.stop_profiling()
+        profile = first.stop_profiling() if profiling else None
         recording = first.stop_recording()
         second.replay(recording)
         assert hits == [1, 1]
+        if not profiling:
+            return
         assert profile['hooks']['calls'] == 1
         assert profile['hooks']['wall_ns'] > 0
         assert profile['iterations'] >= profile['samples'] > 0
