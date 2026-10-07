@@ -168,8 +168,6 @@ class PyBoy(Execution):
             raise NotImplementedError("This port currently provides a headless window only")
         if kwargs:
             raise TypeError("Unsupported options: " + ", ".join(sorted(kwargs)))
-        if rtc_file is not None:
-            raise NotImplementedError("Separate RTC file I/O is not exposed yet")
         rom = _read_source(gamerom)
         boot = None if bootrom is None else _read_source(bootrom)
         self._machine = Machine(rom, boot, cgb, sound_emulated, sound_sample_rate)
@@ -185,6 +183,10 @@ class PyBoy(Execution):
             data = ram_file.read()
             if data:
                 self._machine.load_cartridge_ram(data)
+        if rtc_file is not None and self._machine.rtc_present():
+            # PyBoy 2.7.0 reads ten bytes here and fails on short input.
+            self._machine.rtc_import(rtc_file.read())
+        self._rtc_file = rtc_file
         self._events = []
         self._queued_input = []
         self._hooks = {}
@@ -365,8 +367,6 @@ class PyBoy(Execution):
         return self._machine.serial_output()
 
     def stop(self, save=True, ram_file=None, rtc_file=None):
-        if rtc_file is not None:
-            raise NotImplementedError("Separate RTC file I/O is not exposed yet")
         if self.stopped:
             return
         stream = self._ram_file if ram_file is None else ram_file
@@ -375,7 +375,83 @@ class PyBoy(Execution):
             stream.write(self._machine.cartridge_ram())
             stream.truncate()
             stream.flush()
+        clock = self._rtc_file if rtc_file is None else rtc_file
+        if save and clock is not None and self._machine.rtc_present():
+            clock.seek(0)
+            clock.write(self._machine.rtc_export())
+            clock.truncate()
+            clock.flush()
         self.stopped = True
+
+    # Cartridge real-time clock (MBC3 + RTC). The file format is PyBoy 2.7.0's
+    # ``.rtc`` file: a little-endian float64 base timestamp (Unix seconds at
+    # which the clock read zero), a halt byte and a day-carry byte. Latched
+    # register values are not part of the file.
+
+    @property
+    def rtc_present(self):
+        """Whether the cartridge has a real-time clock."""
+        return self._machine.rtc_present()
+
+    def rtc_export(self):
+        """Return the ten-byte PyBoy 2.7.0 ``.rtc`` file contents."""
+        return self._machine.rtc_export()
+
+    def rtc_import(self, source):
+        """Load a PyBoy 2.7.0 ``.rtc`` file from bytes or a binary file object."""
+        self._machine.rtc_import(source if isinstance(source, (bytes, bytearray, memoryview)) else source.read())
+
+    def rtc_registers(self):
+        """Seconds, minutes, hours, days (0-511), halt and day_carry at the clock's current reading.
+
+        These are derived from the base timestamp and are not the latched values
+        the game reads through the cartridge.
+        """
+        return self._machine.rtc_registers()
+
+    def set_rtc_registers(self, *, seconds=None, minutes=None, hours=None, days=None, halt=None, day_carry=None):
+        """Set any of the clock registers; omitted ones keep their current value.
+
+        This moves the base timestamp so the clock reads the requested values at
+        its current reading. Unlike a game write, it is exact.
+        """
+        self._machine.rtc_set_registers(seconds, minutes, hours, days, halt, day_carry)
+
+    def rtc_state(self):
+        """Base timestamp (``timezero``), halt, day carry, latch contents and lock status."""
+        return self._machine.rtc_state()
+
+    def set_rtc_timezero(self, timezero):
+        """Set the base timestamp: the Unix time at which the clock reads zero."""
+        self._machine.rtc_set_timezero(float(timezero))
+
+    @property
+    def clock_locked(self):
+        return self._machine.clock_locked()
+
+    def clock_now(self):
+        """The Unix time the cartridge currently uses: the locked time, or host time when unlocked."""
+        return self._machine.clock_now()
+
+    def lock_clock(self, at=None, follow_frames=False):
+        """Make the cartridge clock deterministic.
+
+        While locked, the cartridge never reads the host clock. Time is ``at``
+        (default: the current reading, which is host time if previously
+        unlocked) plus whatever ``advance_clock`` adds and, when
+        ``follow_frames`` is true, 70224 cycles at 4194304 Hz for every frame
+        completed by ``tick``/``run_frame``. Pass ``at`` for runs that must
+        repeat exactly. Locking again replaces the previous lock.
+        """
+        self._machine.lock_clock(None if at is None else float(at), bool(follow_frames))
+
+    def unlock_clock(self):
+        """Resume host time, continuing from the frozen reading instead of jumping."""
+        self._machine.unlock_clock()
+
+    def advance_clock(self, seconds):
+        """Advance a locked clock by ``seconds`` (finite, not negative)."""
+        self._machine.advance_clock(float(seconds))
 
     def __enter__(self):
         return self

@@ -85,7 +85,8 @@ before replay. Arbitrary memory edits, changing hooks, external link activity,
 and other host side effects are not an input recording format. Divergence
 raises an error and leaves the machine at the divergent state for inspection.
 Cartridges with a live wall clock are rejected when starting a recording.
-This API does not virtualize RTC time.
+This API does not virtualize RTC time, and a clock lock set with
+``lock_clock`` is not part of a recording.
 
 Recordings and checkpoints are private local artifacts. They contain game
 state and potentially small ROM overlays. Do not commit or distribute them.

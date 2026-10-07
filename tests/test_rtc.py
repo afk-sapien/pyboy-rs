@@ -1,0 +1,347 @@
+"""Cartridge real-time clock: PyBoy 2.7.0 ``.rtc`` files and the deterministic clock.
+
+Every cartridge here is synthetic. The program below latches the clock and
+copies the five registers into work RAM, so tests observe what a game observes.
+"""
+
+import atexit
+import io
+import math
+import shutil
+import struct
+import tempfile
+import time
+from pathlib import Path
+
+import pytest
+from pyboy import PyBoy
+from pyboy_rs import PyBoy as RustPyBoy
+
+SECOND, MINUTE, HOUR, DAY = 1, 60, 3600, 86400
+WRAM = 0xC000
+
+
+def _bootrom():
+    # Jump over nothing, then unmap the boot ROM and fall into the cartridge.
+    code = bytearray(256)
+    code[0:3] = bytes((0xC3, 0xFC, 0x00))
+    code[0xFC:0x100] = bytes((0x3E, 0x01, 0xE0, 0x50))
+    return bytes(code)
+
+
+_DIRECTORY = tempfile.mkdtemp(prefix="pyboy-rs-rtc-")
+atexit.register(shutil.rmtree, _DIRECTORY, ignore_errors=True)
+BOOTROM = Path(_DIRECTORY) / "boot.bin"
+BOOTROM.write_bytes(_bootrom())
+
+
+def _program():
+    code = bytearray(bytes((0x3E, 0x0A, 0xEA, 0x00, 0x00)))  # enable RAM and the clock
+    loop = len(code)
+    for value in (0, 1):  # latch: write 0 then 1 to 0x6000
+        code += bytes((0x3E, value, 0xEA, 0x00, 0x60))
+    for register in range(8, 13):  # copy RTC registers 8..12 to 0xC000..0xC004
+        code += bytes((0x3E, register, 0xEA, 0x00, 0x40))
+        code += bytes((0xFA, 0x00, 0xA0))
+        code += bytes((0xEA, register - 8, WRAM >> 8))
+    code += bytes((0x18, (loop - (len(code) + 2)) & 255))  # jr loop
+    return bytes(code)
+
+
+def cartridge(carttype=0x10):
+    data = bytearray(32 * 16384)
+    data[0x100:0x103] = bytes((0xC3, 0x50, 0x01))
+    data[0x150:0x150 + len(_program())] = _program()
+    data[0x147] = carttype
+    data[0x148] = 4
+    data[0x149] = 3
+    data[0x14D] = (-sum(data[0x134:0x14D]) - 25) & 255
+    return bytes(data)
+
+
+def rtc_file(timezero, halt=0, carry=0):
+    return struct.pack("<d", timezero) + bytes((halt, carry))
+
+
+def rust(carttype=0x10, rtc=None, ram=None):
+    pb = RustPyBoy(io.BytesIO(cartridge(carttype)), bootrom=str(BOOTROM),
+                   ram_file=ram, rtc_file=None if rtc is None else io.BytesIO(rtc))
+    pb.set_emulation_speed(0)
+    return pb
+
+
+def upstream(carttype=0x10, rtc=None, ram=None):
+    pb = PyBoy(io.BytesIO(cartridge(carttype)), window="null", bootrom=str(BOOTROM),
+               ram_file=ram, rtc_file=None if rtc is None else io.BytesIO(rtc))
+    pb.set_emulation_speed(0)
+    return pb
+
+
+def upstream_file(pb):
+    out = io.BytesIO()
+    pb.stop(ram_file=io.BytesIO(), rtc_file=out)
+    return out.getvalue()
+
+
+def rust_file(pb):
+    out = io.BytesIO()
+    pb.stop(ram_file=io.BytesIO(), rtc_file=out)
+    return out.getvalue()
+
+
+def observed(pb, frames=3):
+    pb.tick(frames, False)
+    return tuple(pb.memory[WRAM + offset] for offset in range(5))
+
+
+@pytest.mark.parametrize("timezero,halt,carry", [
+    (1_700_000_000.25, 0, 0), (1_700_000_000.0, 1, 0), (1_700_000_000.0, 0, 1),
+    (0.0, 1, 1), (-86400.5, 0, 0), (4e9, 0, 0), (math.pi, 0, 0),
+])
+def test_file_round_trip_is_byte_identical_to_pyboy(timezero, halt, carry):
+    data = rtc_file(timezero, halt, carry)
+    assert upstream_file(upstream(rtc=data)) == data
+    assert rust_file(rust(rtc=data)) == data
+
+
+def test_fresh_files_cross_load_with_pyboy():
+    before = time.time()
+    produced = upstream_file(upstream())
+    assert len(produced) == 10
+    assert before - 5 < struct.unpack_from("<d", produced)[0] < time.time() + 5
+    assert rust_file(rust(rtc=produced)) == produced
+    fresh = rust_file(rust())
+    assert len(fresh) == 10
+    assert before - 5 < struct.unpack_from("<d", fresh)[0] < time.time() + 5
+    assert upstream_file(upstream(rtc=fresh)) == fresh
+
+
+def test_trailing_bytes_are_ignored_like_pyboy():
+    data = rtc_file(1_650_000_000.0, 1, 0)
+    assert upstream_file(upstream(rtc=data + b"junk")) == data
+    assert rust_file(rust(rtc=data + b"junk")) == data
+
+
+@pytest.mark.parametrize("bad", [b"", bytes(9)])
+def test_short_files_fail_in_both(bad):
+    with pytest.raises(Exception):
+        upstream(rtc=bad)
+    with pytest.raises(ValueError):
+        rust(rtc=bad)
+
+
+@pytest.mark.parametrize("bad", [
+    rtc_file(float("nan")), rtc_file(float("inf")), rtc_file(1e9, 2, 0), rtc_file(1e9, 0, 3),
+])
+def test_values_pyboy_would_accept_but_cannot_use_are_rejected(bad):
+    # PyBoy loads these verbatim and then returns corrupt register bytes or NaN
+    # times. Documented deviation: the Rust port refuses them.
+    upstream(rtc=bad)
+    with pytest.raises(ValueError):
+        rust(rtc=bad)
+
+
+def test_game_visible_registers_match_pyboy():
+    elapsed = 2 * DAY + 3 * HOUR + 4 * MINUTE + 30.5
+    data = rtc_file(time.time() - elapsed)
+    expected = observed(upstream(rtc=data))
+    assert expected == (30, 4, 3, 2, 0)
+    assert observed(rust(rtc=data)) == expected
+
+
+@pytest.mark.parametrize("halt,carry", [(0, 0), (1, 0), (0, 1), (1, 1)])
+def test_flags_reach_the_game_like_pyboy(halt, carry):
+    data = rtc_file(time.time() - 40.5, halt, carry)
+    assert observed(rust(rtc=data)) == observed(upstream(rtc=data))
+    assert observed(rust(rtc=data))[4] == (halt << 6) | (carry << 7)
+
+
+def test_day_counter_overflow_matches_pyboy():
+    data = rtc_file(time.time() - (300 * DAY + 5.5))
+    expected = observed(upstream(rtc=data))
+    assert expected[3] == 300 - 256 and expected[4] == 1
+    assert observed(rust(rtc=data)) == expected
+    data = rtc_file(time.time() - (600 * DAY + 5.5))
+    expected = observed(upstream(rtc=data))
+    assert expected[4] & 0x80  # carry set
+    assert observed(rust(rtc=data)) == expected
+
+
+def test_game_register_write_moves_the_exported_base_like_pyboy():
+    data = rtc_file(1_000_000.0)
+    ports = {}
+    for name, pb in (("pyboy", upstream(rtc=data)), ("rust", rust(rtc=data))):
+        pb.memory[0x0000] = 0x0A
+        pb.memory[0x4000] = 0x09
+        pb.memory[0xA000] = 7
+        ports[name] = struct.unpack_from("<d", rust_file(pb) if name == "rust" else upstream_file(pb))[0]
+    # Both subtract the elapsed-minutes term and the value from the base; the
+    # host clock only differs by the time between the two constructions.
+    assert abs(ports["pyboy"] - ports["rust"]) < 5
+
+
+def test_non_rtc_cartridge_ignores_rtc_files():
+    data = rtc_file(1_700_000_000.0)
+    for pb, finish in ((upstream(0x13, rtc=data), upstream_file), (rust(0x13, rtc=data), rust_file)):
+        assert finish(pb) == b""
+    pb = rust(0x13)
+    assert not pb.rtc_present
+    for call in (pb.rtc_export, pb.rtc_registers, pb.rtc_state, pb.lock_clock, pb.clock_now):
+        with pytest.raises(ValueError, match="no real-time clock"):
+            call()
+
+
+def test_stop_without_save_writes_nothing_and_constructor_file_is_the_default_target():
+    out = io.BytesIO()
+    pb = rust(rtc=rtc_file(1.0))
+    pb.stop(save=False, ram_file=io.BytesIO(), rtc_file=out)
+    assert out.getvalue() == b""
+    target = io.BytesIO(rtc_file(1_234_567.0, 1, 0))
+    pb = RustPyBoy(io.BytesIO(cartridge()), bootrom=str(BOOTROM), ram_file=io.BytesIO(), rtc_file=target)
+    pb.set_rtc_registers(seconds=5)
+    pb.stop()
+    assert len(target.getvalue()) == 10
+    assert target.getvalue() == pb.rtc_export() and struct.unpack_from("<d", target.getvalue())[0] != 1_234_567.0
+    pb.stop()  # idempotent
+
+
+def test_stop_replaces_a_longer_existing_file():
+    # PyBoy overwrites the first ten bytes in place and leaves the rest; a
+    # stale tail would make the file look different, so the port truncates.
+    out = io.BytesIO(b"x" * 40)
+    pb = rust()
+    pb.stop(ram_file=io.BytesIO(), rtc_file=out)
+    assert len(out.getvalue()) == 10
+
+
+def test_export_import_and_state_agree_with_pyboy():
+    base = float(int(time.time()) - 3 * DAY)  # under 512 days, so the game never wraps the counter
+    pb = rust(rtc=rtc_file(base, 1, 1))
+    pb.tick(4, False)
+    state = io.BytesIO()
+    pb.save_state(state)
+    state.seek(0)
+    reference = upstream()
+    reference.load_state(state)
+    assert upstream_file(reference) == pb.rtc_export() == rtc_file(base, 1, 1)
+    other = rust()
+    other.rtc_import(pb.rtc_export())
+    assert other.rtc_state()["timezero"] == base
+    other.rtc_import(io.BytesIO(rtc_file(5.5)))
+    assert other.rtc_state()["timezero"] == 5.5
+    with pytest.raises(ValueError):
+        other.rtc_import(b"short")
+    assert other.rtc_state()["timezero"] == 5.5  # failed import changes nothing
+
+
+def test_registers_are_set_exactly_and_survive_the_file():
+    pb = rust(rtc=rtc_file(1_000_000.0))
+    pb.lock_clock(at=2_000_000.0)
+    pb.set_rtc_registers(seconds=59, minutes=1, hours=23, days=300, day_carry=True)
+    assert pb.rtc_registers() == {"seconds": 59, "minutes": 1, "hours": 23, "days": 300,
+                                  "halt": False, "day_carry": True}
+    pb.set_rtc_registers(minutes=2)
+    assert pb.rtc_registers()["seconds"] == 59 and pb.rtc_registers()["minutes"] == 2
+    assert observed(pb) == (59, 2, 23, 300 - 256, 1 | 0x80)
+    exported = pb.rtc_export()
+    assert struct.unpack_from("<d", exported)[0] == 2_000_000.0 - (300 * DAY + 23 * HOUR + 2 * MINUTE + 59)
+    assert exported[8:] == bytes((0, 1))
+    for bad in ({"seconds": 60}, {"minutes": 60}, {"hours": 24}, {"days": 512}, {"seconds": 256}):
+        with pytest.raises((ValueError, OverflowError)):
+            pb.set_rtc_registers(**bad)
+    assert pb.rtc_registers()["days"] == 300
+    pb.set_rtc_timezero(5.0)
+    assert pb.rtc_state()["timezero"] == 5.0
+    with pytest.raises(ValueError):
+        pb.set_rtc_timezero(float("nan"))
+
+
+def test_locked_clock_never_reads_the_host():
+    start = 1_000_000.0
+    data = rtc_file(start - (1 * DAY + 2 * HOUR + 3 * MINUTE + 4))
+    results = []
+    for pause in (0, 1.2):
+        pb = rust(rtc=data)
+        pb.lock_clock(at=start)
+        time.sleep(pause)
+        results.append((observed(pb, 5), pb.clock_now(), pb.rtc_export()))
+    assert results[0] == results[1]
+    assert results[0][0] == (4, 3, 2, 1, 0)
+    assert results[0][1] == start
+
+
+def test_advance_and_frame_following_are_the_only_ways_time_moves():
+    start = 5_000_000.0
+    pb = rust(rtc=rtc_file(start))
+    pb.lock_clock(at=start)
+    assert observed(pb, 600)[:2] == (0, 0)
+    pb.advance_clock(3661)
+    assert observed(pb, 2)[:3] == (1, 1, 1)
+    assert pb.clock_now() == start + 3661
+    for bad in (-1, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            pb.advance_clock(bad)
+
+    following = rust(rtc=rtc_file(start))
+    following.lock_clock(at=start, follow_frames=True)
+    following.tick(1200, False)
+    frames = following.frame_count
+    assert following.clock_now() == start + frames * 4389 / 262144
+    assert following.rtc_state()["follow_frames"]
+    # 1200 frames is about 20 s; the next latch sees it.
+    assert 19 <= observed(following, 2)[0] <= 20
+    assert following.rtc_state()["locked"]
+
+
+def test_two_runs_with_the_same_inputs_are_identical_while_locked():
+    def run():
+        pb = rust(rtc=rtc_file(1_000_000.0))
+        pb.lock_clock(at=1_000_000.0 + 17 * HOUR + 1, follow_frames=True)
+        trace = []
+        for chunk in range(5):
+            trace.append(observed(pb, 700))
+            pb.advance_clock(chunk * 1000)
+        return trace, pb.rtc_export(), pb.clock_now()
+
+    first = run()
+    time.sleep(1.1)
+    assert run() == first
+
+
+def test_unlock_continues_from_the_frozen_reading():
+    pb = rust(rtc=rtc_file(time.time() - 100))
+    pb.lock_clock(at=time.time() - 50)  # frozen 50 s before the base reads 100 s
+    pb.advance_clock(10)
+    frozen = pb.rtc_registers()
+    assert (frozen["minutes"], frozen["seconds"]) == (1, 0)  # 100 - 50 + 10 = 60 s
+    assert pb.clock_locked
+    pb.unlock_clock()
+    assert not pb.clock_locked
+    resumed = pb.rtc_registers()
+    assert (resumed["minutes"], resumed["seconds"]) in ((1, 0), (1, 1))
+    with pytest.raises(ValueError, match="not locked"):
+        pb.advance_clock(1)
+
+
+def test_relocking_replaces_the_lock_and_defaults_to_the_current_reading():
+    pb = rust(rtc=rtc_file(0.0))
+    pb.lock_clock(at=100.0)
+    pb.advance_clock(50)
+    pb.lock_clock()
+    assert pb.clock_now() == 150.0
+    pb.lock_clock(at=10.0, follow_frames=True)
+    assert pb.clock_now() == 10.0
+    with pytest.raises(ValueError):
+        pb.lock_clock(at=float("inf"))
+
+
+def test_state_load_keeps_the_lock():
+    pb = rust(rtc=rtc_file(1_000_000.0))
+    pb.lock_clock(at=1_000_100.0)
+    state = io.BytesIO()
+    pb.save_state(state)
+    pb.advance_clock(10)
+    state.seek(0)
+    pb.load_state(state)
+    assert pb.clock_locked and pb.clock_now() == 1_000_110.0
+    assert pb.rtc_state()["timezero"] == 1_000_000.0

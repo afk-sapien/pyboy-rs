@@ -41,9 +41,38 @@ with PyBoy("game.gb", window="null") as emulator:
 ```
 
 Use an explicit writable `ram_file` stream to persist battery RAM. This port
-does not automatically create `.sav` or `.rtc` files beside the ROM. Separate
-RTC file I/O is not exposed yet. RTC registers and clock state inside emulator
-checkpoints are implemented.
+does not automatically create `.sav` or `.rtc` files beside the ROM. Likewise
+`rtc_file` takes a binary stream, and `stop(rtc_file=...)` writes one, in
+PyBoy 2.7.0's ten-byte format (little-endian `float64` base timestamp, halt
+byte, day-carry byte). RTC registers and clock state inside emulator
+checkpoints are also implemented.
+
+### Real-time clock
+
+MBC3 cartridges with a clock read the host clock by default, as in PyBoy. For
+repeatable runs the clock can be made deterministic:
+
+```python
+emulator = PyBoy("gold.gbc", rtc_file=open("gold.rtc", "rb"))
+emulator.lock_clock(at=1_700_000_000.0, follow_frames=True)
+emulator.tick(600)            # ten emulated seconds pass, whatever the host does
+emulator.advance_clock(3600)  # an explicit hour
+emulator.set_rtc_registers(days=3, hours=12)
+open("gold.rtc", "wb").write(emulator.rtc_export())
+```
+
+While locked the cartridge never reads the host clock. Its time is `at` (default
+the current reading) plus `advance_clock` plus, with `follow_frames=True`, 70224
+cycles at 4194304 Hz per completed frame. `unlock_clock` resumes host time
+without a jump. The lock is a runtime setting: it is not stored in save states,
+survives `load_state`, and is not recorded or replayed by the execution API,
+which still rejects cartridges with a live clock. Differences from PyBoy: files
+with a non-finite timestamp or a flag other than 0 or 1 are rejected (PyBoy
+loads them and misbehaves), `stop` truncates the stream it writes to, and
+`rtc_file` is ignored on cartridges without a clock, as in PyBoy.
+`rtc_registers`, `set_rtc_registers`, `rtc_state` and `set_rtc_timezero` read and
+write the clock exactly; writes made by the game itself keep PyBoy's upstream
+adjustment arithmetic.
 
 The Python surface includes `tick`, `button`, `button_press`, `button_release`,
 button events through `send_input`, `memory`, `register_file`, `screen`, `sound`,

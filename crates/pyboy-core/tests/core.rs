@@ -101,3 +101,33 @@ fn truncated_state_is_atomic_and_wrong_versions_are_rejected() {
     assert!(machine.load_state(&future).is_err());
     assert_eq!(machine.save_state().unwrap(), before);
 }
+
+fn mbc3_rtc_demo() -> Vec<u8> {
+    let mut rom = DEMO.to_vec();
+    rom[0x147] = 0x10;
+    rom[0x14d] = rom[0x134..0x14d]
+        .iter()
+        .fold(0u8, |sum, byte| sum.wrapping_sub(*byte).wrapping_sub(1));
+    rom
+}
+
+#[test]
+fn machine_clock_lock_counts_completed_frames_only_when_following() {
+    for follow in [false, true] {
+        let mut machine = Machine::new(mbc3_rtc_demo(), None, None, false, 48000).unwrap();
+        assert!(machine.rtc().is_ok());
+        machine.rtc_mut().unwrap().lock_clock(1_000.0, follow);
+        for _ in 0..30 {
+            machine.begin_frame(false, false);
+            assert!(machine.run_frame().unwrap());
+        }
+        let expected = if follow {
+            1_000.0 + 30.0 * 4389.0 / 262144.0
+        } else {
+            1_000.0
+        };
+        assert_eq!(machine.clock_now().unwrap(), expected);
+    }
+    let mut plain = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    assert!(plain.rtc().is_err() && plain.clock_now().is_err() && plain.rtc_mut().is_err());
+}

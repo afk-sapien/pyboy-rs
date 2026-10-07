@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 use crate::{
     MAX_CYCLES,
-    cartridge::Cartridge,
+    cartridge::{Cartridge, Rtc},
     cpu::{Bus, Cpu, NoProgress},
     interaction::{Button, Interaction},
     lcd::Lcd,
@@ -10,6 +10,8 @@ use crate::{
     sound::Sound,
     timer::Timer,
 };
+
+pub const NO_RTC: &str = "The cartridge has no real-time clock";
 
 pub fn now() -> f64 {
     std::time::SystemTime::now()
@@ -93,6 +95,20 @@ impl RuntimeProfile {
 }
 
 impl Machine {
+    pub fn rtc(&self) -> Result<&Rtc, &'static str> {
+        self.mb.cartridge.rtc.as_ref().ok_or(NO_RTC)
+    }
+
+    pub fn rtc_mut(&mut self) -> Result<&mut Rtc, &'static str> {
+        self.mb.cartridge.rtc.as_mut().ok_or(NO_RTC)
+    }
+
+    /// The clock reading the cartridge would see now: the locked clock, or
+    /// the host clock when unlocked.
+    pub fn clock_now(&self) -> Result<f64, &'static str> {
+        Ok(self.rtc()?.clock(now()))
+    }
+
     pub fn new(
         rom: Vec<u8>,
         bootrom: Option<Vec<u8>>,
@@ -210,6 +226,7 @@ impl Machine {
             }
         }
         self.frame_count += 1;
+        self.mb.cartridge.advance_clock_frame();
         Ok(true)
     }
 
