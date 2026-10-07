@@ -1,7 +1,7 @@
 # Releasing
 
 Releases are built by `.github/workflows/wheels.yml`. Pushing a tag `v*` builds the
-sdist and the five wheels, runs the smoke tests, and attaches the six files to the
+sdist and the five wheels, runs the smoke tests, and attaches the six files and a `SHA256SUMS` file to the
 GitHub release for that tag (created from the `CHANGELOG.md` section if it does not
 exist). That is the distribution channel: PokeSim and PokeSim Core pin the release
 asset URLs. Nothing is published to PyPI from a tag.
@@ -9,7 +9,7 @@ asset URLs. Nothing is published to PyPI from a tag.
 PyPI is optional and manual only: run the workflow with `workflow_dispatch` and
 `publish_pypi` set to true (default false). It needs the one-time setup below.
 
-The release assets are exactly these files (the workflow fails on any other set):
+The release assets are exactly these files (seven in all; the workflow fails on any other set):
 
 - `pyboy_rs-X.Y.Z-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl`
 - `pyboy_rs-X.Y.Z-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl`
@@ -17,14 +17,16 @@ The release assets are exactly these files (the workflow fails on any other set)
 - `pyboy_rs-X.Y.Z-cp311-abi3-macosx_11_0_arm64.whl`
 - `pyboy_rs-X.Y.Z-cp311-abi3-win_amd64.whl`
 - `pyboy_rs-X.Y.Z.tar.gz`
+- `SHA256SUMS` (`sha256sum` format for the six files above; check with `sha256sum -c SHA256SUMS`)
 
 ## Dry run (no tag, nothing public)
 
 Run `Wheels` by `workflow_dispatch` with `draft_release` set to true. It builds and
-smoke-tests everything, then uploads the six files to a DRAFT release `vX.Y.Z`
+smoke-tests everything, then uploads the six files and `SHA256SUMS` to a DRAFT release `vX.Y.Z`
 (untagged; a draft has no public URL and no tag is created). The SHA-256 of each
-file is in the job summary. A dry run refuses to touch a release that is already
-public. Delete the draft afterwards, or let the tag push reuse it.
+file is in the job summary. The workflow never modifies a release that is already published, on a dry
+run or a tag push: it fails instead. Only a draft has its assets replaced. Delete
+the draft afterwards, or let the tag push reuse it (its assets are replaced).
 
 ## PyPI one-time setup (optional, owner)
 

@@ -49,18 +49,18 @@ jobs:
           - {name: macos-arm64, os: macos-14, target: aarch64, manylinux: ''}
           - {name: windows-x64, os: windows-latest, target: x64, manylinux: ''}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
-      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --locked --out dist
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: wheel-${{ matrix.name }}
           path: dist/*.whl
@@ -72,10 +72,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           command: sdist
           args: --out dist
@@ -90,7 +90,7 @@ jobs:
           done
           mkdir unpacked && tar xzf "$archive" -C unpacked
           if grep -rIl "/home/" unpacked; then echo "local path in sdist"; exit 1; fi
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: sdist
           path: dist/*.tar.gz
@@ -114,10 +114,10 @@ jobs:
           - {name: macos-arm64, os: macos-14}
           - {name: windows-x64, os: windows-latest}
     steps:
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: wheel-${{ matrix.name }}
           path: dist
@@ -134,10 +134,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: sdist
           path: dist
@@ -150,6 +150,7 @@ jobs:
     name: GitHub release assets
     # A pushed tag attaches the assets to its release. A manual run does so only
     # for a draft (draft_release), which has no public URL and creates no tag.
+    # Neither modifies a release that is already published.
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.draft_release)
     needs: [wheels, sdist, smoke, smoke-sdist]
     runs-on: ubuntu-latest
@@ -159,10 +160,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: '{wheel-*,sdist}'
           merge-multiple: true
@@ -190,8 +191,10 @@ jobs:
           if [ "$expected" != "$actual" ]; then
             echo "asset names differ"; echo "expected:"; echo "$expected"; echo "actual:"; echo "$actual"; exit 1
           fi
-          (cd dist && sha256sum * | tee ../SHA256.txt)
-          { echo '### SHA-256'; echo '```'; cat SHA256.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # SHA256SUMS (sha256sum format, checked with `sha256sum -c`) is attached as a
+          # seventh asset. It is kept out of dist/ so the six-file checks stay exact.
+          (cd dist && sha256sum * | tee ../SHA256SUMS)
+          { echo '### SHA-256'; echo '```'; cat SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           # Release notes: the CHANGELOG section for this version.
           awk -v v="$version" '$0 == "## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
           test -s notes.md || { echo "no CHANGELOG section for $version"; exit 1; }
@@ -199,16 +202,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Only a draft (or a release this run creates as a draft) may be modified.
+          # A published release is never touched, on a tag push or a manual run.
           if gh release view "$TAG" --json isDraft --jq .isDraft > state.txt 2>/dev/null; then
-            if [ "$GITHUB_EVENT_NAME" != push ] && [ "$(cat state.txt)" != true ]; then
-              echo "release $TAG is already public; a dry run will not modify it"; exit 1
+            if [ "$(cat state.txt)" != true ]; then
+              echo "release $TAG is already published; refusing to modify it"; exit 1
             fi
           else
             # Always created as a draft: it is published only after the assets are on it.
             gh release create "$TAG" --draft --target "$GITHUB_SHA" \
               --title "$TAG" --notes-file notes.md
           fi
-          gh release upload "$TAG" dist/* --clobber
+          # Replaces the assets of a draft (for example from an earlier dry run).
+          gh release upload "$TAG" dist/* SHA256SUMS --clobber
+          gh release view "$TAG" --json assets --jq '.assets[].name' | sort > uploaded.txt
+          (ls dist; echo SHA256SUMS) | sort > wanted.txt
+          diff wanted.txt uploaded.txt || { echo "release asset set is wrong"; exit 1; }
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             gh release edit "$TAG" --draft=false
           fi
@@ -227,12 +236,12 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: '{wheel-*,sdist}'
           merge-multiple: true
           path: dist
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Check the files match the version
@@ -248,7 +257,7 @@ jobs:
             esac
           done
           test "$(ls dist | wc -l)" -eq 6
-      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
         with:
           packages-dir: dist
           attestations: true

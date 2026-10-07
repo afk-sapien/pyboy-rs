@@ -243,7 +243,7 @@ def test_registers_are_set_exactly_and_survive_the_file():
     pb.set_rtc_registers(minutes=2)
     assert pb.rtc_registers()["seconds"] == 59 and pb.rtc_registers()["minutes"] == 2
     assert observed(pb) == (59, 2, 23, 300 - 256, 1 | 0x80)
-    exported = pb.rtc_export()
+    exported = pb.rtc_export(raw=True)
     assert struct.unpack_from("<d", exported)[0] == 2_000_000.0 - (300 * DAY + 23 * HOUR + 2 * MINUTE + 59)
     assert exported[8:] == bytes((0, 1))
     for bad in ({"seconds": 60}, {"minutes": 60}, {"hours": 24}, {"days": 512}, {"seconds": 256}):
@@ -264,7 +264,7 @@ def test_locked_clock_never_reads_the_host():
         pb = rust(rtc=data)
         pb.lock_clock(at=start)
         time.sleep(pause)
-        results.append((observed(pb, 5), pb.clock_now(), pb.rtc_export()))
+        results.append((observed(pb, 5), pb.clock_now(), pb.rtc_export(raw=True)))
     assert results[0] == results[1]
     assert results[0][0] == (4, 3, 2, 1, 0)
     assert results[0][1] == start
@@ -301,7 +301,7 @@ def test_two_runs_with_the_same_inputs_are_identical_while_locked():
         for chunk in range(5):
             trace.append(observed(pb, 700))
             pb.advance_clock(chunk * 1000)
-        return trace, pb.rtc_export(), pb.clock_now()
+        return trace, pb.rtc_export(raw=True), pb.clock_now()
 
     first = run()
     time.sleep(1.1)

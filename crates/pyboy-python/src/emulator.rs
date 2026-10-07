@@ -12,7 +12,7 @@ use pyo3::{
 };
 use std::collections::BTreeMap;
 
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "profile", target_os = "linux"))]
 fn thread_cpu_ns() -> std::io::Result<u64> {
     let mut time = libc::timespec {
         tv_sec: 0,
@@ -25,10 +25,17 @@ fn thread_cpu_ns() -> std::io::Result<u64> {
     Ok(time.tv_sec as u64 * 1_000_000_000 + time.tv_nsec as u64)
 }
 
+#[cfg(not(feature = "profile"))]
+fn profiling_unavailable() -> PyErr {
+    PyRuntimeError::new_err(
+        "Profiling is not compiled into this build; build pyboy-rs with the \"profile\" feature",
+    )
+}
+
 #[pyclass(module = "pyboy_rs._native", name = "Machine")]
 pub struct Emulator {
     inner: Machine,
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "profile", target_os = "linux"))]
     frame_timing: Option<(u64, u64, u64)>,
 }
 
@@ -44,7 +51,7 @@ impl Emulator {
         sample_rate: u32,
     ) -> PyResult<Self> {
         Ok(Self {
-            #[cfg(target_os = "linux")]
+            #[cfg(all(feature = "profile", target_os = "linux"))]
             frame_timing: None,
             inner: Machine::new(rom, bootrom, cgb, sound_emulated, sample_rate)
                 .map_err(PyValueError::new_err)?,
@@ -54,7 +61,7 @@ impl Emulator {
         self.inner.begin_frame(render, sound);
     }
     fn run_frame(&mut self, py: Python<'_>) -> PyResult<bool> {
-        #[cfg(target_os = "linux")]
+        #[cfg(all(feature = "profile", target_os = "linux"))]
         if self.frame_timing.is_some() {
             let (complete, cpu, wall) = self.run_frame_profiled(py)?;
             if let Some(timing) = self.frame_timing.as_mut() {
@@ -71,15 +78,15 @@ impl Emulator {
             ))
         })
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "profile", target_os = "linux"))]
     fn enable_frame_timing(&mut self) {
         self.frame_timing = Some((0, 0, 0));
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "profile", target_os = "linux"))]
     fn frame_timing(&self) -> Option<(u64, u64, u64)> {
         self.frame_timing
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(all(feature = "profile", target_os = "linux"))]
     fn run_frame_profiled(&mut self, py: Python<'_>) -> PyResult<(bool, u64, u64)> {
         let (result, cpu, wall) = py
             .detach(|| {
@@ -392,10 +399,22 @@ impl Emulator {
     fn rtc_present(&self) -> bool {
         self.inner.mb.cartridge.rtc.is_some()
     }
-    /// The PyBoy 2.7.0 `.rtc` file contents: ten bytes.
-    fn rtc_export<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    /// The PyBoy 2.7.0 `.rtc` file contents: ten bytes. While the clock is
+    /// locked the default is the host-following equivalent (what `unlock_clock`
+    /// would leave), because the stored base is relative to the fake locked
+    /// time and would read years off anywhere else. `raw` returns the stored
+    /// base as is, for deterministic fixtures that are re-imported into a
+    /// clock locked at the same instant.
+    #[pyo3(signature = (raw=false))]
+    fn rtc_export<'py>(&self, py: Python<'py>, raw: bool) -> PyResult<Bound<'py, PyBytes>> {
         let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
-        Ok(PyBytes::new(py, &rtc.to_file()))
+        let file = if raw {
+            rtc.to_file()
+        } else {
+            rtc.to_file_following_host(now())
+                .map_err(PyValueError::new_err)?
+        };
+        Ok(PyBytes::new(py, &file))
     }
     fn rtc_import(&mut self, data: &[u8]) -> PyResult<()> {
         self.inner
@@ -543,21 +562,26 @@ impl Emulator {
             .ok_or_else(|| PyValueError::new_err("The clock is not locked"))?;
         lock.advance(seconds).map_err(PyValueError::new_err)
     }
+    /// Whether the cartridge clock still depends on the host clock. A locked
+    /// clock is deterministic and does not count.
     fn has_live_rtc(&self) -> bool {
         self.inner
             .mb
             .cartridge
             .rtc
             .as_ref()
-            .is_some_and(|rtc| !rtc.timelock)
+            .is_some_and(|rtc| !rtc.timelock && rtc.lock.is_none())
     }
+    #[cfg(feature = "profile")]
     fn profile_start(&mut self) {
         self.inner.profile = Default::default();
         self.inner.profile.enabled = true;
     }
+    #[cfg(feature = "profile")]
     fn profile_stop(&mut self) {
         self.inner.profile.enabled = false;
     }
+    #[cfg(feature = "profile")]
     fn profile_snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let profile = &self.inner.profile;
         let result = PyDict::new(py);
@@ -575,6 +599,18 @@ impl Emulator {
         }
         result.set_item("components", components)?;
         Ok(result)
+    }
+    #[cfg(not(feature = "profile"))]
+    fn profile_start(&mut self) -> PyResult<()> {
+        Err(profiling_unavailable())
+    }
+    #[cfg(not(feature = "profile"))]
+    fn profile_stop(&mut self) -> PyResult<()> {
+        Err(profiling_unavailable())
+    }
+    #[cfg(not(feature = "profile"))]
+    fn profile_snapshot(&self) -> PyResult<()> {
+        Err(profiling_unavailable())
     }
     fn load_state(&mut self, data: &[u8]) -> PyResult<()> {
         self.inner.load_state(data).map_err(PyValueError::new_err)

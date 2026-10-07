@@ -84,9 +84,10 @@ context. Install matching hook addresses and reset external callback state
 before replay. Arbitrary memory edits, changing hooks, external link activity,
 and other host side effects are not an input recording format. Divergence
 raises an error and leaves the machine at the divergent state for inspection.
-Cartridges with a live wall clock are rejected when starting a recording.
-This API does not virtualize RTC time, and a clock lock set with
-``lock_clock`` is not part of a recording.
+Cartridges with a live wall clock are rejected when starting a recording; lock
+the clock first with ``lock_clock(at=...)``. A locked clock is part of the
+checkpoints and is replayed exactly. Clock changes are refused while recording.
+Restoring a checkpoint that has no clock data releases any lock.
 
 Recordings and checkpoints are private local artifacts. They contain game
 state and potentially small ROM overlays. Do not commit or distribute them.
