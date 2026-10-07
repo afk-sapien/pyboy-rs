@@ -65,7 +65,8 @@ While locked the cartridge never reads the host clock. Its time is `at` (default
 the current reading) plus `advance_clock` plus, with `follow_frames=True`, 70224
 cycles at 4194304 Hz per completed frame. `unlock_clock` resumes host time
 without a jump. The lock is a runtime setting: it is not stored in save states,
-survives `load_state`, and is not recorded or replayed by the execution API,
+survives `load_state`, can be saved and restored exactly with `clock_lock_state`
+and `set_clock_lock_state`, and is not recorded or replayed by the execution API,
 which still rejects cartridges with a live clock. Differences from PyBoy: files
 with a non-finite timestamp or a flag other than 0 or 1 are rejected (PyBoy
 loads them and misbehaves), `stop` truncates the stream it writes to, and

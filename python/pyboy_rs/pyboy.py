@@ -449,6 +449,19 @@ class PyBoy(Execution):
         """Resume host time, continuing from the frozen reading instead of jumping."""
         self._machine.unlock_clock()
 
+    def clock_lock_state(self):
+        """Exact lock fields (base, offset, frames, follow_frames), or None when unlocked.
+
+        Save states do not contain the lock. Store this beside a state to
+        resume a deterministic run exactly.
+        """
+        return self._machine.clock_lock_state()
+
+    def set_clock_lock_state(self, state):
+        """Restore ``clock_lock_state`` verbatim. None releases the lock without
+        shifting the base timestamp, unlike ``unlock_clock``."""
+        self._machine.set_clock_lock_state(None if state is None else dict(state))
+
     def advance_clock(self, seconds):
         """Advance a locked clock by ``seconds`` (finite, not negative)."""
         self._machine.advance_clock(float(seconds))

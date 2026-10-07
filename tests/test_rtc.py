@@ -345,3 +345,37 @@ def test_state_load_keeps_the_lock():
     pb.load_state(state)
     assert pb.clock_locked and pb.clock_now() == 1_000_110.0
     assert pb.rtc_state()["timezero"] == 1_000_000.0
+
+
+def test_lock_state_round_trips_for_exact_resume():
+    base = 1_000_000.0
+    first = rust(rtc=rtc_file(base))
+    assert first.clock_lock_state() is None
+    first.lock_clock(at=base + 90, follow_frames=True)
+    first.tick(300, False)
+    first.advance_clock(11.5)
+    state, lock = io.BytesIO(), first.clock_lock_state()
+    first.save_state(state)
+    assert lock == {"base": base + 90, "offset": 11.5, "frames": 300, "follow_frames": True}
+
+    # A new machine has a different lock until the saved fields are restored.
+    second = rust(rtc=rtc_file(base))
+    second.lock_clock(at=5.0)
+    state.seek(0)
+    second.load_state(state)
+    second.set_clock_lock_state(lock)
+    assert second.clock_now() == first.clock_now()
+    for _ in range(3):
+        assert observed(first, 200) == observed(second, 200)
+    assert second.clock_lock_state() == first.clock_lock_state()
+
+    # None releases without the continuity shift that unlock_clock applies.
+    timezero = second.rtc_state()["timezero"]
+    second.set_clock_lock_state(None)
+    assert not second.clock_locked and second.rtc_state()["timezero"] == timezero
+    for bad in ({}, {"base": 1.0}, {**lock, "base": float("nan")}, {**lock, "frames": -1}):
+        with pytest.raises((ValueError, OverflowError)):
+            second.set_clock_lock_state(bad)
+    assert not second.clock_locked
+    with pytest.raises(ValueError, match="no real-time clock"):
+        rust(0x13).clock_lock_state()

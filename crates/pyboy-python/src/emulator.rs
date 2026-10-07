@@ -493,6 +493,51 @@ impl Emulator {
             .unlock_clock(now());
         Ok(())
     }
+    /// Exact clock-lock fields, or None when the clock follows the host.
+    fn clock_lock_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>> {
+        let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
+        let Some(lock) = &rtc.lock else {
+            return Ok(None);
+        };
+        let result = PyDict::new(py);
+        result.set_item("base", lock.base)?;
+        result.set_item("offset", lock.offset)?;
+        result.set_item("frames", lock.frames)?;
+        result.set_item("follow_frames", lock.follow_frames)?;
+        Ok(Some(result))
+    }
+    /// Restore fields from `clock_lock_state` verbatim. None releases the
+    /// lock without shifting the base timestamp, unlike `unlock_clock`.
+    #[pyo3(signature = (state))]
+    fn set_clock_lock_state(&mut self, state: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        let rtc = self.inner.rtc_mut().map_err(PyValueError::new_err)?;
+        let Some(state) = state else {
+            rtc.lock = None;
+            return Ok(());
+        };
+        if state.len() != 4 {
+            return Err(PyValueError::new_err("Invalid clock lock state"));
+        }
+        let field = |name: &str| {
+            state
+                .get_item(name)?
+                .ok_or_else(|| PyValueError::new_err("Invalid clock lock state"))
+        };
+        let base: f64 = field("base")?.extract()?;
+        let offset: f64 = field("offset")?.extract()?;
+        let frames: u64 = field("frames")?.extract()?;
+        let follow_frames: bool = field("follow_frames")?.extract()?;
+        if !base.is_finite() || !offset.is_finite() || !(base + offset).is_finite() {
+            return Err(PyValueError::new_err("Clock must be finite"));
+        }
+        rtc.lock = Some(cartridge::ClockLock {
+            base,
+            offset,
+            frames,
+            follow_frames,
+        });
+        Ok(())
+    }
     fn advance_clock(&mut self, seconds: f64) -> PyResult<()> {
         if !seconds.is_finite() || seconds < 0.0 {
             return Err(PyValueError::new_err(
