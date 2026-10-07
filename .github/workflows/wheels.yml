@@ -1,11 +1,21 @@
 name: Wheels
 
-# Builds the sdist and wheels. Publishing to PyPI happens only for a pushed
-# tag v*, through trusted publishing; manual runs and pull requests build only.
+# Builds the sdist and wheels, smoke-tests them, and attaches them to the GitHub
+# release for the tag (the release is created from the CHANGELOG if missing).
+# PyPI is never published from a tag; it is an opt-in manual run only.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      draft_release:
+        description: 'Dry run: upload the assets to a DRAFT release v<version> (no tag is created)'
+        type: boolean
+        default: false
+      publish_pypi:
+        description: 'Publish to PyPI (trusted publishing, needs the pypi environment). Leave off.'
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -136,10 +146,77 @@ jobs:
           python -m pip install dist/*.tar.gz
           python -c "$SMOKE"
 
+  release:
+    name: GitHub release assets
+    # A pushed tag attaches the assets to its release. A manual run does so only
+    # for a draft (draft_release), which has no public URL and creates no tag.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.draft_release)
+    needs: [wheels, sdist, smoke, smoke-sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: '{wheel-*,sdist}'
+          merge-multiple: true
+          path: dist
+      - name: Check the assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -n1)
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tag="$GITHUB_REF_NAME"
+            test "$tag" = "v$version" || { echo "tag $tag does not match version $version"; exit 1; }
+          else
+            tag="v$version"
+          fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          expected="pyboy_rs-$version-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+          pyboy_rs-$version-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+          pyboy_rs-$version-cp311-abi3-macosx_10_12_x86_64.whl
+          pyboy_rs-$version-cp311-abi3-macosx_11_0_arm64.whl
+          pyboy_rs-$version-cp311-abi3-win_amd64.whl
+          pyboy_rs-$version.tar.gz"
+          expected=$(echo "$expected" | sed 's/^ *//' | sort)
+          actual=$(ls dist | sort)
+          if [ "$expected" != "$actual" ]; then
+            echo "asset names differ"; echo "expected:"; echo "$expected"; echo "actual:"; echo "$actual"; exit 1
+          fi
+          (cd dist && sha256sum * | tee ../SHA256.txt)
+          { echo '### SHA-256'; echo '```'; cat SHA256.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # Release notes: the CHANGELOG section for this version.
+          awk -v v="$version" '$0 == "## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "no CHANGELOG section for $version"; exit 1; }
+      - name: Create the release if missing and upload the assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --json isDraft --jq .isDraft > state.txt 2>/dev/null; then
+            if [ "$GITHUB_EVENT_NAME" != push ] && [ "$(cat state.txt)" != true ]; then
+              echo "release $TAG is already public; a dry run will not modify it"; exit 1
+            fi
+          else
+            # Always created as a draft: it is published only after the assets are on it.
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" \
+              --title "$TAG" --notes-file notes.md
+          fi
+          gh release upload "$TAG" dist/* --clobber
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            gh release edit "$TAG" --draft=false
+          fi
+
   publish:
     name: publish to PyPI
-    # Only a pushed tag publishes. workflow_dispatch and pull requests never do.
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # Opt-in only: a manual run with publish_pypi=true. Never on a tag or a pull request.
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_pypi
     needs: [wheels, sdist, smoke, smoke-sdist]
     runs-on: ubuntu-latest
     environment:
@@ -155,16 +232,19 @@ jobs:
           pattern: '{wheel-*,sdist}'
           merge-multiple: true
           path: dist
-      - name: Check the tag matches the built version
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check the files match the version
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -n1)
           ls dist
           for file in dist/*; do
             case "$(basename "$file")" in
               pyboy_rs-$version-*|pyboy_rs-$version.tar.gz) ;;
-              *) echo "$file does not match tag $GITHUB_REF_NAME"; exit 1 ;;
+              *) echo "$file does not match version $version"; exit 1 ;;
             esac
           done
           test "$(ls dist | wc -l)" -eq 6

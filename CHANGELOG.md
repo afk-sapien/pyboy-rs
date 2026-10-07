@@ -50,8 +50,9 @@ Real-time clock support and release hardening.
 
 - Version 0.1.1 is `pyproject.toml`, `Cargo.toml` and `pyboy_rs.__version__`.
 - Wheel workflow: sdist, manylinux x86_64 and aarch64, macOS x86_64 and arm64,
-  Windows x64, smoke-tested on Python 3.11 and 3.12 and 3.13; trusted publishing
-  to PyPI on `v*` tags only.
+  Windows x64, smoke-tested on Python 3.11 and 3.12 and 3.13. A `v*` tag attaches
+  the six files to the GitHub release (the distribution channel); PyPI is a
+  manual `workflow_dispatch` option, off by default, never on a tag.
 - `THIRD_PARTY_NOTICES.md`, LGPL relinking instructions, and LICENSE files in
   sdist and wheel. Local filesystem paths removed from two benchmark files.
 - README corrected: PokeBench does not use PyBoy RS.
