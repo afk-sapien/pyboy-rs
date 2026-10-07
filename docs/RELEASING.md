@@ -1,10 +1,32 @@
 # Releasing
 
-Releases are built by `.github/workflows/wheels.yml` and published to PyPI with
-trusted publishing (no API token). Publishing runs only for a pushed tag `v*`,
-never for a pull request or a manual run.
+Releases are built by `.github/workflows/wheels.yml`. Pushing a tag `v*` builds the
+sdist and the five wheels, runs the smoke tests, and attaches the six files to the
+GitHub release for that tag (created from the `CHANGELOG.md` section if it does not
+exist). That is the distribution channel: PokeSim and PokeSim Core pin the release
+asset URLs. Nothing is published to PyPI from a tag.
 
-## One-time setup (owner)
+PyPI is optional and manual only: run the workflow with `workflow_dispatch` and
+`publish_pypi` set to true (default false). It needs the one-time setup below.
+
+The release assets are exactly these files (the workflow fails on any other set):
+
+- `pyboy_rs-X.Y.Z-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl`
+- `pyboy_rs-X.Y.Z-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl`
+- `pyboy_rs-X.Y.Z-cp311-abi3-macosx_10_12_x86_64.whl`
+- `pyboy_rs-X.Y.Z-cp311-abi3-macosx_11_0_arm64.whl`
+- `pyboy_rs-X.Y.Z-cp311-abi3-win_amd64.whl`
+- `pyboy_rs-X.Y.Z.tar.gz`
+
+## Dry run (no tag, nothing public)
+
+Run `Wheels` by `workflow_dispatch` with `draft_release` set to true. It builds and
+smoke-tests everything, then uploads the six files to a DRAFT release `vX.Y.Z`
+(untagged; a draft has no public URL and no tag is created). The SHA-256 of each
+file is in the job summary. A dry run refuses to touch a release that is already
+public. Delete the draft afterwards, or let the tag push reuse it.
+
+## PyPI one-time setup (optional, owner)
 
 1. Sign in at <https://pypi.org> and open Account settings, Publishing.
 2. Add a **pending publisher** (the project does not exist yet):
@@ -25,9 +47,10 @@ Nothing is registered or published by the repository itself.
    they disagree.
 2. Merge to `main` through a pull request and check that the `Wheels` workflow
    is green (run it with `workflow_dispatch` if needed).
-3. Tag and push: `git tag v0.1.1 && git push origin v0.1.1`.
-4. Approve the `pypi` environment when the publish job waits. The job uploads the
-   sdist and wheels with attestations.
+3. Optionally do a dry run (above) and check the hashes.
+4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` job
+   attaches the files and publishes the release (drafted first, published after
+   the upload, so it is never public without its assets).
 5. The tag URL (`https://github.com/afk-sapien/pyboy-rs/tree/vX.Y.Z`) is the
    corresponding source that the README points to for LGPL purposes.
 
