@@ -58,9 +58,15 @@ checkpoints are also implemented.
 
 Feature detection does not need version checks: `pyboy_rs.FEATURES` is a set of
 capability names (`rtc_file`, `clock_lock`, `clock_lock_state`, `advance_clock`,
-`export_rtc`, `rtc_export_follows_host`, `checkpoint_clock_lock`, and `profiling` only in builds with that feature), `pyboy_rs.has_feature(name)` tests one, and `PyBoy.has_rtc` is
+`export_rtc`, `rtc_export_follows_host`, `checkpoint_clock_lock`, `bank_bytes`, and `profiling` only in builds with that feature), `pyboy_rs.has_feature(name)` tests one, and `PyBoy.has_rtc` is
 `False`, never an error, on a cartridge without a clock. Builds before 0.1.1 have
 none of these, so `getattr(pyboy_rs, "FEATURES", ())` is the portable test.
+
+`memory.read_bank_bytes(bank, start, stop)` (feature `bank_bytes`) returns
+`memory[bank, start:stop]` as one `bytes` object in a single call, for example a
+whole WRAM bank (`bank, 0xD000, 0xE000`) or cartridge RAM bank (`bank, 0xA000,
+0xC000`). Values and errors are exactly those of the per-address bank reads.
+Banked slices `memory[bank, start:stop]` use it too.
 
 ### Real-time clock
 

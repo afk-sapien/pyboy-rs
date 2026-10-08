@@ -39,6 +39,13 @@ Real-time clock support and release hardening.
 - The release workflow refuses to modify a published release, attaches a
   `SHA256SUMS` asset (seven assets in all) and prints the hashes in the job summary.
 
+### Added before the first tag
+
+- `memory.read_bank_bytes(bank, start, stop)` reads a banked range (a whole WRAM,
+  cartridge RAM or VRAM bank) in one native call and returns `bytes`. Banked
+  slices `memory[bank, start:stop]` use the same call instead of one call per
+  byte. Values and errors match the per-byte reads exactly. Feature `bank_bytes`.
+
 ### Known limits
 
 - Using an emulator from another thread during `tick` raises
