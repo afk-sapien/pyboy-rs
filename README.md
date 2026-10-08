@@ -29,6 +29,41 @@ python -m venv .venv
 Released wheels for Linux, macOS and Windows are built by the `Wheels` workflow
 (see `docs/RELEASING.md`).
 
+### Install from a GitHub release
+
+Releases are published on GitHub, not PyPI. Each release
+(`https://github.com/afk-sapien/pyboy-rs/releases/tag/vX.Y.Z`) carries five
+wheels, the sdist and `SHA256SUMS.txt`:
+
+| Platform | Asset |
+| --- | --- |
+| Linux x86_64 | `pyboy_rs-X.Y.Z-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl` |
+| Linux aarch64 | `pyboy_rs-X.Y.Z-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl` |
+| macOS x86_64 | `pyboy_rs-X.Y.Z-cp311-abi3-macosx_10_12_x86_64.whl` |
+| macOS arm64 | `pyboy_rs-X.Y.Z-cp311-abi3-macosx_11_0_arm64.whl` |
+| Windows amd64 | `pyboy_rs-X.Y.Z-cp311-abi3-win_amd64.whl` |
+| Source | `pyboy_rs-X.Y.Z.tar.gz` |
+
+Pin the asset URL and its sha256 (from the release's `SHA256SUMS.txt`); pip
+refuses the file if the hash differs:
+
+```sh
+base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1
+curl -fsSLO "$base/SHA256SUMS.txt"
+wheel=pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+sha=$(grep " $wheel\$" SHA256SUMS.txt | cut -d' ' -f1)
+python -m pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
+```
+
+In a requirements file, write the hash once and install with `--require-hashes`:
+
+```text
+pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
+    --hash=sha256:<sha256 from SHA256SUMS.txt>
+```
+
+To check downloaded files by hand: `sha256sum -c --ignore-missing SHA256SUMS.txt`.
+
 On Windows, use the equivalent commands under `.venv/Scripts`.
 For NumPy arrays and Pillow images, install the optional `images` extra.
 
@@ -511,8 +546,8 @@ and every wheel. Notices for the Rust crates linked into the wheel are in
 
 Each release is built from the source tagged `vX.Y.Z` at
 <https://github.com/afk-sapien/pyboy-rs> (for example
-<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.1>); the sdist on PyPI is the
-same source. The wheel's `pyboy_rs/_native` extension is the compiled library.
+<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.1>); the sdist attached to the
+GitHub release is the same source. The wheel's `pyboy_rs/_native` extension is the compiled library.
 To run an application against a modified build:
 
 1. Check out the release tag (or unpack the sdist) and edit the source.

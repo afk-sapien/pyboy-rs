@@ -1,17 +1,18 @@
 name: Wheels
 
-# Builds the sdist and wheels, smoke-tests them, and attaches them to the GitHub
-# release for the tag (the release is created from the CHANGELOG if missing).
-# PyPI is never published from a tag; it is an opt-in manual run only.
+# Builds the sdist and five wheels, smoke-tests every wheel, and assembles the
+# release files (six packages, SHA256SUMS.txt and the CHANGELOG notes).
+#
+# - A pushed tag vX.Y.Z publishes a GitHub release with those files. The tag must
+#   equal the version in Cargo.toml and pyproject.toml, or nothing is built.
+# - A manual run (workflow_dispatch) is a dry run: it builds, tests and uploads the
+#   files as workflow artifacts only. It never creates, edits or uploads to a release.
+# - PyPI is never published from a tag. It is an opt-in manual input, off by default.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      draft_release:
-        description: 'Dry run: upload the assets to a DRAFT release v<version> (no tag is created)'
-        type: boolean
-        default: false
       publish_pypi:
         description: 'Publish to PyPI (trusted publishing, needs the pypi environment). Leave off.'
         type: boolean
@@ -19,23 +20,85 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   SMOKE: |
-    import pathlib, sys
+    import os, pathlib, sys
     import pyboy_rs
-    from pyboy_rs import PyBoy, _native
-    assert pyboy_rs.__version__ == _native.__version__, (pyboy_rs.__version__, _native.__version__)
+    from pyboy_rs import Machine, PyBoy, _native
+    expected = os.environ["EXPECTED_VERSION"]
+    assert pyboy_rs.__version__ == _native.__version__ == expected, (pyboy_rs.__version__, _native.__version__, expected)
     assert pyboy_rs.HAS_CLOCK_CONTROL and pyboy_rs.has_feature("clock_lock_state")
+    assert pyboy_rs.has_feature("bank_bytes")
     rom = pathlib.Path(pyboy_rs.__file__).parent / "assets" / "default_rom.gb"
     with PyBoy(rom) as emulator:
         emulator.set_emulation_speed(0)
         emulator.tick(30)
         assert emulator.has_rtc is False
+        block = emulator.memory.read_bank_bytes(0, 0x8000, 0xA000)
+        assert isinstance(block, bytes) and len(block) == 0x2000
+        assert list(block) == emulator.memory[0, 0x8000:0xA000]
+    # Machine.read_bank_bytes: the native bulk read matches the per-byte reads.
+    machine = Machine(rom.read_bytes(), cgb=False)
+    for _ in range(30):
+        machine.begin_frame(True, False)
+        machine.run_frame()
+    for bank, start, stop in [(0, 0x8000, 0xA000), (0, 0xC000, 0xD000), (1, 0xD000, 0xE000), (0, 0x0000, 0x4000)]:
+        block = machine.read_bank_bytes(bank, start, stop)
+        assert isinstance(block, bytes) and len(block) == stop - start, (bank, start, len(block))
+        assert block == bytes(machine.read_bank(bank, i) for i in range(start, stop)), (bank, start)
+    assert any(machine.read_bank_bytes(0, 0x8000, 0xA000)), "VRAM is empty after 30 frames"
+    assert machine.read_bank_bytes(0, 0xC000, 0xC000) == b""
+    for bad in [(0, 0xD000, 0xC000), (0, 0, 65537), (99, 0x8000, 0x8001)]:
+        try:
+            machine.read_bank_bytes(*bad)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"read_bank_bytes{bad} did not raise")
     print("smoke ok", sys.version.split()[0], pyboy_rs.__version__)
 
 jobs:
+  version:
+    name: check version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Versions agree (and match the tag on a tag push)
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          read_toml() { python3 -c "import sys, tomllib; d = tomllib.load(open(sys.argv[1], 'rb')); print(eval(sys.argv[2], {}, {'d': d}))" "$@"; }
+          py=$(read_toml pyproject.toml 'd["project"]["version"]')
+          cargo=$(read_toml Cargo.toml 'd["workspace"]["package"]["version"]')
+          init=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' python/pyboy_rs/__init__.py)
+          lock=$(python3 -c "import tomllib; print(' '.join(sorted({p['version'] for p in tomllib.load(open('Cargo.lock', 'rb'))['package'] if p['name'] in ('pyboy-core', 'pyboy-python')})))")
+          echo "pyproject.toml=$py Cargo.toml=$cargo __init__.py=$init Cargo.lock=$lock"
+          for other in "$cargo" "$init" "$lock"; do
+            test "$other" = "$py" || { echo "::error::version mismatch: pyproject.toml $py vs $other"; exit 1; }
+          done
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            test "$GITHUB_REF_TYPE" = tag || { echo "::error::push of a non-tag ref"; exit 1; }
+            test "$GITHUB_REF_NAME" = "v$py" || { echo "::error::tag $GITHUB_REF_NAME does not equal v$py (pyproject.toml)"; exit 1; }
+            test "$GITHUB_REF_NAME" = "v$cargo" || { echo "::error::tag $GITHUB_REF_NAME does not equal v$cargo (Cargo.toml)"; exit 1; }
+          fi
+          awk -v v="$py" '$0 == "## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+          grep -q '[^[:space:]]' notes.md || { echo "::error::no CHANGELOG.md section '## $py'"; exit 1; }
+          echo "version=$py" >> "$GITHUB_OUTPUT"
+
   wheels:
     name: wheel ${{ matrix.name }}
+    needs: version
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -43,11 +106,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: linux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: auto}
-          - {name: linux-aarch64, os: ubuntu-latest, target: aarch64, manylinux: auto}
+          - {name: linux-x86_64, os: ubuntu-latest, target: x86_64, manylinux: '2014'}
+          - {name: linux-aarch64, os: ubuntu-latest, target: aarch64, manylinux: '2014'}
           - {name: macos-x86_64, os: macos-15-intel, target: x86_64, manylinux: ''}
           - {name: macos-arm64, os: macos-14, target: aarch64, manylinux: ''}
-          - {name: windows-x64, os: windows-latest, target: x64, manylinux: ''}
+          - {name: windows-amd64, os: windows-latest, target: x64, manylinux: ''}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -68,6 +131,7 @@ jobs:
 
   sdist:
     name: sdist
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,21 +162,23 @@ jobs:
 
   smoke:
     name: smoke ${{ matrix.name }} py${{ matrix.python }}
-    needs: wheels
+    needs: [version, wheels]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+    env:
+      EXPECTED_VERSION: ${{ needs.version.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
-        name: [linux-x86_64, linux-aarch64, macos-x86_64, macos-arm64, windows-x64]
+        name: [linux-x86_64, linux-aarch64, macos-x86_64, macos-arm64, windows-amd64]
         python: ['3.11', '3.12', '3.13']
         include:
           - {name: linux-x86_64, os: ubuntu-latest}
           - {name: linux-aarch64, os: ubuntu-24.04-arm}
           - {name: macos-x86_64, os: macos-15-intel}
           - {name: macos-arm64, os: macos-14}
-          - {name: windows-x64, os: windows-latest}
+          - {name: windows-amd64, os: windows-latest}
     steps:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
@@ -124,15 +190,18 @@ jobs:
       - name: Install the wheel and exercise it
         shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --no-index --find-links dist pyboy-rs
           python -c "$SMOKE"
 
   smoke-sdist:
     name: smoke sdist build
-    needs: sdist
+    needs: [version, sdist]
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      EXPECTED_VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
@@ -142,23 +211,23 @@ jobs:
           name: sdist
           path: dist
       - name: Build from the sdist and exercise it
+        shell: bash
         run: |
+          set -euo pipefail
           python -m pip install dist/*.tar.gz
           python -c "$SMOKE"
 
-  release:
-    name: GitHub release assets
-    # A pushed tag attaches the assets to its release. A manual run does so only
-    # for a draft (draft_release), which has no public URL and creates no tag.
-    # Neither modifies a release that is already published.
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.draft_release)
-    needs: [wheels, sdist, smoke, smoke-sdist]
+  assemble:
+    name: release files
+    # Runs on a tag push and on a dry run. Its artifact `release-files` is exactly
+    # what the release job attaches: six packages, SHA256SUMS.txt (and notes.md,
+    # which becomes the release body).
+    needs: [version, wheels, sdist, smoke, smoke-sdist]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -168,65 +237,89 @@ jobs:
           pattern: '{wheel-*,sdist}'
           merge-multiple: true
           path: dist
-      - name: Check the assets
+      - name: Check the file set, hash it and extract the notes
         shell: bash
         run: |
           set -euo pipefail
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -n1)
-          if [ "$GITHUB_EVENT_NAME" = push ]; then
-            tag="$GITHUB_REF_NAME"
-            test "$tag" = "v$version" || { echo "tag $tag does not match version $version"; exit 1; }
-          else
-            tag="v$version"
-          fi
-          echo "TAG=$tag" >> "$GITHUB_ENV"
-          expected="pyboy_rs-$version-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-          pyboy_rs-$version-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-          pyboy_rs-$version-cp311-abi3-macosx_10_12_x86_64.whl
-          pyboy_rs-$version-cp311-abi3-macosx_11_0_arm64.whl
-          pyboy_rs-$version-cp311-abi3-win_amd64.whl
-          pyboy_rs-$version.tar.gz"
-          expected=$(echo "$expected" | sed 's/^ *//' | sort)
+          expected=$(printf '%s\n' \
+            "pyboy_rs-$VERSION-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" \
+            "pyboy_rs-$VERSION-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" \
+            "pyboy_rs-$VERSION-cp311-abi3-macosx_10_12_x86_64.whl" \
+            "pyboy_rs-$VERSION-cp311-abi3-macosx_11_0_arm64.whl" \
+            "pyboy_rs-$VERSION-cp311-abi3-win_amd64.whl" \
+            "pyboy_rs-$VERSION.tar.gz" | sort)
           actual=$(ls dist | sort)
           if [ "$expected" != "$actual" ]; then
-            echo "asset names differ"; echo "expected:"; echo "$expected"; echo "actual:"; echo "$actual"; exit 1
+            echo "::error::release file names differ"; echo "expected:"; echo "$expected"; echo "actual:"; echo "$actual"; exit 1
           fi
-          # SHA256SUMS (sha256sum format, checked with `sha256sum -c`) is attached as a
-          # seventh asset. It is kept out of dist/ so the six-file checks stay exact.
-          (cd dist && sha256sum * | tee ../SHA256SUMS)
-          { echo '### SHA-256'; echo '```'; cat SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          # Release notes: the CHANGELOG section for this version.
-          awk -v v="$version" '$0 == "## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
-          test -s notes.md || { echo "no CHANGELOG section for $version"; exit 1; }
-      - name: Create the release if missing and upload the assets
+          (cd dist && sha256sum -- * > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+          awk -v v="$VERSION" '$0 == "## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+          grep -q '[^[:space:]]' notes.md || { echo "::error::no CHANGELOG.md section for $VERSION"; exit 1; }
+          mv notes.md dist/notes.md
+          {
+            echo "### pyboy-rs $VERSION release files ($GITHUB_EVENT_NAME)"
+            echo '```'; cat dist/SHA256SUMS.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: release-files
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    # Only a pushed v* tag reaches this job. A manual run (dry run) never does.
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    needs: [version, assemble]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: v${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: release-files
+          path: files
+      - name: Create or update the draft, attach the files, then publish
         shell: bash
         run: |
           set -euo pipefail
-          # Only a draft (or a release this run creates as a draft) may be modified.
-          # A published release is never touched, on a tag push or a manual run.
+          test "$GITHUB_REF_NAME" = "$TAG" || { echo "::error::tag $GITHUB_REF_NAME is not $TAG"; exit 1; }
+          mv files/notes.md notes.md
+          (cd files && sha256sum -c SHA256SUMS.txt)
+          ls files | sort > wanted.txt
+          test "$(wc -l < wanted.txt)" -eq 7
+          # Only a draft (or one this run creates as a draft) may be modified.
+          # A published release is never touched.
           if gh release view "$TAG" --json isDraft --jq .isDraft > state.txt 2>/dev/null; then
             if [ "$(cat state.txt)" != true ]; then
-              echo "release $TAG is already published; refusing to modify it"; exit 1
+              echo "::error::release $TAG is already published; refusing to modify it"; exit 1
             fi
+            gh release edit "$TAG" --title "$TAG" --notes-file notes.md
+            # Remove assets a dry run or earlier draft left that are not in this set.
+            gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r name; do
+              grep -qxF "$name" wanted.txt || gh release delete-asset "$TAG" "$name" --yes
+            done
           else
-            # Always created as a draft: it is published only after the assets are on it.
-            gh release create "$TAG" --draft --target "$GITHUB_SHA" \
-              --title "$TAG" --notes-file notes.md
+            gh release create "$TAG" --draft --verify-tag --title "$TAG" --notes-file notes.md
           fi
-          # Replaces the assets of a draft (for example from an earlier dry run).
-          gh release upload "$TAG" dist/* SHA256SUMS --clobber
+          gh release upload "$TAG" files/* --clobber
           gh release view "$TAG" --json assets --jq '.assets[].name' | sort > uploaded.txt
-          (ls dist; echo SHA256SUMS) | sort > wanted.txt
-          diff wanted.txt uploaded.txt || { echo "release asset set is wrong"; exit 1; }
-          if [ "$GITHUB_EVENT_NAME" = push ]; then
-            gh release edit "$TAG" --draft=false
-          fi
+          diff wanted.txt uploaded.txt || { echo "::error::release asset set is wrong"; exit 1; }
+          # Download what is attached and check it against SHA256SUMS.txt before publishing.
+          mkdir check && gh release download "$TAG" --dir check
+          (cd check && sha256sum -c SHA256SUMS.txt)
+          gh release edit "$TAG" --draft=false --latest
+          gh release view "$TAG" --json url,isDraft,tagName
 
   publish:
     name: publish to PyPI
     # Opt-in only: a manual run with publish_pypi=true. Never on a tag or a pull request.
     if: github.event_name == 'workflow_dispatch' && inputs.publish_pypi
-    needs: [wheels, sdist, smoke, smoke-sdist]
+    needs: [version, assemble]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -235,25 +328,23 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: '{wheel-*,sdist}'
           merge-multiple: true
           path: dist
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          persist-credentials: false
       - name: Check the files match the version
         shell: bash
         run: |
           set -euo pipefail
-          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml | head -n1)
           ls dist
           for file in dist/*; do
             case "$(basename "$file")" in
-              pyboy_rs-$version-*|pyboy_rs-$version.tar.gz) ;;
-              *) echo "$file does not match version $version"; exit 1 ;;
+              pyboy_rs-$VERSION-*|pyboy_rs-$VERSION.tar.gz) ;;
+              *) echo "$file does not match version $VERSION"; exit 1 ;;
             esac
           done
           test "$(ls dist | wc -l)" -eq 6
