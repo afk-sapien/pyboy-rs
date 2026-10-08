@@ -8,7 +8,7 @@ __version__ = "0.1.1"
 # Capabilities of this build, independent of the version number. Consumers
 # should test membership here rather than comparing versions.
 FEATURES = frozenset({"rtc_file", "clock_lock", "clock_lock_state", "advance_clock", "export_rtc",
-                      "rtc_export_follows_host", "checkpoint_clock_lock"}
+                      "rtc_export_follows_host", "checkpoint_clock_lock", "bank_bytes"}
                      | ({"profiling"} if HAS_PROFILING else set()))
 HAS_CLOCK_CONTROL = "clock_lock_state" in FEATURES
 

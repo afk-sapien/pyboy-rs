@@ -332,6 +332,30 @@ impl Emulator {
             .copied()
             .ok_or_else(|| PyValueError::new_err("Bank or address out of bounds"))
     }
+    /// The bytes `read_bank(bank, i)` returns for every `i` in `start..stop`, in one call.
+    /// A range inside one bank window is a single copy. Any other range is read byte by
+    /// byte with `read_bank`, so values and errors are exactly the same as the byte path.
+    fn read_bank_bytes<'py>(
+        &self,
+        py: Python<'py>,
+        bank: i32,
+        start: u32,
+        stop: u32,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        if start > stop || stop > 65536 {
+            return Err(PyValueError::new_err("Invalid memory range"));
+        }
+        if start == stop {
+            return Ok(PyBytes::new(py, &[]));
+        }
+        if let Some(window) = self.bank_window(bank, start as usize, stop as usize) {
+            return Ok(PyBytes::new(py, window));
+        }
+        let bytes = (start..stop)
+            .map(|i| self.read_bank(bank, i as u16))
+            .collect::<PyResult<Vec<u8>>>()?;
+        Ok(PyBytes::new(py, &bytes))
+    }
     fn write_bank(&mut self, bank: i32, address: u16, value: u8) -> PyResult<()> {
         self.read_bank(bank, address)?;
         let mb = &mut self.inner.mb;
@@ -614,6 +638,48 @@ impl Emulator {
     }
     fn load_state(&mut self, data: &[u8]) -> PyResult<()> {
         self.inner.load_state(data).map_err(PyValueError::new_err)
+    }
+}
+
+impl Emulator {
+    /// The contiguous storage `read_bank` reads for `start..stop`, when the whole non-empty
+    /// range falls in one window that `read_bank` maps to consecutive indices. It applies
+    /// the same bank checks as `read_bank`. None means the caller must use the byte path.
+    fn bank_window(&self, bank: i32, start: usize, stop: usize) -> Option<&[u8]> {
+        let mb = &self.inner.mb;
+        let last = stop - 1;
+        let within = |low: usize, high: usize| low <= start && last <= high;
+        if within(0, 0x7fff) && bank == -1 {
+            return mb.bootrom.get(start..stop);
+        }
+        if within(0, 0x7fff) && bank >= 0 && (bank as usize) < mb.cartridge.rom_count() {
+            if start / 16384 != last / 16384 {
+                return None;
+            }
+            let base = bank as usize * 16384;
+            return mb
+                .cartridge
+                .rom
+                .get(base + start % 16384..base + last % 16384 + 1);
+        }
+        if within(0x8000, 0x9fff) && (0..=i32::from(mb.cgb)).contains(&bank) {
+            return mb.lcd.vram[bank as usize].get(start - 0x8000..stop - 0x8000);
+        }
+        if within(0xa000, 0xbfff) && bank >= 0 && (bank as usize) < mb.cartridge.ram_count {
+            let base = bank as usize * 8192;
+            return mb
+                .cartridge
+                .ram
+                .get(base + start - 0xa000..base + stop - 0xa000);
+        }
+        if within(0xc000, 0xdfff) && (0..if mb.cgb { 8 } else { 2 }).contains(&bank) {
+            if start / 4096 != last / 4096 {
+                return None;
+            }
+            let base = bank as usize * 4096;
+            return mb.ram.get(base + start % 4096..base + last % 4096 + 1);
+        }
+        None
     }
 }
 

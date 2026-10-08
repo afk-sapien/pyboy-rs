@@ -64,8 +64,11 @@ class Memory:
             if single:
                 return self._machine.read(addresses.start)
             return list(self._machine.read_range(addresses.start, addresses.stop, addresses.step))
-        values = [self._machine.read_bank(bank, i) for i in addresses]
-        return values[0] if single else values
+        if single:
+            return self._machine.read_bank(bank, addresses.start)
+        if addresses.step == 1:
+            return list(self._machine.read_bank_bytes(bank, addresses.start, addresses.stop))
+        return [self._machine.read_bank(bank, i) for i in addresses]
 
     def read_bytes(self, start, stop):
         """Read a contiguous, detached byte block without Python integer lists."""
@@ -73,6 +76,18 @@ class Memory:
         if not 0 <= start <= stop <= 65536:
             raise ValueError("Invalid memory range")
         return self._machine.read_bytes(start, stop)
+
+    def read_bank_bytes(self, bank, start, stop):
+        """Read ``memory[bank, start:stop]`` as one detached byte block.
+
+        The bytes and errors are exactly those of the per-address bank reads, so a whole
+        WRAM bank, cartridge RAM bank or VRAM bank costs a single call. An empty range is
+        allowed and returns ``b""``.
+        """
+        bank, start, stop = operator.index(bank), operator.index(start), operator.index(stop)
+        if not 0 <= start <= stop <= 65536:
+            raise ValueError("Invalid memory range")
+        return self._machine.read_bank_bytes(bank, start, stop)
 
     def __setitem__(self, key, value):
         bank, addresses, single = self._key(key)
