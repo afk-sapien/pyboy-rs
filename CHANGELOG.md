@@ -18,7 +18,7 @@ Real-time clock support and release hardening.
   and `PyBoy.has_rtc` (False, never an error, without a clock). `pyboy_rs.__version__`
   is new.
 
-### Fixed before the first tag
+### Fixed before the first tag (#3)
 
 - `rtc_export()` and `stop(rtc_file=...)` while the clock is locked now write the
   host-following equivalent. They used to write the base relative to the locked
@@ -36,12 +36,13 @@ Real-time clock support and release hardening.
 - Profiling code is no longer in release wheels; it is the `profile` cargo
   feature. Without it `start_profiling` and friends raise `RuntimeError`;
   `has_feature("profiling")` tells them apart.
-- The release workflow refuses to modify a published release, attaches a
-  `SHA256SUMS` asset (seven assets in all) and prints the hashes in the job summary.
+- The release workflow refuses to modify a published release and attaches a
+  checksum file with the six packages.
 
-### Added before the first tag
+### Added before the first tag (#4)
 
-- `memory.read_bank_bytes(bank, start, stop)` reads a banked range (a whole WRAM,
+- `memory.read_bank_bytes(bank, start, stop)` and the native
+  `Machine.read_bank_bytes(bank, start, stop)` read a banked range (a whole WRAM,
   cartridge RAM or VRAM bank) in one native call and returns `bytes`. Banked
   slices `memory[bank, start:stop]` use the same call instead of one call per
   byte. Values and errors match the per-byte reads exactly. Feature `bank_bytes`.
@@ -84,10 +85,19 @@ Real-time clock support and release hardening.
 ### Packaging
 
 - Version 0.1.1 is `pyproject.toml`, `Cargo.toml` and `pyboy_rs.__version__`.
-- Wheel workflow: sdist, manylinux x86_64 and aarch64, macOS x86_64 and arm64,
-  Windows x64, smoke-tested on Python 3.11 and 3.12 and 3.13. A `v*` tag attaches
-  the six files and SHA256SUMS to the GitHub release (the distribution channel); PyPI is a
-  manual `workflow_dispatch` option, off by default, never on a tag.
+- Wheel workflow: sdist, manylinux2014 x86_64 and aarch64, macOS x86_64 and
+  arm64, Windows amd64, each wheel smoke-tested on Python 3.11, 3.12 and 3.13
+  (import, version, a short run and `Machine.read_bank_bytes` against per-byte
+  reads).
+- A `v*` tag publishes the GitHub release (the distribution channel) with the six
+  files and `SHA256SUMS.txt`, and this CHANGELOG section as the notes. The run
+  fails before building unless the tag equals the version in `Cargo.toml` and
+  `pyproject.toml` (and `__init__.py` and `Cargo.lock` agree). The assets are
+  checked against `SHA256SUMS.txt` after upload, before the draft is published.
+- A manual `workflow_dispatch` run is a dry run: it builds, tests and uploads the
+  release files as the `release-files` workflow artifact and never touches a
+  release. PyPI stays a manual opt-in input, off by default, never on a tag.
+- README documents installing a wheel from the GitHub release URL with its sha256.
 - `THIRD_PARTY_NOTICES.md`, LGPL relinking instructions, and LICENSE files in
   sdist and wheel. Local filesystem paths removed from two benchmark files.
 - README corrected: PokeBench does not use PyBoy RS.
