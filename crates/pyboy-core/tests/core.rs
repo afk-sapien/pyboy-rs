@@ -135,3 +135,205 @@ fn machine_clock_lock_counts_completed_frames_only_when_following() {
     let mut plain = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
     assert!(plain.rtc().is_err() && plain.clock_now().is_err() && plain.rtc_mut().is_err());
 }
+
+/// An MBC3 clock machine with RAM and clock access enabled and the clock
+/// locked at `at`, reading `elapsed` seconds.
+fn locked_rtc_machine(elapsed: f64, at: f64) -> Machine {
+    let mut machine = Machine::new(mbc3_rtc_demo(), None, None, false, 48000).unwrap();
+    machine.write(0x0000, 0x0a);
+    let rtc = machine.rtc_mut().unwrap();
+    rtc.timezero = at - elapsed;
+    rtc.lock_clock(at, false).unwrap();
+    machine
+}
+
+fn latch_and_read(machine: &mut Machine) -> [u8; 5] {
+    machine.write(0x6000, 0);
+    machine.write(0x6000, 1);
+    let mut out = [0; 5];
+    for (slot, register) in out.iter_mut().zip(8u8..=12) {
+        machine.write(0x4000, register);
+        *slot = machine.read(0xa000);
+    }
+    out
+}
+
+#[test]
+fn loading_a_state_rebuilds_the_latch_from_the_loaded_clock() {
+    let at = 1_000_000.0;
+    let mut source = locked_rtc_machine(3_600.0, at);
+    for _ in 0..10 {
+        source.begin_frame(false, false);
+        source.run_frame().unwrap();
+    }
+    assert_eq!(latch_and_read(&mut source), [0, 0, 1, 0, 0]);
+    source
+        .rtc_mut()
+        .unwrap()
+        .lock
+        .as_mut()
+        .unwrap()
+        .advance(125.0)
+        .unwrap();
+    // The state is saved with a stale latch and the latch command set.
+    let state = source.save_state().unwrap();
+
+    let mut first = locked_rtc_machine(0.0, at + 125.0);
+    let mut second = locked_rtc_machine(9e6, at + 125.0);
+    {
+        let rtc = second.rtc_mut().unwrap();
+        rtc.latch = [1, 2, 3, 4, 1];
+        rtc.latch_enabled = true;
+    }
+    for machine in [&mut first, &mut second] {
+        machine.load_state(&state).unwrap();
+        let rtc = machine.rtc().unwrap();
+        assert_eq!(rtc.latch, [5, 2, 1, 0, 0]);
+        assert!(!rtc.latch_enabled);
+    }
+    assert_eq!(first.save_state().unwrap(), second.save_state().unwrap());
+    assert_eq!(
+        first.save_execution_runtime().unwrap(),
+        second.save_execution_runtime().unwrap()
+    );
+    // A bare 0x6000 <- 1 latches on both, whatever the loaders had before.
+    for machine in [&mut first, &mut second] {
+        machine
+            .rtc_mut()
+            .unwrap()
+            .lock
+            .as_mut()
+            .unwrap()
+            .advance(1.0)
+            .unwrap();
+        machine.write(0x6000, 1);
+        assert_eq!(machine.rtc().unwrap().latch[0], 6);
+    }
+}
+
+/// The frozen reading of a halted clock once the next frame starts.
+fn frozen_at_next_frame(machine: &mut Machine) -> f64 {
+    machine.begin_frame(false, false);
+    let rtc = machine.rtc().unwrap();
+    assert!(rtc.halted() && !rtc.unsettled());
+    rtc.frozen
+}
+
+#[test]
+fn a_halted_clock_round_trips_through_a_state_at_the_same_reading() {
+    let at = 1_000_000.0;
+    let mut source = locked_rtc_machine(0.0, at);
+    let rtc = source.rtc_mut().unwrap();
+    rtc.set_halt(true, at);
+    rtc.frozen = 12_345.0;
+    rtc.lock.as_mut().unwrap().advance(500.0).unwrap();
+    let state = source.save_state().unwrap();
+    let runtime = source.save_execution_runtime().unwrap();
+    let lock = source.rtc().unwrap().lock.clone();
+
+    let mut same = locked_rtc_machine(0.0, at + 500.0);
+    same.load_state(&state).unwrap();
+    // Until its first use the loaded clock writes back the loaded base.
+    assert_eq!(same.save_state().unwrap(), state);
+    assert_eq!(frozen_at_next_frame(&mut same), 12_345.0);
+    source.begin_frame(false, false);
+    assert_eq!(same.save_state().unwrap(), source.save_state().unwrap());
+    // Loading first and applying the saved lock afterwards gives the same
+    // frozen value and latch, whatever the host clock read at load.
+    let mut host = Machine::new(mbc3_rtc_demo(), None, None, false, 48000).unwrap();
+    host.load_state_at(&state, 2e9).unwrap();
+    host.rtc_mut().unwrap().lock = lock.clone();
+    assert_eq!(frozen_at_next_frame(&mut host), 12_345.0);
+    assert_eq!(host.rtc().unwrap().latch, same.rtc().unwrap().latch);
+    // A loader at another reading freezes at that reading less the base.
+    let mut later = locked_rtc_machine(0.0, at + 510.0);
+    later.load_state(&state).unwrap();
+    assert_eq!(frozen_at_next_frame(&mut later), 12_355.0);
+    // An execution checkpoint restores the frozen value exactly anyway.
+    later.load_execution(&state, &runtime, 7).unwrap();
+    assert_eq!(later.rtc().unwrap().frozen, 12_345.0);
+    assert!(!later.rtc().unwrap().unsettled());
+    // On the host clock a settled halted clock ignores host time, and a
+    // state written at one instant is the same whenever it is written then.
+    let mut host = Machine::new(mbc3_rtc_demo(), None, None, false, 48000).unwrap();
+    host.load_state_at(&state, 2e9).unwrap();
+    host.rtc_mut().unwrap().settle(2e9);
+    assert_eq!(host.rtc().unwrap().frozen, 2e9 - (at + 500.0 - 12_345.0));
+    assert_eq!(host.rtc().unwrap().registers(9e9).seconds, 5);
+    assert_eq!(
+        host.save_state_at(3e9).unwrap(),
+        host.save_state_at(3e9).unwrap()
+    );
+}
+
+#[test]
+fn running_clock_states_keep_the_old_layout_and_bad_flags_are_rejected() {
+    let at = 1_000_000.0;
+    let mut machine = locked_rtc_machine(77.0, at);
+    let state = machine.save_state().unwrap();
+    // The clock fields are the old ones: base, halt, carry, at the old offset.
+    let base = (at - 77.0).to_le_bytes();
+    let offset = state
+        .windows(10)
+        .position(|window| window[..8] == base && window[8..] == [0, 0])
+        .expect("clock fields");
+    let mut other = locked_rtc_machine(0.0, 5.0);
+    other.load_state(&state).unwrap();
+    assert_eq!(other.save_state().unwrap(), state);
+    for (index, value) in [(8, 2), (9, 2)] {
+        let mut bad = state.clone();
+        bad[offset + index] = value;
+        assert!(other.load_state(&bad).is_err());
+    }
+    // A state written with halt set by an older build (where halt did not
+    // stop the clock) loads frozen at the loader's reading.
+    let mut halted = state.clone();
+    halted[offset + 8] = 1;
+    machine.load_state(&halted).unwrap();
+    assert_eq!(frozen_at_next_frame(&mut machine), 77.0);
+}
+
+#[test]
+fn only_a_halted_clock_writes_runtime_version_two() {
+    let mut machine = locked_rtc_machine(10.0, 1_000.0);
+    let state = machine.save_state().unwrap();
+    let runtime = machine.save_execution_runtime().unwrap();
+    // A running clock keeps the 0.1.1 layout, so old recordings compare equal.
+    assert_eq!(runtime[0], 1);
+    machine.load_execution(&state, &runtime, 3).unwrap();
+    assert_eq!(machine.save_execution_runtime().unwrap(), runtime);
+    let mut future = runtime.clone();
+    future[0] = 3;
+    assert!(machine.load_execution(&state, &future, 3).is_err());
+
+    machine.rtc_mut().unwrap().set_halt(true, 1_000.0);
+    let state = machine.save_state().unwrap();
+    let halted = machine.save_execution_runtime().unwrap();
+    assert_eq!(halted[0], 2);
+    // Version 2 is version 1 followed by the frozen reading.
+    assert_eq!(halted[1..halted.len() - 8], runtime[1..]);
+    assert_eq!(halted[halted.len() - 8..], 10.0f64.to_le_bytes());
+    // A version 1 runtime of a halted clock (from 0.1.1) leaves it pending
+    // from the state's base, so it freezes at the reading the state gives.
+    let mut old = halted[..halted.len() - 8].to_vec();
+    old[0] = 1;
+    machine.rtc_mut().unwrap().frozen = 99.0;
+    machine.load_execution(&state, &old, 3).unwrap();
+    assert!(machine.rtc().unwrap().pending);
+    assert_eq!(frozen_at_next_frame(&mut machine), 10.0);
+    machine.load_execution(&state, &halted, 3).unwrap();
+    assert_eq!(machine.save_execution_runtime().unwrap(), halted);
+    // A running clock must not carry a frozen reading.
+    machine.rtc_mut().unwrap().set_halt(false, 1_000.0);
+    let state = machine.save_state().unwrap();
+    let mut bad = halted.clone();
+    let len = bad.len();
+    bad[len - 8..].copy_from_slice(&5.0f64.to_le_bytes());
+    assert!(machine.load_execution(&state, &bad, 3).is_err());
+}
+
+#[test]
+fn non_rtc_runtime_keeps_version_one() {
+    let mut machine = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    assert_eq!(machine.save_execution_runtime().unwrap()[0], 1);
+}

@@ -433,7 +433,7 @@ impl Emulator {
     fn rtc_export<'py>(&self, py: Python<'py>, raw: bool) -> PyResult<Bound<'py, PyBytes>> {
         let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
         let file = if raw {
-            rtc.to_file()
+            rtc.to_file(rtc.clock(now()))
         } else {
             rtc.to_file_following_host(now())
                 .map_err(PyValueError::new_err)?
@@ -486,7 +486,7 @@ impl Emulator {
     fn rtc_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let rtc = self.inner.rtc().map_err(PyValueError::new_err)?;
         let result = PyDict::new(py);
-        result.set_item("timezero", rtc.timezero)?;
+        result.set_item("timezero", rtc.base(rtc.clock(now())))?;
         result.set_item("halt", rtc.halt)?;
         result.set_item("day_carry", rtc.day_carry)?;
         result.set_item("latch_enabled", rtc.latch_enabled)?;
@@ -503,10 +503,8 @@ impl Emulator {
         if !timezero.is_finite() {
             return Err(PyValueError::new_err("Timestamp must be finite"));
         }
-        self.inner
-            .rtc_mut()
-            .map_err(PyValueError::new_err)?
-            .timezero = timezero;
+        let rtc = self.inner.rtc_mut().map_err(PyValueError::new_err)?;
+        rtc.set_base(timezero, rtc.clock(now()));
         Ok(())
     }
     fn clock_now(&self) -> PyResult<f64> {

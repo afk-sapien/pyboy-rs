@@ -82,6 +82,16 @@ def test_export_follows_advances_and_frames(follow_frames):
 def test_unlocked_export_is_unchanged():
     pb = rust(rtc=rtc_file(BASE, halt=1, carry=1))
     assert pb.rtc_export() == pb.rtc_export(raw=True) == rtc_file(BASE, 1, 1)
+    # Once the halted clock has frozen it no longer follows the host, so its
+    # unlocked export is the base that shows the frozen reading now (an
+    # intentional PyBoy divergence). The base is recent so that no latch
+    # folds a 512 day overflow into it.
+    recent = float(int(time.time()) - 3 * DAY)
+    pb = rust(rtc=rtc_file(recent, halt=1, carry=1))
+    pb.tick(1, False)
+    first = pb.rtc_export()
+    assert first[8:] == bytes((1, 1)) and 0 <= timezero(first) - recent < 5
+    assert 0 <= timezero(pb.rtc_export(raw=True)) - timezero(first) < 5
 
 
 def test_stop_writes_the_host_following_value_while_locked():
@@ -199,7 +209,7 @@ def test_checkpoints_restore_across_builds_but_not_across_formats():
     second.restore_execution(other_build)
     assert second.execution_checkpoint()["state"] == checkpoint["state"]
     for compat in ({"state_format": "pyboy-format-16", "runtime_format": 1},
-                   {"state_format": "pyboy-format-15", "runtime_format": 2}):
+                   {"state_format": "pyboy-format-15", "runtime_format": 3}):
         bad = deepcopy(checkpoint)
         bad["compat"] = compat
         with pytest.raises(ValueError, match="incompatible"):
@@ -211,6 +221,55 @@ def test_checkpoints_restore_across_builds_but_not_across_formats():
         second.restore_execution(legacy)
     legacy["build"] = checkpoint["build"]
     second.restore_execution(legacy)
+
+
+def test_checkpoints_record_their_runtime_format_and_0_1_1_ones_restore():
+    first = locked()
+    first.tick(10, False)
+    running = first.execution_checkpoint()
+    # A running clock keeps the 0.1.1 runtime layout, so 0.1.1 checkpoints and
+    # recordings compare equal.
+    assert running["runtime"][0] == running["compat"]["runtime_format"] == 1
+    first.set_rtc_registers(halt=True)
+    halted = first.execution_checkpoint()
+    assert halted["runtime"][0] == halted["compat"]["runtime_format"] == 2
+    second = locked()
+    for checkpoint in (running, halted):
+        second.restore_execution(checkpoint)
+        assert second.execution_checkpoint() == checkpoint
+    # A 0.1.1 checkpoint of a halted clock carried no frozen reading. It loads
+    # frozen at the reading the state gives under the restored lock.
+    legacy = deepcopy(halted)
+    legacy["compat"]["runtime_format"] = 1
+    legacy["runtime"] = bytes((1,)) + halted["runtime"][1:-8]
+    second.restore_execution(legacy)
+    assert second.rtc_registers() == first.rtc_registers()
+
+
+@pytest.mark.parametrize("lock_first", [False, True])
+def test_a_halted_state_restores_with_its_lock_in_either_order(lock_first):
+    first = locked(follow_frames=True)
+    first.tick(30, False)
+    first.set_rtc_registers(halt=True)
+    first.tick(30, False)
+    state = io.BytesIO()
+    first.save_state(state)
+    lock = first.clock_lock_state()
+    expected = (first.rtc_registers(), observed(first, 1))
+    first.tick(60, False)
+    assert first.rtc_registers() == expected[0]
+    second = rust()
+    second.tick(5, False)
+    if lock_first:
+        second.set_clock_lock_state(lock)
+    state.seek(0)
+    second.load_state(state)
+    if not lock_first:
+        second.set_clock_lock_state(lock)
+    assert (second.rtc_registers(), observed(second, 1)) == expected
+    # Both continue identically, frozen.
+    second.tick(60, False)
+    assert second.rtc_registers() == first.rtc_registers()
 
 
 def test_another_cartridge_is_still_rejected():

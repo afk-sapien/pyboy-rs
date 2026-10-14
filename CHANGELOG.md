@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.1.2
+
+MBC3 real-time clock fixes so Gen 2 games can set and stop their clock. Game
+visible clock behavior now intentionally differs from PyBoy 2.7.0 where PyBoy
+does not follow the hardware.
+
+### Changed (intentional divergence from PyBoy 2.7.0)
+
+- A game write to an RTC register sets exactly that counter, as Pan Docs
+  describes: 0x08 seconds, 0x09 minutes, 0x0A hours, 0x0B the low eight day
+  bits, 0x0C day bit 8 (bit 0), halt (bit 6) and day carry (bit 7). PyBoy
+  turns every write into an adjustment of its base timestamp that also moves
+  the other counters. Out of range values are masked to the register width
+  (six bits for seconds and minutes, five for hours) and then wrap without a
+  carry, so 60 to 63 read as 0 to 3 and 24 to 31 as 0 to 7. A seconds write
+  also clears the sub-second fraction. Other writes keep it.
+- The halt bit stops the clock, and clearing it resumes from the frozen value.
+  This composes with the clock lock, `set_rtc_registers`, `rtc_registers`, the
+  day carry and `latch_rtc`. A halted clock is stored in `.rtc` files and save
+  states as the base timestamp that shows the frozen value at the moment of
+  writing, so the ten-byte formats are unchanged and PyBoy reads such a file as
+  a running clock at the right time. A loaded halted clock freezes at its first
+  use (the next frame or a game access), so `load_state` followed by
+  `set_clock_lock_state` restores it exactly, and a file written back before
+  then is unchanged. After that, with a host clock, a halted file moves forward
+  by the host time between the freeze and the write.
+
+### Fixed
+
+- Loading a save state is deterministic. The latch is rebuilt from the loaded
+  clock (again at the first use, so a lock applied right after loading counts)
+  and the latch command is reset, instead of keeping whatever the loading
+  emulator had. The state layout is unchanged, so Gen 1 states stay byte
+  identical to PyBoy 2.7.0 and 0.1.1 Gen 2 states still load. Clock flags other
+  than 0 or 1 in a state are rejected.
+- `memory[a:a]` returns `[]` (and an empty slice write does nothing) instead of
+  raising. PyBoy 2.7.0 raises here.
+
+### Added
+
+- Execution runtime format 2 carries a halted clock's frozen value. It is
+  written only while a clock is halted, so every other checkpoint keeps the
+  0.1.1 layout and old checkpoints and recordings still restore and replay.
+  Checkpoints record the format their runtime uses.
+- Features `rtc_register_writes`, `rtc_halt` and `empty_memory_slices`.
+
 ## 0.1.1
 
 Real-time clock support and release hardening.

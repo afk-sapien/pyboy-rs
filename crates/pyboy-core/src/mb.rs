@@ -160,6 +160,9 @@ impl Machine {
     }
 
     pub fn begin_frame(&mut self, render: bool, sound: bool) {
+        if let Some(rtc) = self.mb.cartridge.rtc.as_mut().filter(|rtc| rtc.unsettled()) {
+            rtc.settle(rtc.clock(now()));
+        }
         self.mb.lcd.frame_done = false;
         self.mb.lcd.disable_renderer = !render;
         self.mb.sound.disable_sampling = !sound;

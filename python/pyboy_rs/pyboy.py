@@ -50,7 +50,8 @@ class Memory:
                 raise ValueError("Memory slices require explicit start and stop addresses")
             start, stop = operator.index(address.start), operator.index(address.stop)
             step = 1 if address.step is None else operator.index(address.step)
-            if not 0 <= start < stop <= 65536 or step <= 0:
+            # An empty slice is valid and selects nothing, as read_bytes(a, a) is.
+            if not 0 <= start <= stop <= 65536 or step <= 0:
                 raise ValueError("Invalid memory slice")
             return bank, range(start, stop, step), False
         address = operator.index(address)
@@ -60,6 +61,8 @@ class Memory:
 
     def __getitem__(self, key):
         bank, addresses, single = self._key(key)
+        if not addresses:
+            return []
         if bank is None:
             if single:
                 return self._machine.read(addresses.start)
@@ -477,18 +480,25 @@ class PyBoy(Execution):
     def set_rtc_registers(self, *, seconds=None, minutes=None, hours=None, days=None, halt=None, day_carry=None):
         """Set any of the clock registers; omitted ones keep their current value.
 
-        This moves the base timestamp so the clock reads the requested values at
-        its current reading. Unlike a game write, it is exact.
+        The clock then reads the requested values at its current reading. While
+        it is halted they become the frozen value. Game writes through the
+        cartridge are exact too and set one register each.
         """
         self._clock_change_allowed()
         self._machine.rtc_set_registers(seconds, minutes, hours, days, halt, day_carry)
 
     def rtc_state(self):
-        """Base timestamp (``timezero``), halt, day carry, latch contents and lock status."""
+        """Base timestamp (``timezero``), halt, day carry, latch contents and lock status.
+
+        While the clock is halted, ``timezero`` is the base that reads the frozen
+        value at the current clock reading, which is what a ``.rtc`` file or a
+        save state stores."""
         return self._machine.rtc_state()
 
     def set_rtc_timezero(self, timezero):
-        """Set the base timestamp: the Unix time at which the clock reads zero."""
+        """Set the base timestamp: the Unix time at which the clock reads zero.
+
+        A halted clock freezes at the value this base gives at the current reading."""
         self._clock_change_allowed()
         self._machine.rtc_set_timezero(float(timezero))
 

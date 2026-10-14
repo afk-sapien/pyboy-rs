@@ -104,6 +104,28 @@ pub struct RtcRegisters {
     pub day_carry: bool,
 }
 
+/// Seconds in one day.
+const DAY: f64 = 86400.0;
+
+/// MBC3 real-time clock.
+///
+/// While running, the clock reads `now - timezero` seconds. While halted
+/// (register 0x0C bit 6) it reads `frozen` and `timezero` is not used.
+/// Every serialized form (the `.rtc` file and save states) stores a single
+/// base timestamp, so a halted clock is written as the base that reads the
+/// frozen value at the instant of writing: `now - frozen`.
+///
+/// Loading a halted clock from a base does not freeze it at once. It stays
+/// `pending`: `timezero` holds the loaded base, the clock reads
+/// `now - timezero` and lock changes move it as they move a running clock.
+/// The first use (a game access, a register or halt change, or the start of
+/// the next frame) freezes it at that reading. So loading a state and then
+/// applying the lock it was saved with restores the frozen value exactly, in
+/// either order, and writing a pending clock back gives the loaded base.
+/// PyBoy 2.7.0 (which ignores halt) reads such a base as the same value at
+/// load and then lets it run.
+///
+/// Register writes and halt follow Pan Docs, not PyBoy 2.7.0. See `set`.
 #[derive(Debug, Clone)]
 pub struct Rtc {
     pub timezero: f64,
@@ -111,8 +133,63 @@ pub struct Rtc {
     pub lock: Option<ClockLock>,
     pub day_carry: u8,
     pub halt: u8,
+    /// Elapsed seconds the clock reads while halted and settled. Zero while
+    /// running or pending.
+    pub frozen: f64,
+    /// Halted, loaded from a base and not yet frozen (see the type docs).
+    pub pending: bool,
+    /// Set by loading a save state, which does not hold the latch. The latch
+    /// is rebuilt from the clock at the first use, like `pending`.
+    pub stale_latch: bool,
     pub latch_enabled: bool,
     pub latch: [u8; 5],
+}
+
+/// Clock components of an elapsed time: whole seconds 0..60, minutes 0..60,
+/// hours 0..24, the full day count (which may exceed 511 or be negative
+/// before the overflow is folded into the carry) and the sub-second fraction.
+struct Parts {
+    seconds: f64,
+    minutes: f64,
+    hours: f64,
+    days: i64,
+    fraction: f64,
+}
+
+impl Parts {
+    fn of(t: f64) -> Self {
+        let whole = t.floor();
+        Self {
+            seconds: whole.rem_euclid(60.0),
+            minutes: (t / 60.0).floor().rem_euclid(60.0),
+            hours: (t / 3600.0).floor().rem_euclid(24.0),
+            days: (t / DAY).floor() as i64,
+            fraction: t - whole,
+        }
+    }
+
+    fn elapsed(&self) -> f64 {
+        self.days as f64 * DAY
+            + self.hours * 3600.0
+            + self.minutes * 60.0
+            + self.seconds
+            + self.fraction
+    }
+}
+
+/// Mask a written counter value to its hardware register width, then wrap an
+/// out-of-range value into range without carrying into the next unit.
+///
+/// The hardware registers keep 6 bits for seconds and minutes and 5 bits for
+/// hours. Emulator research reports that a value such as 61 seconds reads
+/// back as 61 and counts 62, 63, 0 without incrementing the minutes. This clock is a single timestamp and cannot hold
+/// 60 to 63, so it stores the value the hardware counter would wrap to at the
+/// same remainder: 60 to 63 become 0 to 3 (hours 24 to 31 become 0 to 7).
+/// The next carry into minutes (or days) then comes 4 seconds (or 8 hours)
+/// earlier than on hardware. Games never write these values.
+fn wrap_counter(value: u8, mask: u8, range: u8) -> f64 {
+    let value = value & mask;
+    f64::from(if value >= range { value - range } else { value })
 }
 
 impl Rtc {
@@ -123,22 +200,115 @@ impl Rtc {
             lock: None,
             day_carry: 0,
             halt: 0,
+            frozen: 0.0,
+            pending: false,
+            stale_latch: false,
             latch_enabled: false,
             latch: [0; 5],
         }
     }
 
+    pub fn halted(&self) -> bool {
+        self.halt != 0
+    }
+
     fn elapsed(&self, now: f64) -> f64 {
         if self.timelock {
             0.0
+        } else if self.halted() && !self.pending {
+            self.frozen
         } else {
             now - self.timezero
         }
     }
 
+    /// Whether `settle` would change anything.
+    pub fn unsettled(&self) -> bool {
+        self.pending || self.stale_latch
+    }
+
+    /// Finish a load at clock reading `now`: freeze a pending halted clock at
+    /// its reading and rebuild a stale latch. Does nothing otherwise.
+    pub fn settle(&mut self, now: f64) {
+        if self.pending {
+            self.frozen = now - self.timezero;
+            self.pending = false;
+        }
+        if self.stale_latch {
+            self.latch = self.latch_values(now);
+            self.stale_latch = false;
+        }
+    }
+
+    /// Make the clock read `t` at `now`, running or halted as it is.
+    fn set_elapsed(&mut self, t: f64, now: f64) {
+        self.settle(now);
+        if self.halted() {
+            self.frozen = t;
+        } else {
+            self.timezero = now - t;
+        }
+    }
+
+    /// Stop or restart the clock at `now`. Halting freezes the current
+    /// reading. Resuming continues from the frozen reading.
+    pub fn set_halt(&mut self, halt: bool, now: f64) {
+        self.settle(now);
+        if halt && !self.halted() {
+            self.frozen = self.elapsed(now);
+            self.halt = 1;
+        } else if !halt && self.halted() {
+            self.timezero = now - self.frozen;
+            self.frozen = 0.0;
+            self.halt = 0;
+        }
+    }
+
+    /// The base timestamp a serialized form holds at `now`: the stored base
+    /// while running, and the base that reads the frozen value at `now`
+    /// while halted.
+    pub fn base(&self, now: f64) -> f64 {
+        if self.halted() && !self.pending {
+            now - self.frozen
+        } else {
+            self.timezero
+        }
+    }
+
+    /// Replace the clock with a serialized base, halt flag and carry flag.
+    /// A halted clock is left pending (see the type documentation).
+    pub fn restore(&mut self, timezero: f64, halt: bool, day_carry: bool) {
+        self.timezero = timezero;
+        self.halt = u8::from(halt);
+        self.pending = halt;
+        self.frozen = 0.0;
+        self.day_carry = u8::from(day_carry);
+    }
+
+    /// Set the base timestamp at `now`, keeping the halt and carry flags. A
+    /// halted clock freezes at the reading this base gives at `now`.
+    pub fn set_base(&mut self, timezero: f64, now: f64) {
+        self.restore(timezero, self.halted(), self.day_carry != 0);
+        self.settle(now);
+    }
+
+    /// The latch contents a fresh latch at `now` would hold, without the
+    /// side effects of `latch_rtc` (the carry and the 512-day shift).
+    pub fn latch_values(&self, now: f64) -> [u8; 5] {
+        let registers = self.registers(now);
+        [
+            registers.seconds,
+            registers.minutes,
+            registers.hours,
+            registers.days as u8,
+            (registers.days >> 8) as u8,
+        ]
+    }
+
     pub fn latch_rtc(&mut self, now: f64) {
+        self.settle(now);
         let t = self.elapsed(now);
-        let days = (t / 86400.0).floor() as i64;
+        let days = (t / DAY).floor() as i64;
         self.latch = [
             t.rem_euclid(60.0) as u8,
             (t / 60.0).floor().rem_euclid(60.0) as u8,
@@ -149,7 +319,11 @@ impl Rtc {
         if days >> 8 > 1 {
             self.day_carry = 1;
             self.latch[4] &= 1;
-            self.timezero += 512.0 * 86400.0;
+            if self.halted() {
+                self.frozen -= 512.0 * DAY;
+            } else {
+                self.timezero += 512.0 * DAY;
+            }
         }
     }
 
@@ -159,21 +333,21 @@ impl Rtc {
         self.lock.as_ref().map_or(wall, ClockLock::now)
     }
 
-    /// Registers derived from the base timestamp at `now`, without latching.
+    /// Registers as the cartridge holds them at `now`, without latching. A
+    /// day count past 511 that no latch has folded yet reports the carry.
     pub fn registers(&self, now: f64) -> RtcRegisters {
-        let t = self.elapsed(now);
-        let days = (t / 86400.0).floor() as i64;
+        let parts = Parts::of(self.elapsed(now));
         RtcRegisters {
-            seconds: t.rem_euclid(60.0) as u8,
-            minutes: (t / 60.0).floor().rem_euclid(60.0) as u8,
-            hours: (t / 3600.0).floor().rem_euclid(24.0) as u8,
-            days: days.rem_euclid(512) as u16,
-            halt: self.halt != 0,
-            day_carry: self.day_carry != 0,
+            seconds: parts.seconds as u8,
+            minutes: parts.minutes as u8,
+            hours: parts.hours as u8,
+            days: parts.days.rem_euclid(512) as u16,
+            halt: self.halted(),
+            day_carry: self.day_carry != 0 || parts.days >= 512,
         }
     }
 
-    /// Move the base timestamp so that the registers read `registers` at `now`.
+    /// Make the registers read `registers` at `now`, whole seconds exactly.
     /// The latched copy is untouched, as on hardware until the next latch.
     pub fn set_registers(&mut self, registers: RtcRegisters, now: f64) -> Result<(), &'static str> {
         if registers.seconds > 59
@@ -186,17 +360,18 @@ impl Rtc {
         let elapsed = f64::from(registers.seconds)
             + 60.0 * f64::from(registers.minutes)
             + 3600.0 * f64::from(registers.hours)
-            + 86400.0 * f64::from(registers.days);
-        self.timezero = now - elapsed;
-        self.halt = u8::from(registers.halt);
-        self.day_carry = u8::from(registers.day_carry);
+            + DAY * f64::from(registers.days);
+        self.restore(now - elapsed, registers.halt, registers.day_carry);
+        self.settle(now);
         Ok(())
     }
 
-    /// Serialize as a PyBoy 2.7.0 `.rtc` file.
-    pub fn to_file(&self) -> [u8; RTC_FILE_LEN] {
+    /// Serialize as a PyBoy 2.7.0 `.rtc` file at clock reading `now`. A
+    /// running clock does not depend on `now`. A halted one stores the base
+    /// that reads the frozen value at `now` (see the type documentation).
+    pub fn to_file(&self, now: f64) -> [u8; RTC_FILE_LEN] {
         let mut out = [0; RTC_FILE_LEN];
-        out[..8].copy_from_slice(&self.timezero.to_le_bytes());
+        out[..8].copy_from_slice(&self.base(now).to_le_bytes());
         out[8] = self.halt;
         out[9] = self.day_carry;
         out
@@ -206,20 +381,22 @@ impl Rtc {
     /// lock is set the base timestamp is relative to the fake locked time, so
     /// it is shifted by the same amount `unlock_clock` would shift it. The
     /// registers then read the frozen value now and follow the host from here.
-    /// Without a lock this equals `to_file`. Fails if the shift is not finite.
+    /// Without a lock this equals `to_file(wall)`. Fails if the shift is not finite.
     pub fn to_file_following_host(&self, wall: f64) -> Result<[u8; RTC_FILE_LEN], &'static str> {
         let mut host = self.clone();
         host.unlock_clock(wall);
-        if !host.timezero.is_finite() {
+        if !host.base(wall).is_finite() {
             return Err("Clock is not finite or is out of range");
         }
-        Ok(host.to_file())
+        Ok(host.to_file(wall))
     }
 
-    /// Load a PyBoy 2.7.0 `.rtc` file. Like PyBoy, the first ten bytes are
-    /// used and trailing bytes are ignored, and latched registers are not
-    /// part of the file. Unlike PyBoy, a non-finite timestamp or a flag other
-    /// than 0 or 1 is rejected, and the machine is left unchanged.
+    /// Load a PyBoy 2.7.0 `.rtc` file at clock reading `now`. Like PyBoy, the
+    /// first ten bytes are used and trailing bytes are ignored, and latched
+    /// registers are not part of the file. Unlike PyBoy, a non-finite
+    /// timestamp or a flag other than 0 or 1 is rejected, and the machine is
+    /// left unchanged. A halted clock is left pending, so it freezes at its
+    /// first use (see the type documentation).
     pub fn load_file(&mut self, bytes: &[u8]) -> Result<(), &'static str> {
         if bytes.len() < RTC_FILE_LEN {
             return Err("RTC file is shorter than 10 bytes");
@@ -233,9 +410,7 @@ impl Rtc {
         if bytes[8] > 1 || bytes[9] > 1 {
             return Err("RTC file flags must be 0 or 1");
         }
-        self.timezero = timezero;
-        self.halt = bytes[8];
-        self.day_carry = bytes[9];
+        self.restore(timezero, bytes[8] != 0, bytes[9] != 0);
         Ok(())
     }
 
@@ -248,10 +423,13 @@ impl Rtc {
 
     /// Release a locked clock so the host clock resumes. The base timestamp
     /// is shifted so the registers continue from the frozen reading instead of
-    /// jumping to host time.
+    /// jumping to host time. A halted clock keeps its frozen value. A pending
+    /// one keeps its reading, as a running clock does.
     pub fn unlock_clock(&mut self, wall: f64) {
         if let Some(lock) = self.lock.take() {
-            self.timezero += wall - lock.now();
+            if !self.halted() || self.pending {
+                self.timezero += wall - lock.now();
+            }
         }
     }
 
@@ -274,22 +452,50 @@ impl Rtc {
         }
     }
 
+    /// Write clock register `register` at `now`, as Pan Docs describes and
+    /// unlike PyBoy 2.7.0 (which shifts the base by the old component plus
+    /// the value in mixed units). The write sets exactly that counter and
+    /// leaves the others unchanged:
+    ///
+    /// - 0x08 seconds (6 bits), 0x09 minutes (6 bits), 0x0A hours (5 bits).
+    ///   Out-of-range values wrap as `wrap_counter` describes.
+    /// - 0x0B the low 8 bits of the 9-bit day counter.
+    /// - 0x0C bit 0 day counter bit 8, bit 6 halt, bit 7 day carry. Other
+    ///   bits are ignored.
+    ///
+    /// A seconds write also restarts the current second (the sub-second
+    /// fraction becomes zero). This is a choice of this port: a clock set by
+    /// the game then ticks on whole seconds after the write, whatever the
+    /// sub-second phase was before it. Other writes keep the fraction.
+    ///
+    /// A day count past 511 that no latch has folded yet is folded first: the
+    /// carry is set and the count wraps, as the hardware counter would have
+    /// done when it overflowed. Halting freezes the clock after the day bit
+    /// is applied. Resuming restarts it from the frozen value. The latched
+    /// copy is untouched until the next latch.
     pub fn set(&mut self, register: u8, value: u8, now: f64) {
-        let t = self.elapsed(now);
-        let old = match register {
-            8 => t.rem_euclid(60.0),
-            9 => (t / 60.0).floor().rem_euclid(60.0),
-            10 => (t / 3600.0).floor().rem_euclid(24.0),
-            11 | 12 => (t / 86400.0).floor(),
-            _ => return,
-        };
-        // Preserve the upstream time adjustment and unimplemented halt behavior.
+        if !(8..=12).contains(&register) {
+            return;
+        }
+        let mut parts = Parts::of(self.elapsed(now));
+        if parts.days >= 512 {
+            self.day_carry = 1;
+        }
+        parts.days = parts.days.rem_euclid(512);
+        match register {
+            8 => {
+                parts.seconds = wrap_counter(value, 0x3f, 60);
+                parts.fraction = 0.0;
+            }
+            9 => parts.minutes = wrap_counter(value, 0x3f, 60),
+            10 => parts.hours = wrap_counter(value, 0x1f, 24),
+            11 => parts.days = (parts.days & 0x100) | i64::from(value),
+            _ => parts.days = (parts.days & 0xff) | (i64::from(value & 1) << 8),
+        }
+        self.set_elapsed(parts.elapsed(), now);
         if register == 12 {
-            self.halt = (value >> 6) & 1;
             self.day_carry = (value >> 7) & 1;
-            self.timezero -= old + f64::from(u16::from(value & 1) << 8);
-        } else {
-            self.timezero -= old + f64::from(value);
+            self.set_halt(value & 0x40 != 0, now);
         }
     }
 }
@@ -563,21 +769,29 @@ mod tests {
 
     #[test]
     fn file_round_trip_is_ten_bytes_little_endian() {
-        let mut rtc = Rtc::new(1_700_000_000.25);
-        rtc.halt = 1;
-        rtc.day_carry = 1;
-        let bytes = rtc.to_file();
+        let now = 1_700_000_100.0;
+        let mut rtc = Rtc::new(0.0);
+        rtc.restore(1_700_000_000.25, true, true);
+        assert!(rtc.pending);
+        // A pending clock writes the base it was loaded from, at any instant.
+        assert_eq!(rtc.to_file(now), rtc.to_file(now + 50.0));
+        rtc.settle(now);
+        let bytes = rtc.to_file(now);
         assert_eq!(bytes.len(), 10);
         assert_eq!(bytes[..8], 1_700_000_000.25f64.to_le_bytes());
         assert_eq!(bytes[8..], [1, 1]);
         let mut other = Rtc::new(0.0);
         other.load_file(&bytes).unwrap();
-        assert_eq!(other.timezero, 1_700_000_000.25);
-        assert_eq!((other.halt, other.day_carry), (1, 1));
+        assert_eq!(other.base(now), 1_700_000_000.25);
+        other.settle(now);
+        assert_eq!((other.halt, other.day_carry, other.frozen), (1, 1, 99.75));
         // Trailing bytes are ignored as PyBoy ignores them.
         let mut padded = bytes.to_vec();
         padded.extend([9, 9, 9]);
         other.load_file(&padded).unwrap();
+        // A running clock's file does not depend on the instant it is written.
+        let running = Rtc::new(5.5);
+        assert_eq!(running.to_file(1.0), running.to_file(1e9));
     }
 
     #[test]
@@ -664,13 +878,13 @@ mod tests {
         let exported = rtc.to_file_following_host(wall).unwrap();
         // The lock itself is untouched, and the stored base is still the locked one.
         assert!(rtc.lock.is_some());
-        assert_eq!(rtc.to_file()[..8], 1_000.0f64.to_le_bytes());
+        assert_eq!(rtc.to_file(rtc.clock(wall))[..8], 1_000.0f64.to_le_bytes());
         let mut other = Rtc::new(0.0);
         other.load_file(&exported).unwrap();
         assert_eq!(other.registers(wall), frozen);
         // Without a lock both exports agree.
         rtc.lock = None;
-        assert_eq!(rtc.to_file_following_host(wall).unwrap(), rtc.to_file());
+        assert_eq!(rtc.to_file_following_host(wall).unwrap(), rtc.to_file(wall));
         // A shift that overflows is refused rather than written.
         rtc.lock_clock(-1e15, false).unwrap();
         rtc.timezero = f64::MAX;
@@ -710,16 +924,16 @@ mod tests {
             .unwrap()
             .lock_clock(2_000.0, false)
             .unwrap();
-        // Upstream's day-register write subtracts `value` seconds, and the
-        // locked clock (not the 123.0 host time) decides the elapsed time.
+        // The locked clock (not the 123.0 host time) decides the elapsed
+        // time, 2000 s or 33 min 20 s. Writing day 3 keeps the rest.
         cart.write(0x4000, 0x0b, 123.0);
         cart.write(0xa000, 3, 123.0);
         let rtc = cart.rtc.as_ref().unwrap();
-        assert_eq!(rtc.timezero, -3.0);
+        assert_eq!(rtc.timezero, 2_000.0 - (3.0 * DAY + 2_000.0));
         latch(&mut cart, 456.0);
-        // 2003 s elapsed at the locked instant: 33 min 23 s.
-        assert_eq!(read_register(&mut cart, 8, 456.0), 23);
+        assert_eq!(read_register(&mut cart, 8, 456.0), 20);
         assert_eq!(read_register(&mut cart, 9, 456.0), 33);
+        assert_eq!(read_register(&mut cart, 11, 456.0), 3);
     }
 
     #[test]
@@ -756,5 +970,267 @@ mod tests {
             cart.rtc.as_ref().unwrap().lock.as_ref().unwrap().frames,
             u64::MAX
         );
+    }
+
+    /// A cartridge with RAM and clock access enabled and the clock locked at
+    /// `at`, reading `elapsed` seconds.
+    fn locked_cart(elapsed: f64, at: f64) -> Cartridge {
+        let mut cart = Cartridge::new(mbc3_rtc_rom(), 0.0).unwrap();
+        cart.write(0, 0x0a, 0.0);
+        let rtc = cart.rtc.as_mut().unwrap();
+        rtc.timezero = at - elapsed;
+        rtc.lock_clock(at, false).unwrap();
+        cart
+    }
+
+    fn write_register(cart: &mut Cartridge, register: u8, value: u8) {
+        cart.write(0x4000, register, 0.0);
+        cart.write(0xa000, value, 0.0);
+    }
+
+    /// Latch, then read seconds, minutes, hours, day low and 0x0C as a game does.
+    fn game_reads(cart: &mut Cartridge) -> [u8; 5] {
+        latch(cart, 0.0);
+        let mut out = [0; 5];
+        for (slot, register) in out.iter_mut().zip(8..=12) {
+            *slot = read_register(cart, register, 0.0);
+        }
+        out
+    }
+
+    fn advance(cart: &mut Cartridge, seconds: f64) {
+        let lock = cart.rtc.as_mut().unwrap().lock.as_mut().unwrap();
+        lock.advance(seconds).unwrap();
+    }
+
+    const START: f64 = 2.0 * DAY + 3.0 * 3600.0 + 4.0 * 60.0 + 5.0;
+
+    #[test]
+    fn each_register_write_sets_only_its_counter() {
+        let at = 1_700_000_000.0;
+        for (register, value, expected) in [
+            (8, 42, [42, 4, 3, 2, 0]),
+            (9, 59, [5, 59, 3, 2, 0]),
+            (10, 23, [5, 4, 23, 2, 0]),
+            (11, 255, [5, 4, 3, 255, 0]),
+            (12, 1, [5, 4, 3, 2, 1]),
+            (12, 0x81, [5, 4, 3, 2, 0x81]),
+        ] {
+            let mut cart = locked_cart(START, at);
+            assert_eq!(game_reads(&mut cart), [5, 4, 3, 2, 0]);
+            write_register(&mut cart, register, value);
+            // The latch keeps the old values until the next latch.
+            assert_eq!(read_register(&mut cart, 8, 0.0), 5);
+            assert_eq!(game_reads(&mut cart), expected, "register {register:#x}");
+            // The clock keeps running from the written value.
+            advance(&mut cart, 61.0);
+            let later = cart.rtc.as_ref().unwrap().registers(at + 61.0);
+            let written = cart.rtc.as_ref().unwrap().registers(at);
+            assert_ne!(later, written);
+        }
+    }
+
+    #[test]
+    fn a_full_game_style_clock_set_reads_back_exactly() {
+        // pokecrystal's SetClock: latch, write S, M, H, DL, DH, close.
+        let mut cart = locked_cart(1_234_567.89, 2_000_000_000.0);
+        latch(&mut cart, 0.0);
+        for (register, value) in [(8, 7), (9, 8), (10, 9), (11, 0x34), (12, 0x01)] {
+            write_register(&mut cart, register, value);
+        }
+        cart.write(0x6000, 0, 0.0);
+        assert_eq!(game_reads(&mut cart), [7, 8, 9, 0x34, 1]);
+        let registers = cart.rtc.as_ref().unwrap().registers(2_000_000_000.0);
+        assert_eq!(registers.days, 0x134);
+        // The seconds write restarted the second: exactly 1 s later it ticks.
+        advance(&mut cart, 0.999);
+        assert_eq!(game_reads(&mut cart)[0], 7);
+        advance(&mut cart, 0.001);
+        assert_eq!(game_reads(&mut cart)[0], 8);
+    }
+
+    #[test]
+    fn only_a_seconds_write_clears_the_sub_second_fraction() {
+        let at = 1_000_000.0;
+        let mut cart = locked_cart(START + 0.75, at);
+        write_register(&mut cart, 9, 10);
+        let rtc = cart.rtc.as_ref().unwrap();
+        assert_eq!(at - rtc.timezero, START - 4.0 * 60.0 + 600.0 + 0.75);
+        write_register(&mut cart, 8, 30);
+        let rtc = cart.rtc.as_ref().unwrap();
+        assert_eq!(at - rtc.timezero, START - 5.0 - 4.0 * 60.0 + 600.0 + 30.0);
+    }
+
+    #[test]
+    fn out_of_range_writes_are_masked_and_wrap_without_carry() {
+        let at = 1_000_000.0;
+        for (register, value, expected) in [
+            // Seconds and minutes keep 6 bits, 60 to 63 wrap to 0 to 3.
+            (8, 59, [59, 4, 3, 2, 0]),
+            (8, 60, [0, 4, 3, 2, 0]),
+            (8, 63, [3, 4, 3, 2, 0]),
+            (8, 0x7c, [0, 4, 3, 2, 0]),
+            (8, 0xff, [3, 4, 3, 2, 0]),
+            (9, 61, [5, 1, 3, 2, 0]),
+            (9, 0xc5, [5, 5, 3, 2, 0]),
+            // Hours keep 5 bits, 24 to 31 wrap to 0 to 7.
+            (10, 24, [5, 4, 0, 2, 0]),
+            (10, 31, [5, 4, 7, 2, 0]),
+            (10, 0xe3, [5, 4, 3, 2, 0]),
+            // Bits 1 to 5 of 0x0C are not stored.
+            (12, 0x3e, [5, 4, 3, 2, 0]),
+        ] {
+            let mut cart = locked_cart(START, at);
+            write_register(&mut cart, register, value);
+            assert_eq!(
+                game_reads(&mut cart),
+                expected,
+                "{register:#x} <- {value:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn halt_freezes_the_clock_and_resume_continues_from_the_frozen_value() {
+        let at = 1_000_000.0;
+        let mut cart = locked_cart(START, at);
+        write_register(&mut cart, 12, 0x40);
+        assert_eq!(game_reads(&mut cart), [5, 4, 3, 2, 0x40]);
+        advance(&mut cart, 5_000.0);
+        assert_eq!(game_reads(&mut cart), [5, 4, 3, 2, 0x40]);
+        // Writes while halted set the frozen value.
+        write_register(&mut cart, 9, 30);
+        advance(&mut cart, 100.0);
+        assert_eq!(game_reads(&mut cart), [5, 30, 3, 2, 0x40]);
+        // Clearing halt resumes from the frozen value, not from host time.
+        write_register(&mut cart, 12, 0x00);
+        assert_eq!(game_reads(&mut cart), [5, 30, 3, 2, 0]);
+        advance(&mut cart, 65.0);
+        assert_eq!(game_reads(&mut cart), [10, 31, 3, 2, 0]);
+        // Halt with the day bit and carry in one write.
+        write_register(&mut cart, 12, 0xc1);
+        advance(&mut cart, DAY);
+        assert_eq!(game_reads(&mut cart), [10, 31, 3, 2, 0xc1]);
+        let rtc = cart.rtc.as_ref().unwrap();
+        assert_eq!(rtc.registers(0.0).days, 258);
+        assert!(rtc.halted());
+    }
+
+    #[test]
+    fn halt_composes_with_lock_unlock_and_the_file() {
+        let mut rtc = Rtc::new(0.0);
+        rtc.lock_clock(5_000.0, true).unwrap();
+        rtc.set_halt(true, rtc.clock(0.0));
+        assert_eq!(rtc.frozen, 5_000.0);
+        rtc.lock.as_mut().unwrap().frames = 600;
+        rtc.lock.as_mut().unwrap().offset = 77.0;
+        assert_eq!(rtc.registers(rtc.clock(0.0)).seconds, 20);
+        // The host-following file reads the frozen value at the host instant.
+        let wall = 1_800_000_000.0;
+        let file = rtc.to_file_following_host(wall).unwrap();
+        assert_eq!(file[..8], (wall - 5_000.0).to_le_bytes());
+        assert_eq!(file[8..], [1, 0]);
+        let mut other = Rtc::new(0.0);
+        other.load_file(&file).unwrap();
+        assert!(other.halted() && other.pending);
+        // Pending, it freezes at its first use: three host seconds after the write.
+        other.settle(wall + 3.0);
+        assert_eq!(other.frozen, 5_003.0);
+        assert_eq!(other.registers(9e9).seconds, 23);
+        other.load_file(&file).unwrap();
+        other.settle(wall);
+        assert_eq!(other.registers(9e9), rtc.registers(rtc.clock(0.0)));
+        // Loaded and then locked, as after load_state and set_clock_lock_state,
+        // a pending clock freezes at the locked reading.
+        other.load_file(&file).unwrap();
+        other.lock_clock(wall, false).unwrap();
+        other.latch_rtc(other.clock(0.0));
+        assert_eq!(other.frozen, 5_000.0);
+        // Unlocking keeps a halted clock frozen.
+        rtc.unlock_clock(wall);
+        assert_eq!(rtc.registers(wall + 1e6).seconds, 20);
+        rtc.set_halt(false, wall);
+        assert_eq!(rtc.timezero, wall - 5_000.0);
+        assert_eq!(rtc.registers(wall + 10.0).seconds, 30);
+        // Relocking while halted, then resuming at the locked reading.
+        rtc.set_halt(true, wall + 10.0);
+        rtc.lock_clock(42.0, false).unwrap();
+        rtc.set_halt(false, rtc.clock(0.0));
+        assert_eq!(rtc.registers(rtc.clock(0.0)).seconds, 30);
+        assert_eq!(rtc.frozen, 0.0);
+    }
+
+    #[test]
+    fn set_registers_halts_and_resumes() {
+        let mut rtc = Rtc::new(0.0);
+        let registers = RtcRegisters {
+            seconds: 1,
+            minutes: 2,
+            hours: 3,
+            days: 4,
+            halt: true,
+            day_carry: false,
+        };
+        rtc.set_registers(registers, 100.0).unwrap();
+        assert_eq!(rtc.registers(1e9), registers);
+        assert_eq!(rtc.base(500.0), 500.0 - rtc.frozen);
+        rtc.set_registers(
+            RtcRegisters {
+                halt: false,
+                ..registers
+            },
+            1_000.0,
+        )
+        .unwrap();
+        assert_eq!(rtc.registers(1_001.0).seconds, 2);
+        // Setting the base of a halted clock freezes it at that base's reading.
+        rtc.set_halt(true, 1_001.0);
+        rtc.set_base(900.0, 1_000.0);
+        assert!(rtc.halted() && rtc.frozen == 100.0);
+    }
+
+    #[test]
+    fn carry_is_written_kept_and_set_by_overflow_while_halted() {
+        let at = 1_000_000.0;
+        let mut cart = locked_cart(START, at);
+        write_register(&mut cart, 12, 0x80);
+        assert_eq!(game_reads(&mut cart)[4], 0x80);
+        advance(&mut cart, 3.0 * DAY);
+        assert_eq!(game_reads(&mut cart)[4], 0x80);
+        write_register(&mut cart, 12, 0x00);
+        assert_eq!(game_reads(&mut cart)[4], 0x00);
+
+        // Day 511 halted at 23:59:59 stays there. Resume and one second later
+        // the counter wraps to 0 and the carry is set.
+        let mut cart = locked_cart(511.0 * DAY + 86_399.0, at);
+        write_register(&mut cart, 12, 0x41);
+        advance(&mut cart, 10.0);
+        assert_eq!(game_reads(&mut cart), [59, 59, 23, 255, 0x41]);
+        write_register(&mut cart, 12, 0x01);
+        advance(&mut cart, 1.0);
+        assert_eq!(game_reads(&mut cart), [0, 0, 0, 0, 0x80]);
+
+        // An overflow the game has not latched yet is folded into the carry
+        // by a write, and the halted latch path folds it too.
+        let mut cart = locked_cart(600.0 * DAY, at);
+        let rtc = cart.rtc.as_ref().unwrap();
+        assert!(rtc.registers(at).day_carry && rtc.day_carry == 0);
+        write_register(&mut cart, 8, 9);
+        assert_eq!(game_reads(&mut cart), [9, 0, 0, 88, 0x80]);
+        let mut cart = locked_cart(600.0 * DAY, at);
+        cart.rtc.as_mut().unwrap().set_halt(true, at);
+        assert_eq!(game_reads(&mut cart), [0, 0, 0, 88, 0xc0]);
+        assert_eq!(cart.rtc.as_ref().unwrap().frozen, 88.0 * DAY);
+    }
+
+    #[test]
+    fn latch_values_match_a_latch_without_its_side_effects() {
+        let mut rtc = Rtc::new(0.0);
+        for elapsed in [0.0, 59.5, START, 300.0 * DAY + 1.0] {
+            rtc.timezero = 1_000.0 - elapsed;
+            let derived = rtc.latch_values(1_000.0);
+            rtc.latch_rtc(1_000.0);
+            assert_eq!(derived, rtc.latch, "{elapsed}");
+        }
     }
 }
