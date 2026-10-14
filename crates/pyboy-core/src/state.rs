@@ -1,10 +1,15 @@
 // PyBoy state format 15. Translation of the component save/load methods.
 // SPDX-License-Identifier: LGPL-3.0-only
 use crate::{
-    cartridge::Controller,
+    cartridge::{CLOCK_LIMIT, Controller, Rtc},
     lcd::{ColorPalette, FRAME_CYCLES},
-    mb::Machine,
+    mb::{Machine, now},
 };
+
+/// Newest execution runtime layout. Version 2 adds the halted clock's frozen
+/// reading. It is written only while a clock is halted, so every other runtime
+/// keeps the version 1 bytes of 0.1.1 and old recordings still replay.
+pub const RUNTIME_FORMAT: u8 = 2;
 
 pub struct Codec {
     pub data: Vec<u8>,
@@ -113,14 +118,27 @@ impl Codec {
 }
 
 impl Machine {
+    /// PyBoy format 15 state. See `save_state_at`.
     pub fn save_state(&mut self) -> Result<Vec<u8>, &'static str> {
+        self.save_state_at(now())
+    }
+
+    /// PyBoy format 15 state, with `wall` as the host time. Only a halted
+    /// real-time clock that is not locked depends on it: it is stored as the
+    /// base that reads the frozen value at that instant.
+    pub fn save_state_at(&mut self, wall: f64) -> Result<Vec<u8>, &'static str> {
         let mut codec = Codec::writer();
-        self.codec(&mut codec)?;
+        self.codec(&mut codec, wall)?;
         Ok(codec.data)
     }
 
     /// Runtime fields intentionally absent from the upstream hardware format.
+    /// A clock still settling after a load is settled first, at the current
+    /// reading, which is what the next frame would do.
     pub fn save_execution_runtime(&mut self) -> Result<Vec<u8>, &'static str> {
+        if let Some(rtc) = &mut self.mb.cartridge.rtc {
+            rtc.settle(rtc.clock(now()));
+        }
         let mut codec = Codec::writer();
         self.execution_runtime_codec(&mut codec)?;
         Ok(codec.data)
@@ -149,9 +167,10 @@ impl Machine {
     }
 
     fn execution_runtime_codec(&mut self, c: &mut Codec) -> Result<(), &'static str> {
-        let mut version = 1;
+        let halted = self.mb.cartridge.rtc.as_ref().is_some_and(Rtc::halted);
+        let mut version = if halted { RUNTIME_FORMAT } else { 1 };
         c.byte(&mut version)?;
-        if version != 1 {
+        if !(1..=RUNTIME_FORMAT).contains(&version) {
             return Err("Unsupported execution runtime format");
         }
         c.boolean(&mut self.cpu.bail)?;
@@ -190,18 +209,48 @@ impl Machine {
             c.boolean(&mut rtc.timelock)?;
             c.boolean(&mut rtc.latch_enabled)?;
             c.bytes(&mut rtc.latch)?;
+            if c.reading {
+                rtc.stale_latch = false;
+            }
+            // Version 1 has no frozen reading. A halted clock then stays
+            // pending from the state's base and freezes at its first use.
+            if version >= 2 {
+                c.float(&mut rtc.frozen)?;
+                if c.reading {
+                    rtc.pending = false;
+                }
+                if c.reading
+                    && (rtc.frozen.abs() > CLOCK_LIMIT || (!rtc.halted() && rtc.frozen != 0.0))
+                {
+                    return Err("Invalid real-time clock reading");
+                }
+            }
         }
         Ok(())
     }
 
-    /// Parse into a private copy so malformed states cannot partially mutate a machine.
+    /// Load a state. See `load_state_at`.
     pub fn load_state(&mut self, bytes: &[u8]) -> Result<(), &'static str> {
+        self.load_state_at(bytes, now())
+    }
+
+    /// Parse into a private copy so malformed states cannot partially mutate a machine.
+    ///
+    /// The format holds the clock's base, halt and carry but not the latched
+    /// registers, the latch command or the clock lock. The lock stays this
+    /// machine's own. The latch is rebuilt from the loaded clock: the latched
+    /// registers are what a latch at load time would hold, and the latch
+    /// command is cleared, so a game's next write of 1 latches. One state
+    /// therefore loads to the same clock on any machine with the same clock
+    /// reading. A halted clock freezes at the loaded base's reading, using
+    /// `wall` as the host time when the clock is not locked.
+    pub fn load_state_at(&mut self, bytes: &[u8], wall: f64) -> Result<(), &'static str> {
         if bytes.len() > 2_000_000 {
             return Err("Save state is too large");
         }
         let mut candidate = self.clone();
         let mut codec = Codec::reader(bytes);
-        candidate.codec(&mut codec)?;
+        candidate.codec(&mut codec, wall)?;
         if codec.position != bytes.len() {
             return Err("Trailing data in save state");
         }
@@ -210,7 +259,7 @@ impl Machine {
         Ok(())
     }
 
-    fn codec(&mut self, c: &mut Codec) -> Result<(), &'static str> {
+    fn codec(&mut self, c: &mut Codec, wall: f64) -> Result<(), &'static str> {
         let mut version = 15;
         c.byte(&mut version)?;
         if version != 15 {
@@ -354,9 +403,24 @@ impl Machine {
         c.byte(&mut cart.memorymodel)?;
         c.bytes(&mut cart.ram[..cart.ram_count * 8192])?;
         if let Some(rtc) = &mut cart.rtc {
-            c.float(&mut rtc.timezero)?;
-            c.byte(&mut rtc.halt)?;
-            c.byte(&mut rtc.day_carry)?;
+            let at = rtc.clock(wall);
+            let mut timezero = rtc.base(at);
+            let (mut halt, mut day_carry) = (rtc.halt, rtc.day_carry);
+            c.float(&mut timezero)?;
+            c.byte(&mut halt)?;
+            c.byte(&mut day_carry)?;
+            if c.reading {
+                if halt > 1 || day_carry > 1 {
+                    return Err("Invalid real-time clock flags in save state");
+                }
+                // The state has no latch. It is rebuilt from the loaded clock
+                // now and again at the first use, so applying a lock right
+                // after loading gives the same latch as loading under it.
+                rtc.restore(timezero, halt != 0, day_carry != 0);
+                rtc.latch = rtc.latch_values(at);
+                rtc.latch_enabled = false;
+                rtc.stale_latch = true;
+            }
         }
         if cart.controller == Controller::Mbc1 {
             c.byte(&mut cart.bank_select_register1)?;

@@ -81,6 +81,20 @@ def test_bounds_are_checked_and_invalid_writes_are_atomic():
             native.tick(-1)
 
 
+def test_empty_slices_read_as_empty_lists():
+    # PyBoy 2.7.0 raises for memory[a:a]. This port returns an empty list, like
+    # a Python sequence, and an empty write changes nothing.
+    with PyBoy(DEMO) as native:
+        before = native.memory[0xc000:0xc010]
+        for key in (slice(0xc000, 0xc000), slice(0, 0), slice(65536, 65536), (1, slice(0xd000, 0xd000))):
+            assert native.memory[key] == []
+        native.memory[0xc000:0xc000] = []
+        assert native.memory[0xc000:0xc010] == before
+        for key in (slice(0xc001, 0xc000), slice(65536, 65537)):
+            with pytest.raises((ValueError, IndexError)):
+                native.memory[key]
+
+
 def test_ram_file_roundtrip():
     from test_cartridge import rom
     stream = io.BytesIO()

@@ -89,6 +89,24 @@ def rust_file(pb):
     return out.getvalue()
 
 
+# Intentional divergence from PyBoy 2.7.0: in this port the halt flag stops the
+# clock. A halted clock is written to a file as the base that shows its frozen
+# reading now. A loaded halted file freezes at its first use (the next frame),
+# so it writes back unchanged until then. After that, with a host clock, it
+# moves forward by the host time between the freeze and the write. PyBoy
+# ignores the flag and always writes the base back unchanged. Running files
+# are unaffected and still byte identical.
+def assert_same_file(produced, expected, slack=5.0):
+    assert produced[8:] == expected[8:]
+    if produced == expected:
+        return
+    if expected[8]:
+        drift = struct.unpack_from("<d", produced)[0] - struct.unpack_from("<d", expected)[0]
+        assert 0 <= drift < slack
+    else:
+        assert produced == expected
+
+
 def observed(pb, frames=3):
     pb.tick(frames, False)
     return tuple(pb.memory[WRAM + offset] for offset in range(5))
@@ -102,6 +120,24 @@ def test_file_round_trip_is_byte_identical_to_pyboy(timezero, halt, carry):
     data = rtc_file(timezero, halt, carry)
     assert upstream_file(upstream(rtc=data)) == data
     assert rust_file(rust(rtc=data)) == data
+
+
+def test_halted_file_round_trip_is_exact_on_a_locked_clock():
+    pb = rust(rtc=rtc_file(1_700_000_000.0, 1, 1))
+    pb.lock_clock(at=2_000_000_000.0)
+    pb.tick(1, False)  # the loaded halted clock freezes at the locked reading
+    frozen = pb.rtc_registers()
+    assert frozen["halt"] and frozen["day_carry"]
+    assert (frozen["days"], frozen["hours"]) == (300_000_000 // DAY % 512, 300_000_000 % DAY // HOUR)
+    pb.advance_clock(DAY)
+    pb.tick(60, False)
+    assert pb.rtc_registers() == frozen
+    other = rust()
+    other.lock_clock(at=2_000_000_000.0 + DAY)
+    other.rtc_import(pb.rtc_export(raw=True))
+    assert other.rtc_export(raw=True) == pb.rtc_export(raw=True)
+    other.tick(1, False)
+    assert other.rtc_registers() == frozen
 
 
 def test_fresh_files_cross_load_with_pyboy():
@@ -167,17 +203,22 @@ def test_day_counter_overflow_matches_pyboy():
     assert observed(rust(rtc=data)) == expected
 
 
-def test_game_register_write_moves_the_exported_base_like_pyboy():
+def test_game_register_write_sets_the_counter_unlike_pyboy():
+    # Intentional divergence from PyBoy 2.7.0. PyBoy subtracts an elapsed
+    # minutes term and the value from the base, which moves every counter. This
+    # port sets exactly the written counter, as Pan Docs describes.
     data = rtc_file(1_000_000.0)
     ports = {}
     for name, pb in (("pyboy", upstream(rtc=data)), ("rust", rust(rtc=data))):
         pb.memory[0x0000] = 0x0A
         pb.memory[0x4000] = 0x09
         pb.memory[0xA000] = 7
-        ports[name] = struct.unpack_from("<d", rust_file(pb) if name == "rust" else upstream_file(pb))[0]
-    # Both subtract the elapsed-minutes term and the value from the base; the
-    # host clock only differs by the time between the two constructions.
-    assert abs(ports["pyboy"] - ports["rust"]) < 5
+        ports[name] = rust_file(pb) if name == "rust" else upstream_file(pb)
+    before = rust(rtc=data).rtc_registers()
+    after = rust(rtc=ports["rust"]).rtc_registers()
+    assert after["minutes"] == 7
+    assert (after["days"], after["hours"]) == (before["days"], before["hours"])
+    assert ports["rust"] != ports["pyboy"]
 
 
 def test_non_rtc_cartridge_ignores_rtc_files():
@@ -201,7 +242,9 @@ def test_stop_without_save_writes_nothing_and_constructor_file_is_the_default_ta
     pb.set_rtc_registers(seconds=5)
     pb.stop()
     assert len(target.getvalue()) == 10
-    assert target.getvalue() == pb.rtc_export() and struct.unpack_from("<d", target.getvalue())[0] != 1_234_567.0
+    # The file is halted, so later exports move with the host clock.
+    assert_same_file(pb.rtc_export(), target.getvalue())
+    assert struct.unpack_from("<d", target.getvalue())[0] != 1_234_567.0
     pb.stop()  # idempotent
 
 
@@ -214,19 +257,26 @@ def test_stop_replaces_a_longer_existing_file():
     assert len(out.getvalue()) == 10
 
 
-def test_export_import_and_state_agree_with_pyboy():
+@pytest.mark.parametrize("halt", [0, 1])
+def test_export_import_and_state_agree_with_pyboy(halt):
     base = float(int(time.time()) - 3 * DAY)  # under 512 days, so the game never wraps the counter
-    pb = rust(rtc=rtc_file(base, 1, 1))
+    pb = rust(rtc=rtc_file(base, halt, 1))
     pb.tick(4, False)
     state = io.BytesIO()
     pb.save_state(state)
     state.seek(0)
     reference = upstream()
     reference.load_state(state)
-    assert upstream_file(reference) == pb.rtc_export() == rtc_file(base, 1, 1)
+    # PyBoy writes back the base it loaded. A halted clock here moves with
+    # the host clock (see assert_same_file), so only running files are exact.
+    assert_same_file(upstream_file(reference), rtc_file(base, halt, 1))
+    assert_same_file(pb.rtc_export(), rtc_file(base, halt, 1))
     other = rust()
     other.rtc_import(pb.rtc_export())
-    assert other.rtc_state()["timezero"] == base
+    if halt:
+        assert 0 <= other.rtc_state()["timezero"] - base < 5
+    else:
+        assert other.rtc_state()["timezero"] == base
     other.rtc_import(io.BytesIO(rtc_file(5.5)))
     assert other.rtc_state()["timezero"] == 5.5
     with pytest.raises(ValueError):
@@ -488,7 +538,7 @@ def test_version_and_features_agree_across_the_build():
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     if pyproject.exists():
         assert f'version = "{pyboy_rs.__version__}"' in pyproject.read_text()
-    assert _native.__version__ == pyboy_rs.__version__ == "0.1.1"
+    assert _native.__version__ == pyboy_rs.__version__ == "0.1.2"
     assert pyboy_rs.HAS_CLOCK_CONTROL and pyboy_rs.has_feature("clock_lock_state")
     assert not pyboy_rs.has_feature("nonexistent")
     for name in ("rtc_file", "clock_lock", "advance_clock", "export_rtc"):

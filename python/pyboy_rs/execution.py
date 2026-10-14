@@ -19,8 +19,13 @@ from .diagnostics import ReplayDivergence, compare, snapshot, validate_checkpoin
 # other-platform wheel with the same layouts restores it. The build identity is
 # still recorded for provenance but is no longer a condition.
 STATE_FORMAT = 'pyboy-format-15'
-RUNTIME_FORMAT = 1
+# Runtime format 2 adds a halted clock's frozen reading. The native layer
+# writes it only while a clock is halted and writes format 1, the layout of
+# 0.1.1, otherwise, so a checkpoint records the format its runtime bytes use.
+RUNTIME_FORMAT = 2
 COMPAT = {'state_format': STATE_FORMAT, 'runtime_format': RUNTIME_FORMAT}
+READABLE_COMPAT = tuple({'state_format': STATE_FORMAT, 'runtime_format': version}
+                        for version in range(1, RUNTIME_FORMAT + 1))
 
 BUTTONS = ('up', 'down', 'right', 'left', 'a', 'b', 'select', 'start')
 
@@ -152,10 +157,12 @@ class Execution:
     def execution_checkpoint(self):
         """Detached hardware and input state. Hook functions are not serialized."""
         self._idle()
-        return deepcopy({'format': 1, 'build': _build_identity(), 'compat': dict(COMPAT),
+        runtime = self._machine.execution_runtime()
+        return deepcopy({'format': 1, 'build': _build_identity(),
+                         'compat': {'state_format': STATE_FORMAT, 'runtime_format': runtime[0]},
                          'clock_lock': self._machine.clock_lock_state() if self._machine.rtc_present() else None,
                          **self._execution_identity,
-                         'state': self._machine.save_state(), 'runtime': self._machine.execution_runtime(),
+                         'state': self._machine.save_state(), 'runtime': runtime,
                          'frame': self.frame_count,
                          'events': self._events, 'scheduled': self._queued_input,
                          'sequence': self._sequence, 'paused': self.paused,
@@ -171,7 +178,7 @@ class Execution:
         if checkpoint.get('format') != 1:
             raise ValueError('Unsupported execution checkpoint')
         if 'compat' in checkpoint:
-            if checkpoint['compat'] != COMPAT:
+            if checkpoint['compat'] not in READABLE_COMPAT:
                 raise ValueError('Execution checkpoint uses an incompatible state or runtime format')
         elif checkpoint.get('build') != _build_identity():
             raise ValueError('Execution checkpoint without format information requires the original build')

@@ -40,7 +40,7 @@ def test_banking_and_ram_match_python(carttype, oracle):
     assert native.ram() == expected
 
 
-def test_rtc_latch_and_register_writes(oracle, monkeypatch):
+def test_rtc_latch_matches_pyboy(oracle, monkeypatch):
     clock = [1_000_000.0]
     monkeypatch.setattr(oracle.rtc, "time", types.SimpleNamespace(time=lambda: clock[0]))
     native = Cartridge(rom(0x10), clock=clock[0])
@@ -57,8 +57,78 @@ def test_rtc_latch_and_register_writes(oracle, monkeypatch):
             native.write(0x4000, register, clock=clock[0])
             reference.setitem(0x4000, register)
             assert native.read(0xa000) == reference.getitem(0xa000)
-            native.write(0xa000, 17, clock=clock[0])
-            reference.setitem(0xa000, 17)
+
+
+def latched(native, clock):
+    native.write(0x6000, 0, clock=clock)
+    native.write(0x6000, 1, clock=clock)
+    values = []
+    for register in range(8, 13):
+        native.write(0x4000, register, clock=clock)
+        values.append(native.read(0xa000))
+    return values
+
+
+# Intentional divergence from PyBoy 2.7.0. PyBoy turns a game write into an
+# adjustment of its base timestamp with arithmetic that also moves the other
+# counters and ignores the halt bit, so a game that sets its clock reads back
+# something else. This port sets exactly the written counter, as Pan Docs
+# describes for the MBC3, and these checks no longer compare with PyBoy.
+def test_rtc_register_writes_set_exactly_that_counter(oracle, monkeypatch):
+    clock = 1_000_000.0
+    native = Cartridge(rom(0x10), clock=clock)
+    native.write(0, 10, clock=clock)
+    start = latched(native, clock)
+    for register, value in ((8, 17), (9, 42), (10, 23), (11, 200), (12, 1)):
+        native.write(0x4000, register, clock=clock)
+        native.write(0xa000, value, clock=clock)
+        expected = list(start)
+        expected[register - 8] = value
+        assert latched(native, clock) == expected
+        start = expected
+    # PyBoy does not read the same values back, which is why this differs.
+    monkeypatch.setattr(oracle.rtc, "time", types.SimpleNamespace(time=lambda: clock))
+    reference = oracle.cartridge.load_cartridge(io.BytesIO(rom(0x10)), None, None)
+    reference.setitem(0, 10)
+    for register, value in ((8, 17), (9, 42), (10, 23), (11, 200), (12, 1)):
+        reference.setitem(0x4000, register)
+        reference.setitem(0xa000, value)
+    reference.setitem(0x6000, 0)
+    reference.setitem(0x6000, 1)
+    pyboy_values = []
+    for register in range(8, 13):
+        reference.setitem(0x4000, register)
+        pyboy_values.append(reference.getitem(0xa000))
+    assert pyboy_values != start
+
+
+def test_rtc_halt_freezes_and_resumes_from_the_frozen_value():
+    clock = 1_000_000.0
+    native = Cartridge(rom(0x10), clock=clock)
+    native.write(0, 10, clock=clock)
+    native.write(0x4000, 12, clock=clock)
+    native.write(0xa000, 0x40, clock=clock)
+    native.write(0x4000, 8, clock=clock)
+    native.write(0xa000, 30, clock=clock)
+    assert latched(native, clock + 1000)[:3] == [30, 0, 0]
+    assert latched(native, clock + 1000)[4] == 0x40
+    native.write(0x4000, 12, clock=clock + 1000)
+    native.write(0xa000, 0, clock=clock + 1000)
+    assert latched(native, clock + 1065)[:3] == [35, 1, 0]
+
+
+@pytest.mark.parametrize("register,value,expected", [
+    (8, 60, 0), (8, 63, 3), (8, 0xff, 3), (9, 61, 1), (9, 0xc5, 5),
+    (10, 24, 0), (10, 31, 7), (10, 0xe5, 5), (12, 0xfe, 0xc0), (12, 0xff, 0xc1)])
+def test_rtc_out_of_range_writes_wrap_without_carry(register, value, expected):
+    clock = 1_000_000.0
+    native = Cartridge(rom(0x10), clock=clock)
+    native.write(0, 10, clock=clock)
+    native.write(0x4000, register, clock=clock)
+    native.write(0xa000, value, clock=clock)
+    values = latched(native, clock)
+    assert values[register - 8] == expected
+    assert all(values[index] == 0 for index in range(4) if index != register - 8)
 
 
 def test_rom_validation():

@@ -127,8 +127,24 @@ with a non-finite timestamp or a flag other than 0 or 1 are rejected (PyBoy
 loads them and misbehaves), `stop` truncates the stream it writes to, and
 `rtc_file` is ignored on cartridges without a clock, as in PyBoy.
 `rtc_registers`, `set_rtc_registers`, `rtc_state` and `set_rtc_timezero` read and
-write the clock exactly; writes made by the game itself keep PyBoy's upstream
-adjustment arithmetic.
+write the clock exactly.
+
+**Register writes and halt intentionally differ from PyBoy 2.7.0.** Since
+0.1.2 a game write to an RTC register sets exactly that counter, as Pan Docs
+describes for the MBC3 (0x08 seconds, 0x09 minutes, 0x0A hours, 0x0B day low,
+0x0C day bit 8, halt and day carry). PyBoy instead adjusts its base timestamp
+with arithmetic that moves the other counters too, so a game that sets its
+clock reads back other values. Out of range values are masked to the register width and then
+wrap without a carry (60 to 63 read as 0 to 3, 24 to 31 as 0 to 7). A seconds
+write clears the sub-second fraction. The halt bit stops the clock, and
+clearing it resumes from the frozen value. PyBoy ignores halt. A halted clock
+is written to `.rtc` files and save states as the base that shows the frozen
+value at the moment of writing, so both formats are unchanged, and PyBoy reads
+such a file as a running clock. A loaded halted clock freezes at its first use
+(the next frame or a game access), so applying the saved lock right after
+`load_state` restores it exactly. Once frozen on a host clock, a written file
+moves forward by the time between the freeze and the write. Latching and
+reading a running clock still match PyBoy exactly.
 
 **Exporting while locked.** The stored base timestamp of a locked clock is
 relative to the fake locked time, so writing it as is would make a real
@@ -145,7 +161,8 @@ non-finite or move its magnitude past 1e15 seconds; a rejected call changes
 nothing.
 
 **Clock lock and save states.** A raw save state does not carry the clock lock.
-It stores the base timestamp and latch, but whether the clock was locked, and
+It stores the base timestamp (the latch is rebuilt from the loaded clock at the
+first use, so loading is deterministic), but whether the clock was locked, and
 at what instant, lives outside the state. To resume deterministically, store
 `clock_lock_state()` next to every state you save and call
 `set_clock_lock_state(...)` right after `load_state`. Loading a state that was
