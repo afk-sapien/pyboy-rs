@@ -48,9 +48,9 @@ Pin the asset URL and its sha256 (from the release's `SHA256SUMS.txt`); pip
 refuses the file if the hash differs:
 
 ```sh
-base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1
+base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2
 curl -fsSLO "$base/SHA256SUMS.txt"
-wheel=pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+wheel=pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha=$(grep " $wheel\$" SHA256SUMS.txt | cut -d' ' -f1)
 python -m pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
 ```
@@ -58,7 +58,7 @@ python -m pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
 In a requirements file, write the hash once and install with `--require-hashes`:
 
 ```text
-pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.1/pyboy_rs-0.1.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
+pyboy-rs @ https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.2/pyboy_rs-0.1.2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
     --hash=sha256:<sha256 from SHA256SUMS.txt>
 ```
 
@@ -563,7 +563,7 @@ and every wheel. Notices for the Rust crates linked into the wheel are in
 
 Each release is built from the source tagged `vX.Y.Z` at
 <https://github.com/afk-sapien/pyboy-rs> (for example
-<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.1>); the sdist attached to the
+<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.2>); the sdist attached to the
 GitHub release is the same source. The wheel's `pyboy_rs/_native` extension is the compiled library.
 To run an application against a modified build:
 
