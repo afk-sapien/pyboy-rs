@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/pyboy-core", "crates/pyboy-python"]
+members = ["crates/pyboy-core", "crates/pyboy-gba", "crates/pyboy-python"]
 default-members = ["crates/pyboy-core"]
 resolver = "2"
 
