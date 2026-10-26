@@ -17,6 +17,8 @@ fn main() {
 
     let dst = cmake::Config::new(&mgba)
         .profile("Release")
+        // mGBA 0.10.5 asks for CMake 3.1, which CMake 4 (macOS and Windows runners) rejects.
+        .define("CMAKE_POLICY_VERSION_MINIMUM", "3.5")
         .define("LIBMGBA_ONLY", "ON")
         .define("BUILD_STATIC", "ON")
         .define("BUILD_SHARED", "OFF")
