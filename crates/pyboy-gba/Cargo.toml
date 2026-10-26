@@ -1,0 +1,14 @@
+[package]
+name = "pyboy-gba"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Optional Game Boy Advance core for pyboy-rs, a safe wrapper over a vendored mGBA"
+publish = false
+links = "mgba"
+build = "build.rs"
+
+[build-dependencies]
+cmake = "=0.1.58"
+cc = "=1.10.0"
