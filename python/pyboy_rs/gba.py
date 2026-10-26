@@ -149,10 +149,12 @@ class PyBoyGBA:
 
     ``bios`` is optional. Without it mGBA's built-in high-level BIOS emulation is used,
     which boots straight into the cartridge. ``ram_file`` loads battery save data.
+    ``symbols`` is a pret style ``.sym`` file (``0300500c g 00000004 gSaveBlock2Ptr``).
     """
 
     def __init__(self, gamerom, *, window="null", bios=None, skip_bios=True,
-                 sound_emulated=True, sound_sample_rate=48000, ram_file=None, **kwargs):
+                 sound_emulated=True, sound_sample_rate=48000, ram_file=None, symbols=None,
+                 **kwargs):
         if window not in ("null", "headless"):
             raise ValueError("PyBoyGBA is headless only. Use window='null'")
         if kwargs:
@@ -171,6 +173,20 @@ class PyBoyGBA:
         self.sound = GBASound(self._machine, rate)
         self._queued_input = []
         self._pressed = set()
+        self._hooks = {}
+        self._in_hook = False
+        self._symbols = {}
+        if symbols is not None:
+            with open(symbols, encoding="utf-8") as handle:
+                for line in handle:
+                    fields = line.split()
+                    if len(fields) < 2:
+                        continue
+                    try:
+                        address = int(fields[0], 16)
+                    except ValueError:
+                        continue
+                    self._symbols.setdefault(fields[-1], address)
         self.stopped = False
 
     @property
@@ -211,6 +227,8 @@ class PyBoyGBA:
         count = operator.index(count)
         if count < 0:
             raise ValueError("Frame count must be nonnegative")
+        if self._in_hook:
+            raise RuntimeError("Cannot tick from inside a hook callback")
         if self.stopped or count == 0:
             return False
         remaining = count
@@ -218,13 +236,64 @@ class PyBoyGBA:
             step = remaining
             if self._queued_input:
                 step = max(1, min(step, self._queued_input[0][0] - self.frame_count))
-            self._machine.run_frames(step, render and step == remaining)
+            self._run_frames(step, render and step == remaining)
             remaining -= step
             while self._queued_input and self._queued_input[0][0] <= self.frame_count:
                 self.button_release(heapq.heappop(self._queued_input)[1])
         if render:
             self.screen._refresh()
         return True
+
+    def _run_frames(self, count, render_last):
+        if not self._hooks:
+            self._machine.run_frames(count, render_last)
+            return
+        for index in range(count):
+            while not self._machine.run_frame_hooked(render_last and index == count - 1):
+                _, callback, context = self._hooks[self._machine.hook_hit]
+                self._in_hook = True
+                try:
+                    callback(context)
+                finally:
+                    self._in_hook = False
+
+    def symbol_lookup(self, symbol):
+        """Address of ``symbol`` from the ``symbols`` file, as an int.
+
+        The GB core returns ``(bank, address)``. GBA addresses are flat, so there is no bank.
+        Thumb function symbols keep their odd address, which ``hook_register`` understands.
+        """
+        return self._symbols[symbol]
+
+    def _hook_address(self, bank, addr, arm):
+        if bank is not None:
+            raise ValueError("The GBA has no banks. Pass bank=None")
+        if isinstance(addr, str):
+            addr = self.symbol_lookup(addr)
+        addr = operator.index(addr)
+        return addr & ~1, not arm
+
+    def hook_register(self, bank, addr, callback, context, *, arm=False):
+        """Call ``callback(context)`` each time the CPU is about to run ``addr``.
+
+        ``addr`` is a ROM address or a symbol name. Hooks assume Thumb code unless ``arm``
+        is true. They work by patching a ``BKPT`` into ROM, so reading the hooked bytes
+        returns the breakpoint until the hook is removed.
+        """
+        address, thumb = self._hook_address(bank, addr, arm)
+        if not callable(callback):
+            raise TypeError("Hook callback must be callable")
+        if address in self._hooks:
+            raise ValueError("Hook already registered")
+        self._machine.hook_set(address, thumb)
+        self._hooks[address] = (thumb, callback, context)
+
+    def hook_deregister(self, bank, addr):
+        address, _ = self._hook_address(bank, addr, False)
+        if address not in self._hooks:
+            raise ValueError("No hook registered at this address")
+        self._machine.hook_clear(address)
+        del self._hooks[address]
 
     def save_state(self, file_like_object):
         file_like_object.write(self._machine.save_state())

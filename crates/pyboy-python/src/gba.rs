@@ -65,6 +65,28 @@ impl GbaMachine {
         let inner = &mut self.inner;
         py.detach(|| inner.run_frames(count, render))
     }
+    /// Run until the frame ends (true) or a hook is hit (false), with the GIL released.
+    /// After a hit, the next call resumes the same frame.
+    #[pyo3(signature = (render=true))]
+    fn run_frame_hooked(&mut self, py: Python<'_>, render: bool) -> bool {
+        let inner = &mut self.inner;
+        py.detach(|| inner.run_frame_hooked(render))
+    }
+    fn hook_set(&mut self, address: u32, thumb: bool) -> PyResult<()> {
+        self.inner
+            .set_hook(address, thumb)
+            .map_err(PyValueError::new_err)
+    }
+    fn hook_clear(&mut self, address: u32) -> PyResult<()> {
+        self.inner
+            .clear_hook(address)
+            .map_err(PyValueError::new_err)
+    }
+    /// Address of the hook that stopped the last `run_frame_hooked` call.
+    #[getter]
+    fn hook_hit(&self) -> u32 {
+        self.inner.hook_hit()
+    }
     #[getter]
     fn frame_count(&self) -> u32 {
         self.inner.frame_count()

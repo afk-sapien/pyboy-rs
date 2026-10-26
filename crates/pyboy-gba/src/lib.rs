@@ -39,6 +39,10 @@ unsafe extern "C" {
     fn pbgba_set_keys(pb: *mut PbGba, keys: u32);
     fn pbgba_get_keys(pb: *mut PbGba) -> u32;
     fn pbgba_run_frames(pb: *mut PbGba, count: u32, render_last: c_int);
+    fn pbgba_run_frame_hooked(pb: *mut PbGba, render: c_int) -> c_int;
+    fn pbgba_hook_set(pb: *mut PbGba, address: u32, thumb: c_int) -> c_int;
+    fn pbgba_hook_clear(pb: *mut PbGba, address: u32) -> c_int;
+    fn pbgba_hook_hit(pb: *mut PbGba) -> u32;
     fn pbgba_frame_counter(pb: *mut PbGba) -> u32;
     fn pbgba_video(pb: *mut PbGba) -> *const u32;
     fn pbgba_audio(pb: *mut PbGba, frames: *mut usize) -> *const i16;
@@ -146,6 +150,36 @@ impl Gba {
     /// Run `count` frames. Only the last frame is drawn, and only if `render` is set.
     pub fn run_frames(&mut self, count: u32, render: bool) {
         unsafe { pbgba_run_frames(self.raw, count, render as c_int) }
+    }
+
+    /// Run until the current frame completes (true) or an execution hook is reached
+    /// (false). After a hook, calling again resumes the same frame.
+    pub fn run_frame_hooked(&mut self, render: bool) -> bool {
+        unsafe { pbgba_run_frame_hooked(self.raw, render as c_int) != 0 }
+    }
+
+    /// Hook the instruction at `address` in cartridge ROM. The hook fires before that
+    /// instruction runs. `thumb` selects a 16-bit Thumb or 32-bit ARM breakpoint.
+    pub fn set_hook(&mut self, address: u32, thumb: bool) -> Result<(), String> {
+        if unsafe { pbgba_hook_set(self.raw, address, thumb as c_int) } == 0 {
+            return Err(format!(
+                "Cannot hook {address:#010x}: it must be an aligned cartridge ROM address \
+                 that is not already hooked (at most 1024 hooks)"
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn clear_hook(&mut self, address: u32) -> Result<(), String> {
+        if unsafe { pbgba_hook_clear(self.raw, address) } == 0 {
+            return Err(format!("No hook at {address:#010x}"));
+        }
+        Ok(())
+    }
+
+    /// Address of the hook that stopped the last `run_frame_hooked` call.
+    pub fn hook_hit(&self) -> u32 {
+        unsafe { pbgba_hook_hit(self.raw) }
     }
 
     pub fn frame_count(&self) -> u32 {
@@ -310,6 +344,82 @@ mod tests {
         gba.load_state(&state).unwrap();
         assert_eq!(gba.read(EWRAM.0 + 0x100), 0x5a);
         assert_eq!(gba.frame_count(), 3);
+    }
+
+    /// Switches to Thumb at 0x080000C8, then counts r1 up forever and stores it to EWRAM.
+    /// The loop body starts at 0x080000CE.
+    fn thumb_counter_rom() -> Vec<u8> {
+        let mut rom = tiny_rom();
+        rom[0xC0..0xC4].copy_from_slice(&0xE28F_0001u32.to_le_bytes()); // add r0, pc, #1
+        rom[0xC4..0xC8].copy_from_slice(&0xE12F_FF10u32.to_le_bytes()); // bx r0
+        let program: [u16; 6] = [
+            0x2202, // movs r2, #2
+            0x0612, // lsls r2, r2, #24
+            0x2100, // movs r1, #0
+            0x3101, // loop: adds r1, #1
+            0x6011, // str r1, [r2]
+            0xE7FC, // b loop
+        ];
+        for (i, half) in program.iter().enumerate() {
+            rom[0xC8 + i * 2..0xCA + i * 2].copy_from_slice(&half.to_le_bytes());
+        }
+        rom
+    }
+
+    fn counter(gba: &Gba) -> u32 {
+        u32::from_le_bytes(gba.read_range(EWRAM.0, 4).try_into().unwrap())
+    }
+
+    #[test]
+    fn thumb_hook_runs_the_hooked_instruction_once() {
+        let mut gba = Gba::new(&thumb_counter_rom(), None, true, 0).unwrap();
+        gba.set_hook(0x0800_00CE, true).unwrap();
+        let mut hits = 0;
+        while !gba.run_frame_hooked(false) {
+            assert_eq!(gba.hook_hit(), 0x0800_00CE);
+            // The previous iteration's store is visible; this one's add has not run yet.
+            assert_eq!(counter(&gba), hits);
+            hits += 1;
+            if hits == 1000 {
+                gba.clear_hook(0x0800_00CE).unwrap();
+            }
+        }
+        assert_eq!(hits, 1000);
+        assert_eq!(gba.frame_count(), 1);
+        assert_eq!(gba.read_range(0x0800_00CE, 2), 0x3101u16.to_le_bytes());
+
+        // Hooks do not change emulation: the counter matches a run without them.
+        let mut plain = Gba::new(&thumb_counter_rom(), None, true, 0).unwrap();
+        plain.run_frames(1, false);
+        assert_eq!(counter(&gba), counter(&plain));
+    }
+
+    #[test]
+    fn arm_hook_matches_an_unhooked_run() {
+        let mut hooked = Gba::new(&tiny_rom(), None, true, 0).unwrap();
+        hooked.set_hook(0x0800_00CC, false).unwrap();
+        let mut plain = Gba::new(&tiny_rom(), None, true, 0).unwrap();
+        let mut hits = 0;
+        for _ in 0..3 {
+            while !hooked.run_frame_hooked(false) {
+                hits += 1;
+            }
+        }
+        plain.run_frames(3, false);
+        assert!(hits > 1000);
+        assert_eq!(hooked.register(15), plain.register(15));
+        assert_eq!(hooked.save_state().unwrap(), plain.save_state().unwrap());
+    }
+
+    #[test]
+    fn rejects_bad_hooks() {
+        let mut gba = Gba::new(&tiny_rom(), None, true, 0).unwrap();
+        assert!(gba.set_hook(0x0300_0000, true).is_err()); // not ROM
+        assert!(gba.set_hook(0x0800_00C2, false).is_err()); // unaligned ARM
+        assert!(gba.set_hook(0x0800_0200, true).is_err()); // past the end of ROM
+        gba.set_hook(0x0800_00C0, false).unwrap();
+        assert!(gba.set_hook(0x0800_00C0, false).is_err());
+        assert!(gba.clear_hook(0x0800_00C4).is_err());
     }
 
     #[test]

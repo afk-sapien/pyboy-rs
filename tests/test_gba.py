@@ -3,6 +3,7 @@
 Extra ROM-based tests run when these are set, and are skipped otherwise:
 - GBA_TEST_ROMS: a checkout of jsmolka/gba-tests (MIT), for example ~/gba-tests
 - GBA_ROM_PATH: a legally dumped Pokemon FireRed (BPRE) ROM, read only
+- GBA_SYM_PATH: pokefirered.sym from a pret/pokefirered build matching that ROM
 """
 
 import hashlib
@@ -127,6 +128,74 @@ def test_rejects_bad_input():
         pyboy_rs.PyBoyGBA(tiny_rom(), window="SDL2")
 
 
+LOOP = 0x080000CC  # the ldrh in tiny_rom's loop, run once per iteration
+
+
+def test_hook_fires_and_deregisters(gba):
+    hits = []
+    gba.hook_register(None, LOOP, lambda ctx: ctx.append(gba.register(15)), hits, arm=True)
+    gba.tick(1, render=False)
+    assert len(hits) > 500
+    # Between instructions mGBA's r15 is the next instruction plus 4 in ARM state.
+    assert set(hits) == {LOOP + 4}
+    count = len(hits)
+    gba.hook_deregister(None, LOOP)
+    gba.tick(2, render=False)
+    assert len(hits) == count
+    assert gba.frame_count == 3
+    assert gba.memory.read_u32(LOOP) == 0xE1D010B0
+
+
+def test_hooks_do_not_change_emulation():
+    plain = pyboy_rs.PyBoyGBA(tiny_rom(), sound_emulated=False)
+    hooked = pyboy_rs.PyBoyGBA(tiny_rom(), sound_emulated=False)
+    hooked.hook_register(None, LOOP, lambda _: None, None, arm=True)
+    for machine in (plain, hooked):
+        machine.button("a", 3)
+        machine.tick(5)
+    assert plain.save_state_bytes() == hooked.save_state_bytes()
+    assert plain.frame_count == hooked.frame_count
+
+
+def test_hook_callback_cannot_tick(gba):
+    gba.hook_register(None, LOOP, lambda _: gba.tick(1), None, arm=True)
+    with pytest.raises(RuntimeError):
+        gba.tick(1)
+
+
+def test_hook_rejects_bad_addresses(gba):
+    with pytest.raises(ValueError):
+        gba.hook_register(0, LOOP, print, None, arm=True)
+    with pytest.raises(ValueError):
+        gba.hook_register(None, IWRAM, print, None)
+    with pytest.raises(TypeError):
+        gba.hook_register(None, LOOP, None, None, arm=True)
+    gba.hook_register(None, LOOP, print, None, arm=True)
+    with pytest.raises(ValueError):
+        gba.hook_register(None, LOOP, print, None, arm=True)
+    with pytest.raises(ValueError):
+        gba.hook_deregister(None, LOOP + 4)
+
+
+def test_symbols(tmp_path):
+    sym = tmp_path / "tiny.sym"
+    sym.write_text(
+        "08000000 l 00000000 .text\n"
+        "080000cc g 00000004 TinyLoop\n"
+        "0300500c g 00000004 gSaveBlock2Ptr\n"
+        "not a symbol line\n"
+    )
+    gba = pyboy_rs.PyBoyGBA(tiny_rom(), sound_emulated=False, symbols=sym)
+    assert gba.symbol_lookup("gSaveBlock2Ptr") == 0x0300500C
+    with pytest.raises(KeyError):
+        gba.symbol_lookup("missing")
+    hits = []
+    gba.hook_register(None, "TinyLoop", lambda ctx: ctx.append(1), hits, arm=True)
+    gba.tick(1, render=False)
+    assert hits
+    gba.hook_deregister(None, "TinyLoop")
+
+
 TEST_ROMS = os.environ.get("GBA_TEST_ROMS")
 
 
@@ -206,3 +275,33 @@ def test_firered_state_round_trip(firered_title_state):
     gba.tick(100)
     gba.load_state_bytes(saved)
     assert ram_digest(gba) == before
+
+
+GMAIN_CALLBACK2 = 0x030030F0 + 4  # gMain.callback2 in pokefirered
+
+
+def test_firered_hook_on_callback2(firered_title_state):
+    digests = []
+    for hooked in (False, True):
+        gba = pyboy_rs.PyBoyGBA(FIRERED, sound_emulated=False)
+        gba.load_state_bytes(firered_title_state)
+        gba.tick(60, render=False)  # let the screen transition settle on one callback2
+        callback2 = gba.memory.read_u32(GMAIN_CALLBACK2)
+        assert 0x08000000 <= callback2 < 0x0A000000 and callback2 & 1  # a Thumb ROM pointer
+        hits = []
+        if hooked:
+            gba.hook_register(None, callback2, lambda ctx: ctx.append(gba.frame_count), hits)
+        gba.tick(30, render=False)
+        assert gba.memory.read_u32(GMAIN_CALLBACK2) == callback2
+        if hooked:
+            assert len(hits) >= 30
+            assert set(range(gba.frame_count - 30, gba.frame_count)) <= set(hits)
+        digests.append(ram_digest(gba))
+    assert digests[0] == digests[1]
+
+
+@pytest.mark.skipif(not os.environ.get("GBA_SYM_PATH"), reason="GBA_SYM_PATH is not set")
+def test_firered_symbols(firered_title_state):
+    gba = pyboy_rs.PyBoyGBA(FIRERED, sound_emulated=False, symbols=os.environ["GBA_SYM_PATH"])
+    assert gba.symbol_lookup("gSaveBlock2Ptr") == 0x0300500C
+    assert gba.symbol_lookup("gMain") == GMAIN_CALLBACK2 - 4
