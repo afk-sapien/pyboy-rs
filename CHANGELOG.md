@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.1.3
+## 0.1.4
+
+The tag v0.1.3 was never published as a release: its wheel run built
+everything but failed the release file check. 0.1.4 is the same code as
+v0.1.3 plus the pinned maturin below, and carries its DIV fix.
 
 ### Fixed
 
@@ -11,6 +15,12 @@
   write now leaves the sound state alone, as a sound tick already does with
   sound off. PyBoy 2.7.0 has the same reset. Saves made with sound off from
   boot are unchanged, because their target is already `MAX_CYCLES`.
+
+### Packaging
+
+- The wheel workflow pins maturin 1.15.0. maturin 1.16.0 writes the Linux
+  wheel tags as `manylinux2014_*.manylinux_2_17_*`, which changed the file
+  names the release check and the README expect.
 
 ## 0.1.2
 
