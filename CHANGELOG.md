@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3
+
+### Fixed
+
+- With sound emulation off, a game write to DIV (0xFF04) no longer resets the
+  APU frame sequencer target to `MAX_CYCLES` (2^31). A state whose sound clock
+  was past that point, such as a long-running save made with sound on, then
+  failed to load with "Invalid scheduler state" after the next DIV write. The
+  write now leaves the sound state alone, as a sound tick already does with
+  sound off. PyBoy 2.7.0 has the same reset. Saves made with sound off from
+  boot are unchanged, because their target is already `MAX_CYCLES`.
+
 ## 0.1.2
 
 MBC3 real-time clock fixes so Gen 2 games can set and stop their clock. Game

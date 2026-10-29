@@ -89,6 +89,34 @@ fn native_demo_runs_and_restores_deterministically() {
 }
 
 #[test]
+fn div_write_with_sound_off_keeps_a_large_clock_state_loadable() {
+    let mut machine = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    for _ in 0..10 {
+        machine.begin_frame(false, false);
+        machine.run_frame().unwrap();
+    }
+    // Move every absolute clock far past MAX_CYCLES, as in a long-running save made with sound on.
+    let shift = 60_000_000_000_000 - machine.cpu.cycles;
+    machine.cpu.cycles += shift;
+    machine.mb.lcd.last_cycles += shift;
+    machine.mb.timer.last_cycles += shift;
+    machine.mb.serial.last_cycles += shift;
+    machine.mb.serial.clock += shift;
+    let sound = &mut machine.mb.sound;
+    sound.cycles = machine.cpu.cycles;
+    sound.last_cycles = machine.cpu.cycles;
+    sound.cycles_target = sound.cycles as f64 + 100.0;
+    sound.cycles_target_512hz = sound.cycles as f64 + 8192.0;
+    let state = machine.save_state().unwrap();
+    machine.load_state(&state).unwrap();
+
+    machine.mb.timer.div = 16; // the APU divider only resets when this DIV bit is set
+    machine.write(0xff04, 0);
+    let state = machine.save_state().unwrap();
+    machine.load_state(&state).unwrap();
+}
+
+#[test]
 fn truncated_state_is_atomic_and_wrong_versions_are_rejected() {
     let mut machine = Machine::new(DEMO.to_vec(), None, None, true, 48000).unwrap();
     let before = machine.save_state().unwrap();

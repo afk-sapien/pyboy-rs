@@ -135,11 +135,11 @@ impl Sound {
     }
 
     pub fn reset_apu_div(&mut self) {
-        self.cycles_target_512hz = if self.emulate {
-            (self.cycles + 8192) as f64
-        } else {
-            MAX_CYCLES as f64
-        };
+        // Like tick, do nothing with sound off. Resetting to MAX_CYCLES would put the
+        // target behind a loaded state's large sound clock and fail state validation.
+        if self.emulate {
+            self.cycles_target_512hz = (self.cycles + 8192) as f64;
+        }
     }
 
     pub fn get(&mut self, offset: u8) -> u8 {
