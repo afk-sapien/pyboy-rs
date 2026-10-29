@@ -118,8 +118,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
+      # Pinned: maturin 1.16 writes the manylinux tags in the other order, which
+      # changes the wheel names the release job and the README expect.
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
+          maturin-version: v1.15.0
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --locked --out dist
@@ -141,6 +144,7 @@ jobs:
           persist-credentials: false
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
+          maturin-version: v1.15.0
           command: sdist
           args: --out dist
       - name: Check the sdist carries the licenses and no local paths
