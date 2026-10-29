@@ -10,7 +10,7 @@ Rust crates linked into the wheel are in
 
 Each release is built from the source tagged `vX.Y.Z` at
 <https://github.com/afk-sapien/pyboy-rs> (for example
-<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.3>). The sdist attached to
+<https://github.com/afk-sapien/pyboy-rs/tree/v0.1.4>). The sdist attached to
 the GitHub release is the same source. The wheel's `pyboy_rs/_native`
 extension is the compiled library. To run an application against a modified
 build:

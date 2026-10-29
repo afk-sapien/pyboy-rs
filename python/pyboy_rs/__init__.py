@@ -3,7 +3,7 @@
 from ._native import CPU, Cartridge, HAS_PROFILING, Interaction, Machine, Serial, Sound, Timer, UPSTREAM_VERSION
 from .pyboy import PyBoy
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 # Capabilities of this build, independent of the version number. Consumers
 # should test membership here rather than comparing versions.

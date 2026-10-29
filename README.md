@@ -20,9 +20,9 @@ sdist and `SHA256SUMS.txt`. pyboy-rs is not on PyPI. Pin the URL and hash, and
 pip refuses a file whose hash differs:
 
 ```sh
-base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.3
+base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.4
 curl -fsSLO "$base/SHA256SUMS.txt"
-wheel=pyboy_rs-0.1.3-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+wheel=pyboy_rs-0.1.4-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha=$(grep " $wheel\$" SHA256SUMS.txt | cut -d' ' -f1)
 python -m pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
 ```
