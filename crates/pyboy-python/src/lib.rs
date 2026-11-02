@@ -2,6 +2,8 @@
 use pyo3::prelude::*;
 mod components;
 mod emulator;
+#[cfg(feature = "gba")]
+mod gba;
 
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -15,5 +17,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<emulator::Emulator>()?;
     m.add_class::<emulator::Sound>()?;
     m.add_class::<emulator::Cartridge>()?;
+    m.add("HAS_GBA", cfg!(feature = "gba"))?;
+    #[cfg(feature = "gba")]
+    m.add_class::<gba::GbaMachine>()?;
     Ok(())
 }

@@ -10,11 +10,26 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OWN = {"pyboy-core", "pyboy-python"}
+OWN = {"pyboy-core", "pyboy-gba", "pyboy-python"}
+MGBA = ROOT / "crates/pyboy-gba/vendor/mgba"
+# C sources statically linked into builds made with the optional "gba" feature.
+VENDORED_C = [
+    ("mGBA", "MPL-2.0", "https://github.com/mgba-emu/mgba", "LICENSE"),
+    ("blip_buf (bundled in mGBA)", "LGPL-2.1-or-later", "https://github.com/mgba-emu/mgba/tree/master/src/third-party/blip_buf",
+     "src/third-party/blip_buf/license.txt"),
+    ("inih (bundled in mGBA)", "BSD-3-Clause", "https://github.com/benhoyt/inih", "src/third-party/inih/LICENSE.txt"),
+]
 
 
 def cargo(*args):
     return subprocess.run(["cargo", *args], cwd=ROOT, check=True, capture_output=True, text=True).stdout
+
+
+def mgba_version():
+    text = (MGBA / "version.cmake").read_text(encoding="utf-8")
+    parts = [line.split()[-1].rstrip(")") for line in text.splitlines()
+             if line.strip().startswith(("set(LIB_VERSION_MAJOR", "set(LIB_VERSION_MINOR", "set(LIB_VERSION_PATCH"))]
+    return ".".join(parts)
 
 
 def main():
@@ -37,6 +52,16 @@ def main():
         for path in sorted(directory.iterdir()):
             if path.is_file() and path.name.upper().startswith(("LICENSE", "COPYING", "NOTICE")):
                 out += [f"### {path.name}", "", "```text", path.read_text(encoding="utf-8").strip("\n"), "```", ""]
+    if (MGBA / "LICENSE").exists():
+        version = mgba_version()
+        out += ["# Optional GBA core", "",
+                'Wheels built with the "gba" Cargo feature also statically link the C code below,',
+                f"vendored as the git submodule `crates/pyboy-gba/vendor/mgba` at mGBA {version}.",
+                "Its complete source is that submodule. Default wheels do not include it.", ""]
+        for name, spdx, source, license_file in VENDORED_C:
+            out += [f"## {name}", "", f"- License: {spdx}", f"- Source: {source}", "",
+                    f"### {Path(license_file).name}", "", "```text",
+                    (MGBA / license_file).read_text(encoding="utf-8").strip("\n"), "```", ""]
     (ROOT / "THIRD_PARTY_NOTICES.md").write_text("\n".join(out), encoding="utf-8")
 
 

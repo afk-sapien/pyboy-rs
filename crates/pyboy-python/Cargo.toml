@@ -14,9 +14,12 @@ crate-type = ["cdylib"]
 # Component and frame timing instrumentation. Off in release wheels: it adds work to the
 # emulation loop. Build with `maturin build --release --features profile` to enable it.
 profile = ["pyboy-core/profile"]
+# Optional Game Boy Advance core (vendored mGBA, MPL-2.0). Needs CMake and a C compiler.
+gba = ["dep:pyboy-gba"]
 
 [dependencies]
 pyboy-core = { path = "../pyboy-core" }
+pyboy-gba = { path = "../pyboy-gba", optional = true }
 pyo3 = { version = "=0.29.2", features = ["abi3-py311"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
