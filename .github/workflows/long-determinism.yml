@@ -1,0 +1,35 @@
+name: Long determinism
+
+# The 200,000 frame run of tests/test_long_determinism.py, about a minute on Linux.
+# Every test.yml matrix job runs the same test at 20,000 frames.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  long-determinism:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: Build and install the wheel
+        run: |
+          python -m pip install maturin==1.15.0 pytest pyboy==2.7.0 numpy pillow
+          maturin build --release --locked --out dist
+          python -m pip install --no-index --find-links dist pyboy-rs
+      - name: 200,000 frames on the demo ROM
+        env:
+          PYBOY_RS_DETERMINISM_FRAMES: '200000'
+        run: python -m pytest -q --durations=0 tests/test_long_determinism.py

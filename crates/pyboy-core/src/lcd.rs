@@ -289,6 +289,13 @@ impl Lcd {
             return;
         }
         let y = usize::from(self.ly);
+        // The window line counter starts over on every frame. PyBoy resets it
+        // only after a rendered line 143, so a frame could inherit a stale count
+        // from frames run without rendering, an LCD switched off mid-frame, or
+        // the machine a save state was loaded into. Save states do not store it.
+        if y == 0 {
+            self.ly_window = -1;
+        }
         let wx = i64::from(self.wx) - 7;
         let window = self.lcdc & 32 != 0 && self.wy <= self.ly && wx < 160;
         if window {

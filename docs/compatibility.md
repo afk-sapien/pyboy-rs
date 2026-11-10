@@ -60,6 +60,15 @@ CPU interrupt semantics. Deliberate differences:
   count as a row count.
 - RTC register writes and the halt bit follow Pan Docs. See
   [rtc.md](rtc.md#differences-from-pyboy-270).
+- The window line counter starts over at line 0 of every rendered frame. PyBoy
+  resets it only after a rendered line 143, and save states do not store it, so
+  a frame can inherit a stale count. The window is then drawn one line low on
+  the first rendered frame after loading a state into a machine with a
+  different count (a fresh process, for example), after frames run without
+  rendering since boot, or after the LCD is switched off mid-frame. pyboy-rs
+  differs from PyBoy 2.7.0 only on that one frame. Later frames are identical.
+  A save state therefore continues exactly in any process. A state saved
+  mid-frame from a hook still cannot restore a partial count.
 - Input validation is stricter, so the public API is not identical in every
   edge case.
 
