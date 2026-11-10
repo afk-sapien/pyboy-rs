@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.5
+
+A save state now continues exactly like the run that saved it, in any process.
+
+### Changed (intentional divergence from PyBoy 2.7.0)
+
+- The window line counter is reset at line 0 of every rendered frame. Format 15
+  save states do not store it, and PyBoy resets it only after a rendered line
+  143. The first rendered frame after a load therefore depended on what the
+  loading machine had run before: a fresh process drew the window one line
+  low, and so did a run without rendering since boot or an LCD switched off
+  mid-frame. Now that frame matches the uninterrupted run. It differs from
+  PyBoy 2.7.0 by that one frame only. The state format is unchanged. The new
+  feature name `exact_state_reload` reports it.
+
+### Tests
+
+- A long determinism test runs one input script in separate processes and
+  compares a state and screen hash at 20 intervals, then loads the midpoint
+  save state in a fresh process and checks every later interval. Pull requests
+  run 20,000 frames on the demo ROM. A nightly job runs 200,000.
+  `PYBOY_RS_DETERMINISM_ROM` adds local games.
+
 ## 0.1.4
 
 The tag v0.1.3 was never published as a release: its wheel run built
