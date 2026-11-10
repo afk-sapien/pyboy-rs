@@ -1,17 +1,12 @@
 name: Long determinism
 
-# The 200,000 frame run of tests/test_long_determinism.py. Pull requests run the
-# same test at 20,000 frames in test.yml. This one runs nightly, by hand, and on
-# pull requests that change the test itself.
+# The 200,000 frame run of tests/test_long_determinism.py, about 40 s on Linux.
+# Every test.yml matrix job runs the same test at 20,000 frames.
 on:
-  schedule:
-    - cron: '23 5 * * *'
-  workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    paths:
-      - tests/test_long_determinism.py
-      - tests/long_determinism_runner.py
-      - .github/workflows/long-determinism.yml
+  workflow_dispatch:
 
 permissions:
   contents: read

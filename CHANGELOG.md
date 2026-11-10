@@ -19,9 +19,15 @@ A save state now continues exactly like the run that saved it, in any process.
 
 - A long determinism test runs one input script in separate processes and
   compares a state and screen hash at 20 intervals, then loads the midpoint
-  save state in a fresh process and checks every later interval. Pull requests
-  run 20,000 frames on the demo ROM. A nightly job runs 200,000.
-  `PYBOY_RS_DETERMINISM_ROM` adds local games.
+  save state in a fresh process and checks every later interval. Every test
+  job runs 20,000 frames on the demo ROM, and a Linux job runs 200,000 (about
+  40 s) on every pull request and push to main. `PYBOY_RS_DETERMINISM_ROM`
+  adds local games.
+
+### CI
+
+- macOS jobs and the arm64 macOS wheel run on `macos-15`. GitHub no longer
+  accepts `macos-14`. The wheel keeps its `macosx_11_0_arm64` tag.
 
 ## 0.1.4
 

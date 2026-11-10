@@ -6,7 +6,7 @@ The third loads the first one's midpoint save state in a fresh process and must
 match it on every later interval.
 
 ``PYBOY_RS_DETERMINISM_FRAMES`` sets the run length (default 20,000 frames, the
-nightly workflow uses 200,000). Real games cannot ship with the repository. Set
+long-determinism workflow uses 200,000). Real games cannot ship with the repository. Set
 ``PYBOY_RS_DETERMINISM_ROM`` to one or more ROM paths, separated by the path
 separator, to run them too. Games with a real-time clock run on a locked clock.
 """
