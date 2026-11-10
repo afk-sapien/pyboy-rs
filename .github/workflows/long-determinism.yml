@@ -1,6 +1,6 @@
 name: Long determinism
 
-# The 200,000 frame run of tests/test_long_determinism.py, about 40 s on Linux.
+# The 200,000 frame run of tests/test_long_determinism.py, about a minute on Linux.
 # Every test.yml matrix job runs the same test at 20,000 frames.
 on:
   push:

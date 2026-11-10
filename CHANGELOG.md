@@ -21,7 +21,7 @@ A save state now continues exactly like the run that saved it, in any process.
   compares a state and screen hash at 20 intervals, then loads the midpoint
   save state in a fresh process and checks every later interval. Every test
   job runs 20,000 frames on the demo ROM, and a Linux job runs 200,000 (about
-  40 s) on every pull request and push to main. `PYBOY_RS_DETERMINISM_ROM`
+  a minute) on every pull request and push to main. `PYBOY_RS_DETERMINISM_ROM`
   adds local games.
 
 ### CI
