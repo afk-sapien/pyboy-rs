@@ -23,7 +23,9 @@ window is headless.
 `clock_lock_state`, `advance_clock`, `export_rtc`, `rtc_export_follows_host`,
 `checkpoint_clock_lock`, `bank_bytes`, `exact_state_reload` (a save state
 loaded in any process continues exactly like the run that saved it, see
-[compatibility.md](compatibility.md#divergences)), and `profiling` (only in
+[compatibility.md](compatibility.md#divergences)), `long_run_state` (a run of
+any length keeps saving states that load again, and a state saved past 2^48
+cycles by an older build loads), and `profiling` (only in
 builds with that feature). `pyboy_rs.has_feature(name)` tests one.
 `getattr(pyboy_rs, "FEATURES", ())` is the portable test.
 `PyBoy.has_rtc` is `False`, never an error, on a cartridge without a clock.

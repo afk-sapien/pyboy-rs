@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.6
+
+A run of any length keeps saving states that load again.
+
+### Fixed
+
+- State loading refused a CPU cycle count above 2^48 (about 777 emulated
+  days), but saving had no such limit. A long run at maximum speed (a hosted
+  game reaches it in about 2.7 days) kept writing states that every later load
+  rejected as an invalid emulator state. Now each frame that ends above 2^47
+  cycles moves every absolute clock back by one common multiple of 2^40, so a
+  state never grows past about 2^47 and 0.1.5 can still load it. The clocks
+  moved are the CPU, LCD, timer, serial and sound clocks, plus the sound
+  sample deadlines by the matching half step in double speed. A state saved
+  above 2^48 by an older build is rebased the same way when it loads, with all
+  progress kept. A state at or below 2^48 loads byte for byte as before. The
+  new feature name `long_run_state` reports it.
+
+### Changed
+
+- `registers()["cycles"]` drops by a multiple of 2^40 when a frame ends above
+  2^47 cycles. Use differences between nearby readings, not the absolute
+  value, for timing.
+
+### Tests
+
+- A state saved past the old cap loads and runs like the same state at small
+  clocks for 1500 frames, on DMG and on CGB in double speed. A state at
+  exactly 2^48 loads unchanged and one cycle more is rebased. A run across the
+  in-memory rebase matches the same run at small clocks frame by frame for up
+  to 2400 frames in screen, RAM and every clock offset, and in every audio
+  sample at 47880 Hz (an exact 88 cycles per sample). At 48000 Hz the audio
+  already differed between small and large clocks in 0.1.5, because sample
+  deadlines are floats that round more coarsely at large values. Screens and
+  RAM still match there.
+
 ## 0.1.5
 
 A save state now continues exactly like the run that saved it, in any process.

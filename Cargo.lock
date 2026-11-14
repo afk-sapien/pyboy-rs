@@ -37,11 +37,11 @@ dependencies = [
 
 [[package]]
 name = "pyboy-core"
-version = "0.1.5"
+version = "0.1.6"
 
 [[package]]
 name = "pyboy-python"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "libc",
  "pyboy-core",

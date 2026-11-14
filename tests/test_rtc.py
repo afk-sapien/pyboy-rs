@@ -538,8 +538,9 @@ def test_version_and_features_agree_across_the_build():
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     if pyproject.exists():
         assert f'version = "{pyboy_rs.__version__}"' in pyproject.read_text()
-    assert _native.__version__ == pyboy_rs.__version__ == "0.1.5"
+    assert _native.__version__ == pyboy_rs.__version__ == "0.1.6"
     assert pyboy_rs.HAS_CLOCK_CONTROL and pyboy_rs.has_feature("clock_lock_state")
+    assert pyboy_rs.has_feature("long_run_state")
     assert not pyboy_rs.has_feature("nonexistent")
     for name in ("rtc_file", "clock_lock", "advance_clock", "export_rtc"):
         assert name in pyboy_rs.FEATURES

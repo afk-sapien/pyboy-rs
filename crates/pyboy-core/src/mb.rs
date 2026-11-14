@@ -230,6 +230,9 @@ impl Machine {
         }
         self.frame_count += 1;
         self.mb.cartridge.advance_clock_frame();
+        if self.cpu.cycles > crate::state::REBASE_ABOVE {
+            self.rebase_clocks();
+        }
         Ok(true)
     }
 
