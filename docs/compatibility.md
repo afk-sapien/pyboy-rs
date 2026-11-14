@@ -69,6 +69,12 @@ CPU interrupt semantics. Deliberate differences:
   differs from PyBoy 2.7.0 only on that one frame. Later frames are identical.
   A save state therefore continues exactly in any process. A state saved
   mid-frame from a hook still cannot restore a partial count.
+- Absolute cycle clocks are bounded. When a frame ends above 2^47 CPU cycles,
+  every absolute clock moves back by one common multiple of 2^40 (the sound
+  clocks by the matching amount in their own domain). Emulation is unchanged,
+  but `registers()["cycles"]` and the clocks in a save state are smaller than
+  PyBoy's after about 388 emulated days. A state with more than 2^48 cycles is
+  rebased the same way on load instead of being refused.
 - Input validation is stricter, so the public API is not identical in every
   edge case.
 

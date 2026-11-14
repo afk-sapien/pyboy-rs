@@ -11,6 +11,24 @@ use crate::{
 /// keeps the version 1 bytes of 0.1.1 and old recordings still replay.
 pub const RUNTIME_FORMAT: u8 = 2;
 
+/// The highest CPU clock a state may hold, about 777 emulated days. Releases
+/// before 0.1.6 refuse any state above it, and a long run there kept saving
+/// states past it.
+pub const CLOCK_CAP: i64 = 1 << 48;
+
+/// A completed frame rebases the clocks once the CPU clock passes this, so a
+/// running machine and every state it saves stay at half the cap or less.
+pub const REBASE_ABOVE: i64 = 1 << 47;
+
+const CPU_EPOCH: i64 = 1 << 40;
+const SOUND_EPOCH: i64 = 1 << 39;
+
+/// The multiple of `epoch` that leaves `clock` in `epoch..2 * epoch`, or 0
+/// when it is already below that.
+fn epoch_delta(clock: i64, epoch: i64) -> i64 {
+    (clock / epoch - 1).max(0) * epoch
+}
+
 pub struct Codec {
     pub data: Vec<u8>,
     pub reading: bool,
@@ -254,9 +272,65 @@ impl Machine {
         if codec.position != bytes.len() {
             return Err("Trailing data in save state");
         }
+        // Only a state the cap used to refuse is rebased here. Any other
+        // state loads exactly as saved, and its first completed frame
+        // rebases it as the saving machine would have.
+        if candidate.cpu.cycles > CLOCK_CAP {
+            candidate.rebase_clocks();
+        }
         candidate.validate_state()?;
         *self = candidate;
         Ok(())
+    }
+
+    /// Move every absolute clock back by whole epochs, keeping all progress.
+    ///
+    /// The clocks counted in CPU cycles move by one delta. The sound clocks
+    /// count at half that rate in double speed, so they move by their own
+    /// delta. Both deltas are multiples of 2^39, so every difference between
+    /// clocks of one kind and every phase below 2^39 stays the same, and the
+    /// float sound deadlines move exactly. The frame-local LCD clock and the
+    /// timer, serial and sound countdowns are relative and do not move. The
+    /// APU divider is only read modulo 8, so it is reduced modulo 8, which
+    /// keeps it under the CPU clock however often a run rebases. Emulation
+    /// after a rebase is the same as before it. Only the float sample
+    /// deadlines round on a finer grid at the smaller magnitude, which can
+    /// move an audio sample by a cycle when cycles per sample is not a
+    /// short binary fraction.
+    pub fn rebase_clocks(&mut self) {
+        let mb = &mut self.mb;
+        let lowest = [
+            self.cpu.cycles,
+            mb.lcd.last_cycles,
+            mb.sound.last_cycles,
+            mb.timer.last_cycles,
+            mb.serial.last_cycles,
+            mb.serial.clock,
+        ]
+        .into_iter()
+        .min()
+        .unwrap();
+        let delta = epoch_delta(lowest, CPU_EPOCH);
+        for clock in [
+            &mut self.cpu.cycles,
+            &mut mb.lcd.last_cycles,
+            &mut mb.sound.last_cycles,
+            &mut mb.timer.last_cycles,
+            &mut mb.serial.last_cycles,
+            &mut mb.serial.clock,
+            // A finished transfer leaves the target at MAX_CYCLES, which is
+            // only ever compared with the serial clock, so it moves too.
+            &mut mb.serial.clock_target,
+        ] {
+            *clock = clock.saturating_sub(delta);
+        }
+
+        let sound = &mut mb.sound;
+        let delta = epoch_delta(sound.cycles, SOUND_EPOCH);
+        sound.cycles -= delta;
+        sound.cycles_target -= delta as f64;
+        sound.cycles_target_512hz -= delta as f64;
+        sound.div_apu %= 8;
     }
 
     fn codec(&mut self, c: &mut Codec, wall: f64) -> Result<(), &'static str> {
@@ -461,7 +535,7 @@ impl Machine {
         let mb = &self.mb;
         let lcd = &mb.lcd;
         let sound = &mb.sound;
-        if !(0..=1 << 48).contains(&self.cpu.cycles)
+        if !(0..=CLOCK_CAP).contains(&self.cpu.cycles)
             || lcd.ly > 153
             || lcd.next_stat_mode > 3
             || lcd.vbank > 1
