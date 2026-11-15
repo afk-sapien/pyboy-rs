@@ -39,6 +39,16 @@ enum Target {
     CartRam,
 }
 
+/// How `read` handles a run of addresses within one page.
+enum Run<'a> {
+    /// It returns these bytes straight from a buffer.
+    Copy(&'a [u8]),
+    /// It sends this many addresses to `read_slow`.
+    Slow(usize),
+    /// This many addresses need `read` itself.
+    Bus(usize),
+}
+
 /// A page mapped to the buffer offset of its first byte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Page {
@@ -320,6 +330,17 @@ impl Machine {
     pub fn read(&mut self, address: u16) -> u8 {
         self.mb.read(address, &mut self.cpu)
     }
+    /// Fill `out` with what `read` gives at `start`, `start + step` and on.
+    ///
+    /// Runs of addresses the bus maps straight to a buffer are copied from it.
+    /// Every other address takes the path `read` takes, in address order, so
+    /// the bytes and any device catch-up are exactly those of a loop of `read`
+    /// calls.
+    ///
+    /// Panics when `step` is zero or the last address is above 0xffff.
+    pub fn read_into(&mut self, start: u16, step: usize, out: &mut [u8]) {
+        self.mb.read_into(start, step, out, &mut self.cpu);
+    }
     pub fn write(&mut self, address: u16, value: u8) {
         self.mb.write(address, value, &mut self.cpu);
     }
@@ -592,6 +613,86 @@ impl Motherboard {
     fn remapped(mut self) -> Self {
         self.remap();
         self
+    }
+
+    fn read_into(&mut self, start: u16, step: usize, out: &mut [u8], cpu: &mut Cpu) {
+        assert!(step > 0, "step must be positive");
+        let mut address = usize::from(start);
+        if let Some(count) = out.len().checked_sub(1) {
+            let last = count
+                .checked_mul(step)
+                .and_then(|span| span.checked_add(address));
+            assert!(last.is_some_and(|last| last <= 0xffff), "read past 0xffff");
+        }
+        let mut filled = 0;
+        while filled < out.len() {
+            let page_end = (address | 0xfff) + 1;
+            let (len, slow) = match self.run_at(address, page_end) {
+                Run::Copy(run) => {
+                    let count = run.len().div_ceil(step).min(out.len() - filled);
+                    let slots = &mut out[filled..filled + count];
+                    if step == 1 {
+                        slots.copy_from_slice(&run[..count]);
+                    } else {
+                        for (slot, byte) in slots.iter_mut().zip(run.iter().step_by(step)) {
+                            *slot = *byte;
+                        }
+                    }
+                    filled += count;
+                    address += count * step;
+                    continue;
+                }
+                Run::Slow(len) => (len, true),
+                Run::Bus(len) => (len, false),
+            };
+            let count = len.div_ceil(step).min(out.len() - filled);
+            for slot in &mut out[filled..filled + count] {
+                *slot = if slow {
+                    self.read_slow(address as u16, cpu)
+                } else {
+                    self.read(address as u16, cpu)
+                };
+                address += step;
+            }
+            filled += count;
+        }
+    }
+
+    /// How `read` handles the run of addresses from `address` to at most
+    /// `end`, within one page. It mirrors the checks in `read` and
+    /// `read_banked`, so each kind of run gives what a `read` of each of its
+    /// addresses gives.
+    fn run_at(&self, address: usize, end: usize) -> Run<'_> {
+        let index = address >> 12;
+        let offset = address & 0xfff;
+        let mut len = end - address;
+        let window = self.map.window[index];
+        let low = usize::from(window.low);
+        let high = low + usize::from(window.span);
+        if (low..high).contains(&offset) {
+            let from = window.base as usize + offset;
+            let len = len.min(high - offset);
+            return self
+                .ram
+                .get(from..from + len)
+                .map_or(Run::Bus(len), Run::Copy);
+        }
+        // Outside the window `read` goes to the page table.
+        if offset < low {
+            len = len.min(low - offset);
+        }
+        let page = self.map.read[index];
+        let from = page.base as usize + offset;
+        let buffer = match page.target {
+            Target::Slow => return Run::Slow(len),
+            Target::Rom => &self.cartridge.rom,
+            Target::Vram0 => &self.lcd.vram[0],
+            Target::Vram1 => &self.lcd.vram[1],
+            Target::CartRam => &self.cartridge.ram,
+        };
+        buffer
+            .get(from..from + len)
+            .map_or(Run::Bus(len), Run::Copy)
     }
 
     fn map_rom(&mut self) {
@@ -972,6 +1073,106 @@ mod tests {
             "cartridge RAM writes differ"
         );
         assert_eq!(fast_cpu, slow_cpu);
+        let pages: Vec<usize> = (0..=16)
+            .map(|page| page * 4096)
+            .chain([0xff80, 0xffff])
+            .collect();
+        check_spans(m, &pages, &[1]);
+    }
+
+    /// What `read_into` gives for `start..stop` by `step`.
+    fn span(m: &mut Machine, start: usize, stop: usize, step: usize) -> Vec<u8> {
+        let mut out = vec![0; (stop - start).div_ceil(step)];
+        m.read_into(start as u16, step, &mut out);
+        out
+    }
+
+    /// Every span between two of `edges`, read with each of `steps`, gives
+    /// what a `read` of each of its addresses gives.
+    fn check_spans(m: &mut Machine, edges: &[usize], steps: &[usize]) {
+        let full: Vec<u8> = (0..=0xffffu16).map(|address| m.read(address)).collect();
+        for &start in edges {
+            for &stop in edges.iter().filter(|stop| **stop >= start) {
+                for &step in steps {
+                    let expected: Vec<u8> = if step == 1 {
+                        full[start..stop].to_vec()
+                    } else {
+                        full[start..stop].iter().step_by(step).copied().collect()
+                    };
+                    let got = span(m, start, stop, step);
+                    assert!(got == expected, "{start:#06x}..{stop:#06x} by {step}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn spans_read_what_bus_reads_give() {
+        let edges: Vec<usize> = (0..=16usize)
+            .flat_map(|page| {
+                [
+                    page * 4096,
+                    page * 4096 + 1,
+                    (page * 4096).saturating_sub(1),
+                ]
+            })
+            .chain([0xfe00, 0xfea0, 0xff00, 0xff10, 0xff40, 0xff80, 0xfffe])
+            .filter(|address| *address <= 0x10000)
+            .collect();
+        let setup: &[(u16, u8)] = &[
+            (0xff50, 1),
+            (0x0000, 0x0a),
+            (0x4000, 0x02),
+            (0x2000, 0x05),
+            (0xff70, 0x03),
+            (0xff4f, 0x01),
+        ];
+        // MBC1, MBC2, MBC3 with a clock, MBC5 and ROM only, with the boot ROM
+        // mapped and then with every bank register moved.
+        for (carttype, cgb) in [
+            (0x03, false),
+            (0x06, false),
+            (0x10, true),
+            (0x1b, true),
+            (0x00, false),
+        ] {
+            let mut m = machine(carttype, cgb);
+            for stage in [&[][..], setup] {
+                for &(address, value) in stage {
+                    m.write(address, value);
+                }
+                check_spans(&mut m, &edges, &[1, 3, 4096]);
+                let full: Vec<u8> = (0..=0xffffu16).map(|address| m.read(address)).collect();
+                // Every offset near a page edge and every seventh one between.
+                let starts = (0..0x10000usize)
+                    .filter(|start| start % 7 == 0 || !(34..0xfe0).contains(&(start & 0xfff)));
+                for start in starts {
+                    let mut stops = vec![(start + 33).min(0x10000)];
+                    if start < 0xf000 {
+                        stops.push((start | 0xfff) + 2);
+                    }
+                    for stop in stops {
+                        let got = span(&mut m, start, stop, 1);
+                        assert!(got == full[start..stop], "{start:#06x}..{stop:#06x}");
+                    }
+                }
+                // A span read leaves the machine as a loop of reads does.
+                let (mut by_byte, mut by_span) = (m.clone(), m.clone());
+                for address in 0..=0xffffu16 {
+                    by_byte.read(address);
+                }
+                span(&mut by_span, 0, 0x10000, 1);
+                assert_eq!(by_byte.cpu, by_span.cpu);
+                assert_eq!(by_byte.save_state(), by_span.save_state());
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "read past 0xffff")]
+    fn spans_stop_at_the_end_of_the_address_space() {
+        let mut m = machine(0x00, false);
+        m.read_into(0xfff0, 4, &mut [0; 5]);
     }
 
     #[test]

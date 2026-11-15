@@ -4,6 +4,13 @@
 
 ### Changed
 
+- `memory.read_bytes`, memory slices and `tick_read` copy each run of
+  addresses the bus maps straight to a buffer, such as work RAM, high RAM,
+  video RAM, the ROM banks and mapped cartridge RAM, in one slice copy. IO
+  registers, OAM, the clock registers and other device-backed addresses still
+  take the full bus read, in address order, so every byte equals a read of its
+  address. Reading the 8 KB of work RAM at 0xc000 takes about 0.3 us instead
+  of 11 us, and all 64 KB 16 to 39 us instead of 150 to 170 us, on Red and Crystal.
 - The four sound channels advance their period timers in closed form instead
   of one period at a time. The square and wave positions move by division and
   the noise register jumps up to 14 steps at once. Save states and audio

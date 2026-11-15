@@ -122,9 +122,9 @@ impl Emulator {
             .detach(|| {
                 self.inner.run_frame().map(|complete| {
                     let bytes = complete.then(|| {
-                        (start..stop)
-                            .map(|i| self.inner.read(i as u16))
-                            .collect::<Vec<_>>()
+                        let mut out = vec![0; (stop - start) as usize];
+                        self.inner.read_into(start as u16, 1, &mut out);
+                        out
                     });
                     (complete, bytes)
                 })
@@ -144,10 +144,9 @@ impl Emulator {
         if stop > 65536 || stop < u32::from(start) || step == 0 {
             return Err(PyValueError::new_err("Invalid memory range"));
         }
-        Ok((u32::from(start)..stop)
-            .step_by(step as usize)
-            .map(|i| self.inner.read(i as u16))
-            .collect())
+        let mut out = vec![0; (stop - u32::from(start)).div_ceil(step) as usize];
+        self.inner.read_into(start, step as usize, &mut out);
+        Ok(out)
     }
     fn read_bytes<'py>(
         &mut self,
@@ -158,8 +157,10 @@ impl Emulator {
         if start > stop || stop > 65536 {
             return Err(PyValueError::new_err("Invalid memory range"));
         }
-        let bytes: Vec<u8> = (start..stop).map(|i| self.inner.read(i as u16)).collect();
-        Ok(PyBytes::new(py, &bytes))
+        PyBytes::new_with(py, (stop - start) as usize, |out| {
+            self.inner.read_into(start as u16, 1, out);
+            Ok(())
+        })
     }
     fn write(&mut self, address: u16, value: u8) {
         self.inner.write(address, value);
