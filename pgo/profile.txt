@@ -1,0 +1,9 @@
+# Written by tools/pgo.sh record. See docs/RELEASING.md.
+toolchain=1.97.1
+target=x86_64-unknown-linux-gnu
+maturin=1.15.0
+version=0.1.6
+source=e8c84353b089782bb86245d83ceaf398c7433574
+commit=604f952832df5ab8d7e24e6b4070be5c80caab16
+frames=9000
+states=10

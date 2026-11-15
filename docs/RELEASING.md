@@ -66,14 +66,90 @@ Nothing is registered or published by the repository itself.
 1. Bump the version in `pyproject.toml`, `Cargo.toml` (and `Cargo.lock`) and
    `python/pyboy_rs/__init__.py`; add a `CHANGELOG.md` entry. A test fails if
    they disagree.
-2. Merge to `main` through a pull request and check that the `Wheels` workflow
+2. Commit the bump, then record a fresh PGO profile (below) with
+   `tools/pgo.sh record` and commit `pgo/linux-x86_64.profdata` and
+   `pgo/profile.txt` in the same pull request. The version is part of every
+   symbol name, so a bump leaves the old profile matching nothing, and a tag
+   build fails until the profile is recorded again.
+3. Merge to `main` through a pull request and check that the `Wheels` workflow
    is green (run it with `workflow_dispatch` if needed).
-3. Do a dry run (above) on the merge commit and check that every job passes.
-4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` job
+4. Do a dry run (above) on the merge commit and check that every job passes
+   and that the Linux x86_64 job shows no stale profile warning. A tag build
+   would fail on that warning.
+5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` job
    attaches the files and publishes the release (drafted first, published after
    the upload, so it is never public without its assets).
-5. The tag URL (`https://github.com/afk-sapien/pyboy-rs/tree/vX.Y.Z`) is the
+6. The tag URL (`https://github.com/afk-sapien/pyboy-rs/tree/vX.Y.Z`) is the
    corresponding source that the README points to for LGPL purposes.
+
+## Profile-guided Linux x86_64 wheel
+
+The Linux x86_64 wheel is built with profile-guided optimization (PGO). The
+profile is `pgo/linux-x86_64.profdata`, an LLVM indexed profile recorded from an
+instrumented wheel playing Pokemon Red and Crystal through the Python API.
+`pgo/profile.txt` holds the Rust toolchain, target and maturin version it was
+recorded with and a fingerprint of the Rust source. The `Wheels` workflow builds
+that one wheel with `-Cprofile-use` and the recorded toolchain. The other four
+wheels and the sdist build as before. A profile matches one toolchain and one
+target only, and there are no ROMs to record the others with.
+
+CI has no ROMs, so the profile is recorded locally and committed. It holds
+function names, control-flow hashes and counters, about 380 KB. Before
+`tools/pgo.sh record` writes it, it checks that no 64-byte stretch of any ROM or
+state it played appears in it.
+
+PGO changes how the compiler lays out, inlines and orders code, not what the
+code does. Save states and audio from a PGO wheel are identical to those from a
+wheel without it.
+
+### When the profile goes stale
+
+rustc matches a profile record to a function by its symbol name and a hash of
+its control flow. The symbol name includes the crate version and the toolchain.
+
+- A change to a function's control flow drops the profile for that function
+  only. rustc warns `function control flow change detected (hash mismatch)` and
+  builds that function as without PGO.
+- A version bump, a new toolchain or a change to the dependencies renames every
+  function, so none of the profile matches. The wheel builds and works at the
+  speed of a build without PGO. rustc warns `no profile data available` for
+  each function.
+
+A stale profile never changes behavior, it only loses speed. The workflow runs
+`tools/pgo.sh check`, which compares the recorded source fingerprint and
+version with the commit being built.
+
+- On a `vX.Y.Z` tag push a stale profile fails the Linux x86_64 job, so the
+  release is not published. Record the profile again, merge it and tag a new
+  commit. Never move a tag.
+- On a manual run it only puts a warning on the run, so a dry run of work in
+  progress still builds every wheel.
+
+So the release order is: bump the version, record the profile, commit both,
+merge, dry run, then tag.
+
+### Refreshing the profile
+
+Record on a Linux x86_64 machine that has the ROMs, after the version bump and
+any Rust change are committed, then commit the two files:
+
+```sh
+rustup toolchain install 1.97.1 --component llvm-tools
+pip install maturin==1.15.0
+tools/pgo.sh record --rom red.gb red-a.state red-b.state --rom crystal.gbc crystal-a.state crystal-b.state
+tools/pgo.sh check
+```
+
+Use five or so states per game from ordinary play: the overworld, battles,
+menus and text. Leave the benchmark scenes out, so measured gains are not
+tuned to them. Gzip states are fine. `record` plays 9000 frames per state
+(`--frames N`) and takes a few minutes, most of it the instrumented build. It
+refuses to run while the Rust source has uncommitted changes, because the
+profile must match what HEAD builds. The maturin version must equal the
+`wheels.yml` pin.
+
+To move the wheel to a newer Rust, record once with `PGO_TOOLCHAIN=1.X.Y`. The
+new toolchain is written to `pgo/profile.txt` and the workflow uses it.
 
 ## Regenerating third-party notices
 
