@@ -30,6 +30,14 @@
   only when it writes the MBC3 clock. Save states and audio samples are
   identical to 0.1.6. On one core, the six Red and Crystal bench scenes run 5%
   to 23% faster with sound emulated and sampling off, 13% faster on average.
+- The Linux x86_64 wheel is built with profile-guided optimization from a
+  committed profile of Red and Crystal play, recorded with `tools/pgo.sh` and
+  built with Rust 1.97.1. Save states and audio are identical to a build
+  without it. Through Python on one core, Red and Crystal scenes run 12% to 50%
+  faster in the PokeSim pattern (a render every 30 frames, no sampling), 4% to
+  22% faster with render and sound every frame, and up to 15% faster headless.
+  The other wheels and the sdist are unchanged. The profile holds no ROM or
+  save data. See `docs/RELEASING.md` for how to refresh it.
 
 ## 0.1.6
 

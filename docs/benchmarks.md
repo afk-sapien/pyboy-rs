@@ -79,4 +79,47 @@ python tools/benchmark.py run reference/pyboy-2.7.0/pyboy/default_rom.gb --outpu
 scales the frame budgets. A debug extension gives misleading results, so
 install a wheel built with `maturin build --release` first.
 
+## Profile-guided build
+
+The Linux x86_64 wheel is built with a committed PGO profile (see
+[Releasing](RELEASING.md#profile-guided-linux-x86_64-wheel)). The profile was
+recorded from ten Red and Crystal states that are not among the scenes below.
+The tables give the change in median emulated frames per second against a
+build of the same source without PGO, on one pinned core of the same machine.
+The two builds alternate per mode over two rounds of three trials. The machine
+was not idle, so trials spread widely and changes under about 5% are noise.
+
+The native harness, built with a profile recorded from the harness itself, at
+30,000 frames per trial:
+
+| Game and scene | pokesim | full | headless |
+| --- | ---: | ---: | ---: |
+| Red overworld | +13.4% | +18.1% | +23.1% |
+| Red battle | +55.8% | +27.3% | +28.0% |
+| Red menu | +39.6% | +28.6% | +19.0% |
+| Crystal overworld | +26.8% | +1.8% | +14.7% |
+| Crystal battle | +45.3% | +40.7% | +56.6% |
+| Crystal start menu | +13.0% | +2.8% | +21.9% |
+
+The Linux x86_64 wheel through Python, built with the committed profile, at
+12,000 frames per trial:
+
+| Game and scene | pokesim | full | headless |
+| --- | ---: | ---: | ---: |
+| Red overworld | +12.4% | +4.3% | +0.1% |
+| Red battle | +49.8% | +7.2% | +2.4% |
+| Red menu | +40.6% | +9.0% | +6.3% |
+| Crystal overworld | +20.3% | +11.6% | +2.7% |
+| Crystal battle | +13.6% | +12.5% | +14.7% |
+| Crystal start menu | +28.3% | +21.6% | +5.1% |
+
+pokesim renders one frame in 30 and does not sample sound. full renders and
+samples sound every frame. headless does neither. Sound hardware stays
+emulated in all three. Through Python, pokesim and headless call `tick(4)` and
+full calls `tick(1)` and reads the samples. The profile was recorded mostly
+from the pokesim pattern, which gains the most.
+
+Save states and audio matched the build without PGO on 44 scenario states
+over 40,000 frames each, with sound sampling off and on.
+
 Benchmark results contain ROM hashes, never ROM, save or checkpoint data.
