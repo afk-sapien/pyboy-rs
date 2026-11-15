@@ -180,6 +180,8 @@ impl Machine {
         }
         candidate.frame_count = frame;
         candidate.validate_state()?;
+        // The runtime record restores the low ROM bank.
+        candidate.mb.remap();
         *self = candidate;
         Ok(())
     }
@@ -279,6 +281,7 @@ impl Machine {
             candidate.rebase_clocks();
         }
         candidate.validate_state()?;
+        candidate.mb.remap();
         *self = candidate;
         Ok(())
     }

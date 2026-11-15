@@ -622,7 +622,12 @@ impl Cartridge {
     }
 
     pub fn write(&mut self, address: u16, value: u8, now: f64) {
-        let now = self.rtc.as_ref().map_or(now, |rtc| rtc.clock(now));
+        self.write_at(address, value, || now);
+    }
+
+    /// `write` with the host clock read through `wall`, only for a write to
+    /// the clock. Reading the host time costs more than most writes.
+    pub fn write_at(&mut self, address: u16, value: u8, wall: impl FnOnce() -> f64) {
         let count = self.rom_count();
         match self.controller {
             Controller::RomOnly => match address {
@@ -686,6 +691,7 @@ impl Cartridge {
                 }
                 0x6000..=0x7fff => {
                     if let Some(rtc) = &mut self.rtc {
+                        let now = rtc.clock(wall());
                         rtc.write_command(value, now);
                     }
                 }
@@ -694,6 +700,7 @@ impl Cartridge {
                         self.ram[self.rambank_selected * 8192 + usize::from(address - 0xa000)] =
                             value;
                     } else if let Some(rtc) = &mut self.rtc {
+                        let now = rtc.clock(wall());
                         rtc.set(self.rambank_selected as u8, value, now);
                     }
                 }

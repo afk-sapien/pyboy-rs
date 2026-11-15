@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 use crate::{
     MAX_CYCLES,
-    cartridge::{Cartridge, Rtc},
+    cartridge::{Cartridge, Controller, Rtc},
     cpu::{Bus, Cpu, NoProgress},
     interaction::{Button, Interaction},
     lcd::{FRAME_CYCLES, Lcd},
@@ -28,6 +28,76 @@ pub struct Hdma {
     pub dst: u16,
 }
 
+/// Where a 4 KiB page outside work RAM reads or writes on the bus fast path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    /// The full address decode in `read_slow` and `write_slow`.
+    Slow,
+    Rom,
+    Vram0,
+    Vram1,
+    CartRam,
+}
+
+/// A page mapped to the buffer offset of its first byte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Page {
+    target: Target,
+    base: u32,
+}
+
+const SLOW: Page = Page {
+    target: Target::Slow,
+    base: 0,
+};
+
+/// The `span` bytes from page offset `low` map to `ram[base + offset]`, where
+/// `offset` is the address within its 4 KiB page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Window {
+    base: u32,
+    low: u16,
+    span: u16,
+}
+
+/// Lookup tables for the bus fast path, one entry per 4 KiB page.
+///
+/// The windows cover work RAM, its echo below 0xf000 and high RAM, all held
+/// in `Motherboard::ram`. The page tables cover the banked buffers. Every
+/// entry is an offset derived from the bank registers, so the map never
+/// enters the save state. A page left on the slow path is always correct,
+/// so the map only has to be rebuilt when a register it uses changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MemoryMap {
+    window: [Window; 16],
+    read: [Page; 16],
+    write: [Page; 16],
+}
+
+impl Default for MemoryMap {
+    fn default() -> Self {
+        Self {
+            window: [Window {
+                base: 0,
+                low: 0,
+                span: 0,
+            }; 16],
+            read: [SLOW; 16],
+            write: [SLOW; 16],
+        }
+    }
+}
+
+/// The page at `offset` in bank `bank` of `size` bytes, or the slow path when
+/// any of its bytes lies outside a buffer of `len` bytes.
+fn page(target: Target, bank: usize, size: usize, offset: usize, len: usize) -> Page {
+    bank.checked_mul(size)
+        .and_then(|start| start.checked_add(offset))
+        .filter(|base| base.checked_add(4096).is_some_and(|end| end <= len))
+        .and_then(|base| u32::try_from(base).ok())
+        .map_or(SLOW, |base| Page { target, base })
+}
+
 #[derive(Debug, Clone)]
 pub struct Motherboard {
     pub cartridge: Cartridge,
@@ -46,6 +116,7 @@ pub struct Motherboard {
     pub singlestep: bool,
     pub singlestep_latch: bool,
     pub serialbuffer: Vec<u8>,
+    map: MemoryMap,
 }
 
 #[derive(Debug, Clone)]
@@ -155,7 +226,9 @@ impl Machine {
                 singlestep: false,
                 singlestep_latch: false,
                 serialbuffer: Vec::new(),
-            },
+                map: MemoryMap::default(),
+            }
+            .remapped(),
         })
     }
 
@@ -476,7 +549,178 @@ impl Bus for Motherboard {
         }
     }
 
+    // Kept out of line. Inlining the fast path into all of the opcode
+    // handlers more than doubles their code and stops `fetch` inlining.
+    #[inline(never)]
     fn read(&mut self, address: u16, cpu: &mut Cpu) -> u8 {
+        let window = self.map.window[usize::from(address >> 12)];
+        let offset = address & 0xfff;
+        if offset.wrapping_sub(window.low) < window.span {
+            if let Some(byte) = self.ram.get(window.base as usize + usize::from(offset)) {
+                return *byte;
+            }
+        }
+        self.read_banked(address, cpu)
+    }
+
+    #[inline(never)]
+    fn write(&mut self, address: u16, value: u8, cpu: &mut Cpu) {
+        let window = self.map.window[usize::from(address >> 12)];
+        let offset = address & 0xfff;
+        if offset.wrapping_sub(window.low) < window.span {
+            if let Some(byte) = self.ram.get_mut(window.base as usize + usize::from(offset)) {
+                *byte = value;
+                return;
+            }
+        }
+        self.write_banked(address, value, cpu);
+    }
+}
+
+impl Motherboard {
+    /// Rebuild the bus lookup tables from the bank registers.
+    ///
+    /// Bus writes and state loads keep the tables current. Call this after
+    /// assigning a bank register, the boot ROM flag or SVBK directly.
+    pub fn remap(&mut self) {
+        self.map_rom();
+        self.map_cart_ram();
+        self.map_vram();
+        self.map_wram();
+    }
+
+    fn remapped(mut self) -> Self {
+        self.remap();
+        self
+    }
+
+    fn map_rom(&mut self) {
+        let cart = &self.cartridge;
+        for index in 0..8 {
+            let bank = if index < 4 {
+                cart.rombank_selected_low
+            } else {
+                cart.rombank_selected
+            };
+            // The boot ROM overlays parts of page 0 only.
+            self.map.read[index] = if index == 0 && self.bootrom_enabled {
+                SLOW
+            } else {
+                page(Target::Rom, bank, 16384, (index % 4) * 4096, cart.rom.len())
+            };
+        }
+    }
+
+    /// MBC3 and MBC5 RAM banks only. MBC1 reads select the bank, MBC2 RAM
+    /// is 4 bits wide and the RTC registers live behind the slow path.
+    fn map_cart_ram(&mut self) {
+        let cart = &self.cartridge;
+        let bank = cart.rambank_selected;
+        let rtc_bank = cart.rtc.is_some() && (8..=12).contains(&bank);
+        let readable = cart.rambank_enabled
+            && !rtc_bank
+            && matches!(cart.controller, Controller::Mbc3 | Controller::Mbc5);
+        let writable = cart.rambank_enabled
+            && match cart.controller {
+                Controller::Mbc3 => bank <= 3,
+                Controller::Mbc5 => true,
+                _ => false,
+            };
+        for index in 0..2 {
+            let mapped = page(Target::CartRam, bank, 8192, index * 4096, cart.ram.len());
+            self.map.read[0xa + index] = if readable { mapped } else { SLOW };
+            self.map.write[0xa + index] = if writable { mapped } else { SLOW };
+        }
+    }
+
+    fn map_vram(&mut self) {
+        let target = match self.lcd.vbank {
+            0 => Target::Vram0,
+            1 => Target::Vram1,
+            _ => Target::Slow,
+        };
+        let len = self.lcd.vram[usize::from(self.lcd.vbank & 1)].len();
+        for index in 0..2 {
+            let mapped = page(target, 0, 0, index * 4096, len);
+            self.map.read[8 + index] = mapped;
+            self.map.write[8 + index] = mapped;
+        }
+    }
+
+    /// Echo RAM above 0xf000 and the IO registers stay on the slow path.
+    fn map_wram(&mut self) {
+        let bank0 = self.wram_index(0xc000) as u32;
+        let bankx = self.wram_index(0xd000) as u32;
+        self.map.window[0xc] = Window {
+            base: bank0,
+            low: 0,
+            span: 0x1000,
+        };
+        self.map.window[0xd] = Window {
+            base: bankx,
+            low: 0,
+            span: 0x1000,
+        };
+        self.map.window[0xe] = self.map.window[0xc];
+        // High RAM, 0xff80 to 0xfffe. 0xffff is IE.
+        self.map.window[0xf] = Window {
+            base: 0xf000,
+            low: 0xf80,
+            span: 0x7f,
+        };
+    }
+
+    /// Keep the tables current after a slow write that can change a mapping.
+    fn remap_after(&mut self, address: u16) {
+        match address {
+            0..=0x7fff | 0xa000..=0xbfff => {
+                self.map_rom();
+                self.map_cart_ram();
+            }
+            0xff4f => self.map_vram(),
+            0xff50 => self.map_rom(),
+            0xff70 => self.map_wram(),
+            _ => {}
+        }
+    }
+
+    #[inline(always)]
+    fn read_banked(&mut self, address: u16, cpu: &mut Cpu) -> u8 {
+        let page = self.map.read[usize::from(address >> 12)];
+        let offset = page.base as usize + usize::from(address & 0xfff);
+        let byte = match page.target {
+            Target::Slow => None,
+            Target::Rom => self.cartridge.rom.get(offset).copied(),
+            Target::Vram0 => self.lcd.vram[0].get(offset).copied(),
+            Target::Vram1 => self.lcd.vram[1].get(offset).copied(),
+            Target::CartRam => self.cartridge.ram.get(offset).copied(),
+        };
+        match byte {
+            Some(byte) => byte,
+            None => self.read_slow(address, cpu),
+        }
+    }
+
+    #[inline(always)]
+    fn write_banked(&mut self, address: u16, value: u8, cpu: &mut Cpu) {
+        let page = self.map.write[usize::from(address >> 12)];
+        let offset = page.base as usize + usize::from(address & 0xfff);
+        let byte = match page.target {
+            Target::Vram0 => self.lcd.vram[0].get_mut(offset),
+            Target::Vram1 => self.lcd.vram[1].get_mut(offset),
+            Target::CartRam => self.cartridge.ram.get_mut(offset),
+            Target::Rom | Target::Slow => None,
+        };
+        if let Some(byte) = byte {
+            *byte = value;
+            return;
+        }
+        self.write_slow(address, value, cpu);
+        self.remap_after(address);
+    }
+
+    #[inline(never)]
+    fn read_slow(&mut self, address: u16, cpu: &mut Cpu) -> u8 {
         match address {
             0..=0x7fff => {
                 if self.bootrom_enabled
@@ -555,16 +799,17 @@ impl Bus for Motherboard {
         }
     }
 
-    fn write(&mut self, address: u16, value: u8, cpu: &mut Cpu) {
+    #[inline(never)]
+    fn write_slow(&mut self, address: u16, value: u8, cpu: &mut Cpu) {
         match address {
             0..=0x7fff => {
-                self.cartridge.write(address, value, now());
+                self.cartridge.write_at(address, value, now);
                 cpu.bail = true;
             }
             0x8000..=0x9fff => {
                 self.lcd.vram[usize::from(self.lcd.vbank)][usize::from(address - 0x8000)] = value
             }
-            0xa000..=0xbfff => self.cartridge.write(address, value, now()),
+            0xa000..=0xbfff => self.cartridge.write_at(address, value, now),
             0xc000..=0xdfff => {
                 let i = self.wram_index(address);
                 self.ram[i] = value;
@@ -656,5 +901,212 @@ impl Bus for Motherboard {
             }
             _ => self.ram[usize::from(address)] = value,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ROM whose bytes differ between banks, with a valid header and 4 RAM banks.
+    fn rom(carttype: u8, cgb: bool) -> Vec<u8> {
+        let mut rom: Vec<u8> = (0..64 * 16384)
+            .map(|i| ((i / 16384) as u8).wrapping_mul(37) ^ (i as u8))
+            .collect();
+        rom[0x143] = if cgb { 0x80 } else { 0 };
+        rom[0x147] = carttype;
+        rom[0x149] = 3;
+        rom[0x14d] = rom[0x134..0x14d]
+            .iter()
+            .fold(0u8, |sum, byte| sum.wrapping_sub(*byte).wrapping_sub(1));
+        rom
+    }
+
+    /// A machine with distinct bytes in every buffer the tables can map.
+    fn machine(carttype: u8, cgb: bool) -> Machine {
+        let mut m = Machine::new(rom(carttype, cgb), None, None, false, 48000).unwrap();
+        let fill = |i: usize, salt: u8| (i as u8) ^ ((i >> 8) as u8).wrapping_mul(13) ^ salt;
+        for (i, byte) in m.mb.ram[..0x8000].iter_mut().enumerate() {
+            *byte = fill(i, 1);
+        }
+        for (i, byte) in m.mb.ram[0xff80..0xffff].iter_mut().enumerate() {
+            *byte = fill(i, 2);
+        }
+        for (bank, vram) in m.mb.lcd.vram.iter_mut().enumerate() {
+            for (i, byte) in vram.iter_mut().enumerate() {
+                *byte = fill(i, 3 + bank as u8);
+            }
+        }
+        for (i, byte) in m.mb.cartridge.ram.iter_mut().enumerate() {
+            *byte = fill(i, 5);
+        }
+        m
+    }
+
+    /// The tables match a rebuild, and every read and write outside the IO
+    /// registers gives what the full decode gives.
+    fn check(m: &mut Machine) {
+        let mut fresh = m.mb.clone();
+        fresh.remap();
+        assert_eq!(fresh.map, m.mb.map, "stale tables");
+        assert_eq!(m.mb.map.read[0xf], SLOW);
+        assert_eq!(m.mb.map.write[0xf], SLOW);
+        let addresses = || (0..=0xfeffu16).chain(0xff80..=0xfffe);
+        for address in addresses() {
+            let fast = m.mb.read(address, &mut m.cpu);
+            let slow = m.mb.read_slow(address, &mut m.cpu);
+            assert_eq!(fast, slow, "read {address:#06x}");
+        }
+        let (mut fast, mut fast_cpu) = (m.mb.clone(), m.cpu.clone());
+        let (mut slow, mut slow_cpu) = (m.mb.clone(), m.cpu.clone());
+        for address in addresses().filter(|address| *address >= 0x8000) {
+            let value = (address as u8).wrapping_mul(7) ^ (address >> 8) as u8;
+            fast.write(address, value, &mut fast_cpu);
+            slow.write_slow(address, value, &mut slow_cpu);
+        }
+        assert!(fast.ram == slow.ram, "work RAM writes differ");
+        assert!(fast.lcd.vram == slow.lcd.vram, "VRAM writes differ");
+        assert!(fast.lcd.oam == slow.lcd.oam, "OAM writes differ");
+        assert!(
+            fast.cartridge.ram == slow.cartridge.ram,
+            "cartridge RAM writes differ"
+        );
+        assert_eq!(fast_cpu, slow_cpu);
+    }
+
+    #[test]
+    fn bank_switches_keep_the_tables_current() {
+        // MBC1, MBC2, MBC3 with and without a clock, MBC5 and ROM only.
+        for carttype in [0x03, 0x06, 0x10, 0x13, 0x1b, 0x00] {
+            let mut m = machine(carttype, false);
+            check(&mut m);
+            m.write(0xff50, 1);
+            assert!(!m.mb.bootrom_enabled);
+            check(&mut m);
+            let writes: &[(u16, u8)] = &[
+                (0x0000, 0x0a),
+                (0x2000, 0x25),
+                (0x3000, 0x01),
+                (0x4000, 0x02),
+                (0x6000, 0x01),
+                (0x4000, 0x03),
+                (0x2100, 0x07),
+                (0x4000, 0x08),
+                (0x4000, 0x05),
+                (0x6000, 0x00),
+                (0x0000, 0x00),
+                (0x0100, 0x0a),
+            ];
+            for &(address, value) in writes {
+                m.write(address, value);
+                check(&mut m);
+            }
+        }
+    }
+
+    #[test]
+    fn ram_enable_maps_and_unmaps_cartridge_ram() {
+        let mut m = machine(0x1b, false);
+        m.write(0xff50, 1);
+        assert_eq!(m.mb.map.read[0xa], SLOW);
+        m.write(0x0000, 0x0a);
+        m.write(0x4000, 2);
+        assert_eq!(m.mb.map.read[0xb].target, Target::CartRam);
+        assert_eq!(m.read(0xa123), m.mb.cartridge.ram[2 * 8192 + 0x123]);
+        m.write(0xb456, 0x99);
+        assert_eq!(m.mb.cartridge.ram[2 * 8192 + 0x1456], 0x99);
+        check(&mut m);
+        m.write(0x0000, 0x00);
+        assert_eq!(m.mb.map.read[0xa], SLOW);
+        assert_eq!(m.read(0xa123), 255);
+        check(&mut m);
+    }
+
+    #[test]
+    fn clock_registers_stay_on_the_slow_path() {
+        let mut m = machine(0x10, false);
+        m.write(0xff50, 1);
+        m.write(0x0000, 0x0a);
+        m.write(0x4000, 3);
+        assert_eq!(m.mb.map.read[0xa].target, Target::CartRam);
+        assert_eq!(m.mb.map.write[0xa].target, Target::CartRam);
+        for register in 8..=12 {
+            m.write(0x4000, register);
+            assert_eq!(m.mb.map.read[0xa], SLOW);
+            assert_eq!(m.mb.map.write[0xa], SLOW);
+            check(&mut m);
+        }
+    }
+
+    #[test]
+    fn svbk_and_vbk_select_the_mapped_banks() {
+        let mut m = machine(0x1b, true);
+        assert!(m.mb.cgb);
+        check(&mut m);
+        for value in [0, 1, 2, 3, 4, 5, 6, 7, 0xfa, 0x0f] {
+            m.write(0xff70, value);
+            check(&mut m);
+            let bank = usize::from((value & 7).max(1));
+            assert_eq!(m.read(0xd123), m.mb.ram[bank * 4096 + 0x123]);
+        }
+        for value in [1, 0, 0xff, 0xfe] {
+            m.write(0xff4f, value);
+            check(&mut m);
+            let bank = usize::from(value & 1);
+            assert_eq!(m.read(0x8123), m.mb.lcd.vram[bank][0x123]);
+        }
+        // SVBK and VBK do nothing on a DMG.
+        let mut m = machine(0x1b, false);
+        m.write(0xff70, 3);
+        m.write(0xff4f, 1);
+        check(&mut m);
+        assert_eq!(m.read(0xd123), m.mb.ram[0x1123]);
+        assert_eq!(m.read(0x8123), m.mb.lcd.vram[0][0x123]);
+    }
+
+    #[test]
+    fn state_loads_rebuild_the_tables() {
+        let mut saved = machine(0x1b, true);
+        for (address, value) in [
+            (0xff50, 0x11),
+            (0x0000, 0x0a),
+            (0x2000, 0x2b),
+            (0x4000, 0x03),
+            (0xff70, 0x05),
+            (0xff4f, 0x01),
+        ] {
+            saved.write(address, value);
+        }
+        check(&mut saved);
+        let state = saved.save_state().unwrap();
+        let runtime = saved.save_execution_runtime().unwrap();
+
+        let mut loaded = machine(0x1b, true);
+        loaded.load_state(&state).unwrap();
+        assert!(loaded.mb.map == saved.mb.map);
+        check(&mut loaded);
+
+        let mut loaded = machine(0x1b, true);
+        loaded.load_execution(&state, &runtime, 7).unwrap();
+        assert!(loaded.mb.map == saved.mb.map);
+        check(&mut loaded);
+
+        // A failed load leaves the machine and its tables unchanged.
+        let before = loaded.mb.map.clone();
+        assert!(loaded.load_state(&state[..state.len() - 1]).is_err());
+        assert!(loaded.mb.map == before);
+
+        // MBC1 restores its low ROM bank from the runtime record only.
+        let mut saved = machine(0x03, false);
+        for (address, value) in [(0xff50, 1), (0x6000, 1), (0x4000, 1)] {
+            saved.write(address, value);
+        }
+        assert_ne!(saved.mb.cartridge.rombank_selected_low, 0);
+        let state = saved.save_state().unwrap();
+        let runtime = saved.save_execution_runtime().unwrap();
+        let mut loaded = machine(0x03, false);
+        loaded.load_execution(&state, &runtime, 7).unwrap();
+        assert!(loaded.mb.map == saved.mb.map);
+        check(&mut loaded);
     }
 }
