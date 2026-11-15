@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The four sound channels advance their period timers in closed form instead
+  of one period at a time. The square and wave positions move by division and
+  the noise register jumps up to 14 steps at once. Save states and audio
+  samples are identical to 0.1.6. On one core, Red and Crystal scenes run up to
+  18% faster with sound emulated and sampling off, and up to 8% faster with
+  sound sampled. Scenes with little sound activity are unchanged.
+
 ## 0.1.6
 
 A run of any length keeps saving states that load again.

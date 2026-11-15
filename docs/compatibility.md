@@ -46,6 +46,10 @@ python tools/generate_opcodes.py
 python tools/generate_channels.py
 ```
 
+The sound loop does not call the generated channel `tick` loops directly.
+`channel_clock.rs` reaches the same period timer, waveform position and noise
+register in closed form, and tests check it against the generated loops.
+
 ## Divergences
 
 Upstream quirks are preserved, including serial timing, joypad selection and

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pub mod cartridge;
+mod channel_clock;
 pub mod channels;
 pub mod cpu;
 pub mod interaction;
