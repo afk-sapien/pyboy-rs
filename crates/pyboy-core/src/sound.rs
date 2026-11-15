@@ -84,7 +84,9 @@ mod lag_tests {
     }
 
     // The tick before the lag: every channel runs the generated loop on
-    // every tick, and samples mix with branches.
+    // every tick, and samples mix with branches. It also compares the clock
+    // with the f64 targets directly, so it checks the whole number deadlines
+    // of the tick loop too.
     fn eager_tick(sound: &mut Sound, absolute_cycles: i64) {
         let mut cycles = absolute_cycles - sound.last_cycles;
         sound.last_cycles = absolute_cycles;
@@ -504,53 +506,98 @@ impl Sound {
             return;
         }
         cycles >>= self.speed_shift;
-        while cycles > 0 {
+        if cycles > 0 {
+            self.run(cycles);
+        }
+    }
+
+    /// The tick loop. The clock and the sample target live in locals, which
+    /// the audio buffer stores cannot alias, and the f64 targets are compared
+    /// as their rounded up cycles: for a whole number c and a finite x,
+    /// c >= x exactly when c >= x.ceil(). State validation keeps both targets
+    /// finite and the clock below 2^53, so `c as f64` is exact too. Every
+    /// f64 target is still the same sum of the same steps as before.
+    #[inline(always)]
+    fn run(&mut self, mut cycles: i64) {
+        let mut clock = self.cycles;
+        let mut sample_target = self.cycles_target;
+        let mut sample_at = self.sample_deadline.get(sample_target);
+        let mut frame_at = self.frame_deadline.get(self.cycles_target_512hz);
+        loop {
             let elapsed = if self.disable_sampling {
                 cycles
             } else {
-                (self.sample_deadline.get(self.cycles_target) - self.cycles)
-                    .min(cycles)
-                    .max(0)
+                (sample_at - clock).min(cycles).max(0)
             };
-            let old_div = self.div_apu;
-            while self.cycles as f64 >= self.cycles_target_512hz {
-                self.div_apu += 1;
-                self.cycles_target_512hz += 8192.0;
-            }
+            let steps = if clock >= frame_at {
+                let old_div = self.div_apu;
+                while clock as f64 >= self.cycles_target_512hz {
+                    self.div_apu += 1;
+                    self.cycles_target_512hz += 8192.0;
+                }
+                frame_at = ceil_cycles(self.cycles_target_512hz);
+                self.div_apu - old_div
+            } else {
+                0
+            };
             if self.poweron != 0 {
                 self.advance_channels(elapsed);
-                for _ in 0..self.div_apu - old_div {
-                    if self.div_apu % 2 == 0 {
-                        self.sweepchannel.tick_length();
-                        self.tonechannel.tick_length();
-                        self.wavechannel.tick_length();
-                        self.noisechannel.tick_length();
+                for _ in 0..steps {
+                    self.frame_step();
+                }
+            }
+            clock += elapsed;
+            if clock >= sample_at {
+                if self.disable_sampling {
+                    let clock = clock as f64;
+                    while clock >= sample_target {
+                        sample_target += self.cycles_per_sample;
                     }
-                    if self.div_apu % 4 == 0 {
-                        // A sweep changes the period even with the channel off.
-                        self.run_lag(0);
-                        self.sweepchannel.tick_sweep();
-                    }
-                    if self.div_apu % 8 == 0 {
-                        self.sweepchannel.tick_envelope();
-                        self.tonechannel.tick_envelope();
-                        self.noisechannel.tick_envelope();
+                    sample_at = ceil_cycles(sample_target);
+                } else {
+                    while clock >= sample_at {
+                        self.sample();
+                        sample_target += self.cycles_per_sample;
+                        sample_at = ceil_cycles(sample_target);
                     }
                 }
             }
-            self.cycles += elapsed;
-            while self.cycles as f64 >= self.cycles_target {
-                if !self.disable_sampling {
-                    self.sample();
-                }
-                self.cycles_target += self.cycles_per_sample;
-            }
-            self.cycles_to_interrupt = self
-                .sample_deadline
-                .get(self.cycles_target)
-                .min(self.frame_deadline.get(self.cycles_target_512hz))
-                << self.speed_shift;
             cycles -= elapsed;
+            if cycles <= 0 {
+                break;
+            }
+        }
+        self.cycles = clock;
+        self.cycles_target = sample_target;
+        self.sample_deadline = Deadline {
+            source: sample_target,
+            rounded: sample_at,
+        };
+        self.frame_deadline = Deadline {
+            source: self.cycles_target_512hz,
+            rounded: frame_at,
+        };
+        self.cycles_to_interrupt = sample_at.min(frame_at) << self.speed_shift;
+    }
+
+    /// One 512 Hz frame sequencer step, at the `div_apu` it ends on.
+    #[inline(always)]
+    fn frame_step(&mut self) {
+        if self.div_apu % 2 == 0 {
+            self.sweepchannel.tick_length();
+            self.tonechannel.tick_length();
+            self.wavechannel.tick_length();
+            self.noisechannel.tick_length();
+        }
+        if self.div_apu % 4 == 0 {
+            // A sweep changes the period even with the channel off.
+            self.run_lag(0);
+            self.sweepchannel.tick_sweep();
+        }
+        if self.div_apu % 8 == 0 {
+            self.sweepchannel.tick_envelope();
+            self.tonechannel.tick_envelope();
+            self.noisechannel.tick_envelope();
         }
     }
 
