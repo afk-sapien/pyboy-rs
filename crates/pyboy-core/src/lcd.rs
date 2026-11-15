@@ -96,6 +96,11 @@ pub struct Lcd {
     pub reset: bool,
     pub disable_renderer: bool,
     pub ly_window: i64,
+    /// Set by every write to `framebuffer`: a rendered line, a blanked
+    /// screen or a loaded state. The Python binding clears it when it copies
+    /// the screen out, and skips the copy while it stays clear. It is not
+    /// part of a save state.
+    pub framebuffer_written: bool,
 }
 
 impl Lcd {
@@ -144,6 +149,7 @@ impl Lcd {
             reset: false,
             disable_renderer: false,
             ly_window: 0,
+            framebuffer_written: true,
         }
     }
 
@@ -291,6 +297,7 @@ impl Lcd {
         let color = self.dmg_color(0, self.bgp, 0);
         self.framebuffer.fill(color);
         self.attributes.fill(0);
+        self.framebuffer_written = true;
     }
     fn tile_row(&self, bank: usize, tile: usize, row: usize) -> [u8; 8] {
         let address = tile * 16 + row * 2;
@@ -303,6 +310,9 @@ impl Lcd {
         if self.disable_renderer {
             return;
         }
+        // This covers the sprites too: scanline_sprites runs right after and
+        // draws only when this line was drawn.
+        self.framebuffer_written = true;
         let y = usize::from(self.ly);
         // The window line counter starts over on every frame. PyBoy resets it
         // only after a rendered line 143, so a frame could inherit a stale count

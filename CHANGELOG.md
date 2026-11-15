@@ -4,6 +4,15 @@
 
 ### Changed
 
+- `tick` copies the screen out only after a frame drew a line, blanked the
+  screen or a state load replaced it, and copies the audio buffer out only
+  when the audio head moved since the last copy. Before, every tick copied
+  the 92 KB screen and the audio buffer. After any tick, `screen.raw_buffer`,
+  `screen.ndarray`, `sound.raw_buffer` and `sound.ndarray` hold the same bytes
+  as in 0.1.6, and so do save states. A load or a restore still copies both.
+  `tick(1)` without rendering runs 10% faster on Red and 4% to 6% faster on
+  Crystal, and the PokeSim pattern, 4 frames a tick rendering every 30th
+  frame, 1% to 2% faster. Rendering every frame is unchanged.
 - `memory.read_bytes`, memory slices and `tick_read` copy each run of
   addresses the bus maps straight to a buffer, such as work RAM, high RAM,
   video RAM, the ROM banks and mapped cartridge RAM, in one slice copy. IO
