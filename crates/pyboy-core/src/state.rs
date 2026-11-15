@@ -282,6 +282,7 @@ impl Machine {
         }
         candidate.validate_state()?;
         candidate.mb.remap();
+        candidate.mb.lcd.framebuffer_written = true;
         *self = candidate;
         Ok(())
     }

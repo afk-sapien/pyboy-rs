@@ -141,9 +141,6 @@ class Screen:
         self.raw_buffer = memoryview(self._buffer)
         self._pixels = self.raw_buffer.cast("I")
 
-    def _refresh(self):
-        self._machine.copy_screen(self._pixels)
-
     @property
     def ndarray(self):
         import numpy as np
@@ -173,9 +170,6 @@ class Sound:
         self.raw_buffer_length = (sample_rate // 60 + 1) * 2
         self._buffer = bytearray(self.raw_buffer_length)
         self.raw_buffer = memoryview(self._buffer).cast("b")
-
-    def _refresh(self):
-        self._machine.copy_audio_buffer(self._buffer)
 
     @property
     def raw_buffer_head(self):
@@ -249,9 +243,10 @@ class PyBoy(Execution):
     def cgb(self):
         return self._machine.cgb
 
-    def _refresh(self):
-        self.screen._refresh()
-        self.sound._refresh()
+    def _refresh(self, force=True):
+        # A tick copies only a buffer the machine wrote since the last copy,
+        # so the screen and audio read the same after any tick.
+        self._machine.refresh(self.screen._pixels, self.sound._buffer, force)
 
     def set_emulation_speed(self, target_speed):
         if not isinstance(target_speed, (int, float)) or target_speed < 0:
@@ -322,7 +317,7 @@ class PyBoy(Execution):
                         self._record_frame(recorded_events, bool(render and last), bool(sound and last))
                 while self._queued_input and self._queued_input[0][0] == self.frame_count:
                     self._events.append(heapq.heappop(self._queued_input)[1])
-            self._refresh()
+            self._refresh(False)
         except BaseException:
             if self._recording is not None:
                 self._recording['failed'] = True

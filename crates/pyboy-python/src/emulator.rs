@@ -35,6 +35,9 @@ fn profiling_unavailable() -> PyErr {
 #[pyclass(module = "pyboy_rs._native", name = "Machine")]
 pub struct Emulator {
     inner: Machine,
+    /// While the audio head stays at this value, the whole audio buffer
+    /// equals what `refresh` last copied out. None means it may not.
+    audio_copied: Option<usize>,
     #[cfg(all(feature = "profile", target_os = "linux"))]
     frame_timing: Option<(u64, u64, u64)>,
 }
@@ -55,9 +58,16 @@ impl Emulator {
             frame_timing: None,
             inner: Machine::new(rom, bootrom, cgb, sound_emulated, sample_rate)
                 .map_err(PyValueError::new_err)?,
+            audio_copied: None,
         })
     }
     fn begin_frame(&mut self, render: bool, sound: bool) {
+        // A sample is written at the head and moves it on, and only this
+        // clear or a state load moves the head back. So if the head has not
+        // moved since the last copy, the whole buffer still equals that copy,
+        // and after the clear it still does up to the new head of 0.
+        let head = self.inner.mb.sound.audiobuffer_head;
+        self.audio_copied = (self.audio_copied == Some(head)).then_some(0);
         self.inner.begin_frame(render, sound);
     }
     fn run_frame(&mut self, py: Python<'_>) -> PyResult<bool> {
@@ -281,6 +291,29 @@ impl Emulator {
     fn copy_audio_buffer(&self, py: Python<'_>, target: PyBuffer<u8>) -> PyResult<()> {
         target.copy_from_slice(py, &self.inner.mb.sound.audiobuffer)
     }
+    /// Copy the screen into `screen` and the audio buffer into `audio`, as
+    /// `copy_screen` and `copy_audio_buffer` do, but skip each one that has
+    /// not changed since the last call copied it. `force` copies both. Pass
+    /// the same two buffers every time, since a skipped buffer keeps the
+    /// last copy only if it is the buffer that copy went to.
+    fn refresh(
+        &mut self,
+        py: Python<'_>,
+        screen: &Bound<'_, PyAny>,
+        audio: &Bound<'_, PyAny>,
+        force: bool,
+    ) -> PyResult<()> {
+        if force || self.inner.mb.lcd.framebuffer_written {
+            self.copy_screen(py, PyBuffer::get(screen)?)?;
+            self.inner.mb.lcd.framebuffer_written = false;
+        }
+        let head = self.inner.mb.sound.audiobuffer_head;
+        if force || self.audio_copied != Some(head) {
+            self.copy_audio_buffer(py, PyBuffer::get(audio)?)?;
+            self.audio_copied = Some(head);
+        }
+        Ok(())
+    }
     #[getter]
     fn audio_head(&self) -> usize {
         self.inner.mb.sound.audiobuffer_head
@@ -419,7 +452,9 @@ impl Emulator {
     fn restore_execution(&mut self, data: &[u8], runtime: &[u8], frame: u64) -> PyResult<()> {
         self.inner
             .load_execution(data, runtime, frame)
-            .map_err(PyValueError::new_err)
+            .map_err(PyValueError::new_err)?;
+        self.audio_copied = None;
+        Ok(())
     }
     fn rtc_present(&self) -> bool {
         self.inner.mb.cartridge.rtc.is_some()
@@ -636,7 +671,9 @@ impl Emulator {
         Err(profiling_unavailable())
     }
     fn load_state(&mut self, data: &[u8]) -> PyResult<()> {
-        self.inner.load_state(data).map_err(PyValueError::new_err)
+        self.inner.load_state(data).map_err(PyValueError::new_err)?;
+        self.audio_copied = None;
+        Ok(())
     }
 }
 
