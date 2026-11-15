@@ -118,11 +118,28 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
+      # The Linux x86_64 wheel is built with the committed PGO profile and the
+      # Rust toolchain it was recorded with (pgo/profile.txt). The profile only
+      # matches that toolchain and target, so the other wheels build without it.
+      # A stale profile is still safe, it only loses speed. See docs/RELEASING.md.
+      - name: Use the PGO profile
+        id: pgo
+        if: matrix.name == 'linux-x86_64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! bash tools/pgo.sh check
+          then
+            echo "::warning::pgo/linux-x86_64.profdata is stale, so parts of the Linux x86_64 wheel build without PGO. Refresh it with tools/pgo.sh record (docs/RELEASING.md)."
+          fi
+          echo "toolchain=$(sed -n 's/^toolchain=//p' pgo/profile.txt)" >> "$GITHUB_OUTPUT"
+          echo "RUSTFLAGS=-Cprofile-use=$GITHUB_WORKSPACE/pgo/linux-x86_64.profdata -Cllvm-args=-pgo-warn-missing-function" >> "$GITHUB_ENV"
       # Pinned: maturin 1.16 writes the manylinux tags in the other order, which
       # changes the wheel names the release job and the README expect.
       - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           maturin-version: v1.15.0
+          rust-toolchain: ${{ steps.pgo.outputs.toolchain }}
           target: ${{ matrix.target }}
           manylinux: ${{ matrix.manylinux }}
           args: --release --locked --out dist
