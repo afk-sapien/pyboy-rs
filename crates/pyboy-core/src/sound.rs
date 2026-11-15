@@ -37,9 +37,156 @@ impl Deadline {
     }
 }
 
+/// Equivalent to `while clock as f64 >= target { target += step }`, bit for
+/// bit, for any target, step and clock. With sampling off this loop is the
+/// whole sample clock and runs about 800 times a frame.
+///
+/// In the binade [2^e, 2^(e+1)) every f64 is m * u with u = 2^(e-52) and a
+/// whole m. So target + step rounds to m * u plus step / u rounded to a
+/// whole number of ulps, ties to an even m. While the exact sum stays in the
+/// binade, every pass adds the same whole number of ulps. On a tie that
+/// holds from the first even m, so one plain pass from an odd m comes first.
+/// Passes that leave the binade, and targets or steps outside the range the
+/// shortcut handles, take the plain loop.
+#[inline]
+fn catch_up_target(mut target: f64, step: f64, clock: i64) -> f64 {
+    let at = clock as f64;
+    while at >= target {
+        // Each plain pass is a few cycles, so a short gap is not worth a jump.
+        if at - target < 32.0 * step {
+            target += step;
+            continue;
+        }
+        let bits = target.to_bits();
+        let e = ((bits >> 52) & 0x7ff) as i64 - 1023;
+        if !(0..52).contains(&e) || !(1.0..2e15).contains(&step) {
+            target += step;
+            continue;
+        }
+        let shift = (52 - e) as u32;
+        let m = (bits & ((1 << 52) - 1)) | (1 << 52);
+        // step * 2^shift, exact, and its whole and fractional ulps.
+        let scaled = step * f64::from_bits((1023 + u64::from(shift)) << 52);
+        if scaled >= (1u64 << 52) as f64 {
+            target += step;
+            continue;
+        }
+        let whole = scaled as u64;
+        let frac = scaled - whole as f64;
+        let ulps = if frac > 0.5 {
+            whole + 1
+        } else if frac < 0.5 {
+            whole
+        } else if m % 2 == 0 {
+            whole + (whole & 1)
+        } else {
+            target += step;
+            continue;
+        };
+        // The clock in ulps, and the first pass count that passes it.
+        let need = if (clock as u64) >> (63 - shift) != 0 {
+            u64::MAX
+        } else {
+            ((clock as u64) << shift).saturating_sub(m) / ulps + 1
+        };
+        // Passes that keep m + ulps plus the next step below 2^53.
+        let room = ((1u64 << 53) - 2 - ulps).saturating_sub(m) / ulps;
+        let passes = need.min(room);
+        if passes == 0 {
+            target += step;
+            continue;
+        }
+        target = (m + passes * ulps) as f64 * f64::from_bits((1023 - u64::from(shift)) << 52);
+    }
+    target
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ceil_cycles;
+    use super::{catch_up_target, ceil_cycles};
+
+    fn plain(mut target: f64, step: f64, clock: i64) -> f64 {
+        let at = clock as f64;
+        while at >= target {
+            target += step;
+        }
+        target
+    }
+
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn below(&mut self, bound: u64) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (self.0 >> 11) % bound
+        }
+    }
+
+    fn check(target: f64, step: f64, clock: i64) {
+        assert_eq!(
+            catch_up_target(target, step, clock).to_bits(),
+            plain(target, step, clock).to_bits(),
+            "target {target:e} step {step:e} clock {clock}"
+        );
+    }
+
+    // Every supported sample rate, steps whose low bits make a tie in some
+    // binade, targets at both ends of every binade the sound clock reaches,
+    // and a long run caught up in random chunks.
+    #[test]
+    fn catching_up_the_sample_target_matches_the_plain_loop() {
+        let mut rng = Lcg(7);
+        let mut steps: Vec<f64> = [48000, 44100, 32760, 22020, 96000, 8040, 384000]
+            .iter()
+            .map(|rate| 70224.0 / f64::from(rate / 60))
+            .collect();
+        for _ in 0..12 {
+            let step = 87.0 + rng.below(1 << 20) as f64 / (1 << 20) as f64;
+            steps.extend([
+                step,
+                f64::from_bits(step.to_bits() | 1),
+                f64::from_bits(step.to_bits() & !0xff),
+            ]);
+        }
+        for &step in &steps {
+            for e in 0..48 {
+                let edge = (1u64 << e) as f64;
+                for target in [
+                    edge,
+                    f64::from_bits(edge.to_bits() - 1),
+                    f64::from_bits(edge.to_bits() + 1),
+                    edge * 1.5,
+                    (edge * 2.0 - 40.0 * step).max(1.0),
+                ] {
+                    for span in [0, 1, 50, 3000, 70224, 1 << 18] {
+                        check(target, step, target as i64 + span);
+                    }
+                }
+            }
+            let mut fast = step;
+            let mut slow = step;
+            let mut clock = 0;
+            for _ in 0..500 {
+                clock += rng.below(1 << 18) as i64;
+                fast = catch_up_target(fast, step, clock);
+                slow = plain(slow, step, clock);
+                assert_eq!(fast.to_bits(), slow.to_bits(), "step {step} clock {clock}");
+            }
+            for _ in 0..200 {
+                let e = rng.below(46) + 1;
+                let base = (1u64 << e) + rng.below(1 << e);
+                let target = base as f64 + rng.below(1 << 20) as f64 / 1024.0;
+                let clock = base as i64 + rng.below(1 << 16) as i64 - (1 << 10);
+                check(target, step, clock.max(0));
+            }
+        }
+        for (target, step, clock) in [(0.0, 87.78, 5000), (-3.5, 87.78, 5000), (5.0, 0.75, 9000)] {
+            check(target, step, clock);
+        }
+    }
 
     #[test]
     fn cycle_rounding_matches_float_ceil_and_saturating_cast() {
@@ -549,10 +696,7 @@ impl Sound {
             clock += elapsed;
             if clock >= sample_at {
                 if self.disable_sampling {
-                    let clock = clock as f64;
-                    while clock >= sample_target {
-                        sample_target += self.cycles_per_sample;
-                    }
+                    sample_target = catch_up_target(sample_target, self.cycles_per_sample, clock);
                     sample_at = ceil_cycles(sample_target);
                 } else {
                     while clock >= sample_at {

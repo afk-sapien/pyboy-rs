@@ -126,7 +126,8 @@ pub fn advance_wave(channel: &mut WaveChannel, cycles: i64, divider: &mut Divide
 /// written k - j steps ago otherwise. The taps of the next k steps depend only
 /// on the old register while k is at most 14 (6 for the separate 7-bit low
 /// part), so they are `(r ^ r >> 1)` masked to k bits. One update covers that
-/// many steps.
+/// many steps. Runs of at least `JUMP_STEPS` steps look the result up on the
+/// register's cycle instead, see `jump_noise`.
 #[inline]
 pub fn advance_noise(channel: &mut NoiseChannel, cycles: i64, divider: &mut Divider) {
     let left = channel.periodtimer - cycles;
@@ -145,6 +146,10 @@ pub fn advance_noise(channel: &mut NoiseChannel, cycles: i64, divider: &mut Divi
     }
     let (left, mut steps) = reload(left, channel.period, divider);
     channel.periodtimer = left;
+    if steps >= JUMP_STEPS {
+        channel.shiftregister = jump_noise(channel.shiftregister, steps, chunk == 14);
+        return;
+    }
     let mut register = channel.shiftregister;
     while steps > 0 {
         let k = steps.min(chunk);
@@ -160,6 +165,71 @@ pub fn advance_noise(channel: &mut NoiseChannel, cycles: i64, divider: &mut Divi
         steps -= k;
     }
     channel.shiftregister = register;
+}
+
+/// The shortest run of noise steps that `advance_noise` looks up instead of
+/// stepping. Two table reads cost about as much as a few 14-step updates, and
+/// the 7-bit lookup needs at least 8 steps.
+const JUMP_STEPS: i64 = 64;
+
+/// One cycle of a noise register: the values in step order and each value's
+/// place in it. Both feedback polynomials, x^15 + x + 1 for the 15-bit
+/// register and x^7 + x + 1 for the low part of the 7-bit one, are
+/// primitive, so the cycle from 1 holds every value but 0, which steps to
+/// itself.
+struct NoiseCycle<const N: usize, const M: usize> {
+    value: [u16; N],
+    place: [u16; M],
+}
+
+impl<const N: usize, const M: usize> NoiseCycle<N, M> {
+    /// The register `width` bits wide: shift right, tap `bit0 ^ bit1` into
+    /// the top bit.
+    const fn new(width: u32) -> Self {
+        let mut cycle = NoiseCycle {
+            value: [0; N],
+            place: [0; M],
+        };
+        let mut register = 1u32;
+        let mut index = 0;
+        while index < N {
+            cycle.value[index] = register as u16;
+            cycle.place[register as usize] = index as u16;
+            let tap = (register ^ (register >> 1)) & 1;
+            register = (register >> 1) | (tap << (width - 1));
+            index += 1;
+        }
+        cycle
+    }
+
+    /// `register` after `steps` steps.
+    #[inline(always)]
+    fn ahead(&self, register: i64, steps: u64) -> i64 {
+        if register == 0 {
+            return 0;
+        }
+        let place = u64::from(self.place[register as usize]) + steps % N as u64;
+        i64::from(self.value[(place % N as u64) as usize])
+    }
+}
+
+static NOISE_15: NoiseCycle<32767, 32768> = NoiseCycle::new(15);
+static NOISE_7: NoiseCycle<127, 128> = NoiseCycle::new(7);
+
+/// A noise register in 0..0x8000 after at least 8 steps. In 7-bit mode the
+/// low 7 bits run on their own, and bits 14 and 6 both take each new tap.
+/// So bits 8 to 14 repeat bits 0 to 6, and bit 7 holds the bit that the last
+/// step shifted out of bit 0.
+#[inline]
+fn jump_noise(register: i64, steps: i64, wide: bool) -> i64 {
+    let steps = steps as u64;
+    if wide {
+        return NOISE_15.ahead(register, steps);
+    }
+    let low = register & 0x7f;
+    let now = NOISE_7.ahead(low, steps);
+    let before = NOISE_7.ahead(low, steps - 1);
+    (now << 8) | ((before & 1) << 7) | now
 }
 
 #[cfg(test)]
@@ -242,6 +312,71 @@ mod tests {
                         channel.shiftregister = register;
                     }
                     reference.tick(8 * steps);
+                    advance_noise(&mut fast, 8 * steps, &mut divider);
+                    assert_eq!(
+                        (fast.shiftregister, fast.periodtimer),
+                        (reference.shiftregister, reference.periodtimer),
+                        "feed {feed:#x} register {register:#x} steps {steps}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn noise_cycles_hold_every_register_once() {
+        fn check<const N: usize, const M: usize>(cycle: &NoiseCycle<N, M>) {
+            let mut seen = vec![false; M];
+            for (index, &value) in cycle.value.iter().enumerate() {
+                let value = usize::from(value);
+                assert!(value != 0 && !seen[value], "value {value:#x}");
+                seen[value] = true;
+                assert_eq!(usize::from(cycle.place[value]), index);
+            }
+        }
+        check(&NOISE_15);
+        check(&NOISE_7);
+    }
+
+    // Runs past both cycle lengths and their multiples, from registers that
+    // cover every value of the low 7 bits and the 0 that never moves.
+    #[test]
+    fn noise_jumps_match_the_generated_loop() {
+        let mut divider = Divider::default();
+        let mut reference = NoiseChannel::new();
+        let mut fast = NoiseChannel::new();
+        let counts = [
+            JUMP_STEPS - 1,
+            JUMP_STEPS,
+            JUMP_STEPS + 1,
+            126,
+            127,
+            128,
+            254,
+            255,
+            1000,
+            32766,
+            32767,
+            32768,
+            65535,
+            100_000,
+        ];
+        let mut registers: Vec<i64> = (0..0x8000).step_by(97).collect();
+        registers.extend([0, 1, 0x40, 0x7f, 0x80, 0x4000, 0x7f80, 0x7fff]);
+        for feed in [0x4000, 0x4040] {
+            for &register in &registers {
+                reference.period = 8;
+                reference.periodtimer = 8;
+                reference.lfsrfeed = feed;
+                reference.shiftregister = register;
+                let mut done = 0;
+                for &steps in &counts {
+                    reference.tick(8 * (steps - done));
+                    done = steps;
+                    fast.period = 8;
+                    fast.periodtimer = 8;
+                    fast.lfsrfeed = feed;
+                    fast.shiftregister = register;
                     advance_noise(&mut fast, 8 * steps, &mut divider);
                     assert_eq!(
                         (fast.shiftregister, fast.periodtimer),
