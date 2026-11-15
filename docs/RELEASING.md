@@ -66,13 +66,16 @@ Nothing is registered or published by the repository itself.
 1. Bump the version in `pyproject.toml`, `Cargo.toml` (and `Cargo.lock`) and
    `python/pyboy_rs/__init__.py`; add a `CHANGELOG.md` entry. A test fails if
    they disagree.
-2. Commit the bump, then record a fresh PGO profile (below) and commit it in
-   the same pull request. The version is part of every symbol name, so a bump
-   leaves the old profile matching nothing.
+2. Commit the bump, then record a fresh PGO profile (below) with
+   `tools/pgo.sh record` and commit `pgo/linux-x86_64.profdata` and
+   `pgo/profile.txt` in the same pull request. The version is part of every
+   symbol name, so a bump leaves the old profile matching nothing, and a tag
+   build fails until the profile is recorded again.
 3. Merge to `main` through a pull request and check that the `Wheels` workflow
    is green (run it with `workflow_dispatch` if needed).
 4. Do a dry run (above) on the merge commit and check that every job passes
-   and that the Linux x86_64 job shows no stale profile warning.
+   and that the Linux x86_64 job shows no stale profile warning. A tag build
+   would fail on that warning.
 5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` job
    attaches the files and publishes the release (drafted first, published after
    the upload, so it is never public without its assets).
@@ -112,9 +115,18 @@ its control flow. The symbol name includes the crate version and the toolchain.
   speed of a build without PGO. rustc warns `no profile data available` for
   each function.
 
-A stale profile never fails a build or changes behavior, it only loses speed.
-The workflow runs `tools/pgo.sh check` and puts a warning on the run when the
-fingerprint differs from HEAD.
+A stale profile never changes behavior, it only loses speed. The workflow runs
+`tools/pgo.sh check`, which compares the recorded source fingerprint and
+version with the commit being built.
+
+- On a `vX.Y.Z` tag push a stale profile fails the Linux x86_64 job, so the
+  release is not published. Record the profile again, merge it and tag a new
+  commit. Never move a tag.
+- On a manual run it only puts a warning on the run, so a dry run of work in
+  progress still builds every wheel.
+
+So the release order is: bump the version, record the profile, commit both,
+merge, dry run, then tag.
 
 ### Refreshing the profile
 

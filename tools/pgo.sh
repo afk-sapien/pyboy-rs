@@ -13,10 +13,11 @@
 # profile holds function names and counters only, and record checks that no
 # 64-byte stretch of any ROM or state appears in it.
 #
-# check compares that fingerprint with HEAD. It exits 1 if the Rust source, a
-# manifest or Cargo.lock changed since the profile was recorded. A stale profile
-# is still safe to build with: changed functions lose their profile and are
-# optimized as without PGO.
+# check compares that fingerprint and the workspace version with HEAD. It exits
+# 1 if the Rust source, a manifest, Cargo.lock or the version changed since the
+# profile was recorded. A stale profile is still safe to build with: changed
+# functions lose their profile and are optimized as without PGO. The Wheels
+# workflow fails a tag build on a stale profile and only warns otherwise.
 #
 # Environment:
 #   PGO_TOOLCHAIN     toolchain to record with (default: the one in pgo/profile.txt)
@@ -45,6 +46,10 @@ value() {
   sed -n "s/^$1=//p" "$manifest"
 }
 
+version() {
+  git show HEAD:Cargo.toml | sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p'
+}
+
 fingerprint() {
   local paths=()
   for path in $sources
@@ -55,14 +60,25 @@ fingerprint() {
 }
 
 check() {
-  local recorded current
+  local recorded current recorded_version current_version
   recorded=$(value source)
   current=$(fingerprint)
+  recorded_version=$(value version)
+  current_version=$(version)
   [ -n "$recorded" ] || die "no source fingerprint in $manifest"
+  [ -n "$recorded_version" ] || die "no version in $manifest"
+  if [ "$recorded" = "$current" ] && [ "$recorded_version" = "$current_version" ]
+  then
+    echo "pgo profile matches the source at HEAD (version $current_version, source $current)"
+    return 0
+  fi
+  if [ "$recorded_version" != "$current_version" ]
+  then
+    echo "pgo profile is stale: recorded for version $recorded_version, HEAD has $current_version"
+  fi
   if [ "$recorded" = "$current" ]
   then
-    echo "pgo profile matches the source at HEAD ($current)"
-    return 0
+    return 1
   fi
   echo "pgo profile is stale: recorded from source $recorded at $(value commit), HEAD has $current"
   if git cat-file -e "$(value commit)^{commit}" 2>/dev/null
@@ -142,6 +158,7 @@ record() {
     echo "toolchain=$toolchain"
     echo "target=$target"
     echo "maturin=$have"
+    echo "version=$(version)"
     echo "source=$(fingerprint)"
     echo "commit=$(git rev-parse HEAD)"
     echo "frames=$frames"

@@ -121,7 +121,9 @@ jobs:
       # The Linux x86_64 wheel is built with the committed PGO profile and the
       # Rust toolchain it was recorded with (pgo/profile.txt). The profile only
       # matches that toolchain and target, so the other wheels build without it.
-      # A stale profile is still safe, it only loses speed. See docs/RELEASING.md.
+      # A stale profile is still safe, it only loses speed. A tag build fails on
+      # one so no release ships without PGO. A manual run only warns. See
+      # docs/RELEASING.md.
       - name: Use the PGO profile
         id: pgo
         if: matrix.name == 'linux-x86_64'
@@ -130,6 +132,11 @@ jobs:
           set -euo pipefail
           if ! bash tools/pgo.sh check
           then
+            if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]
+            then
+              echo "::error::pgo/linux-x86_64.profdata was not recorded from the source of $GITHUB_REF_NAME. Record it with tools/pgo.sh record after the version bump and commit it before tagging (docs/RELEASING.md)."
+              exit 1
+            fi
             echo "::warning::pgo/linux-x86_64.profdata is stale, so parts of the Linux x86_64 wheel build without PGO. Refresh it with tools/pgo.sh record (docs/RELEASING.md)."
           fi
           echo "toolchain=$(sed -n 's/^toolchain=//p' pgo/profile.txt)" >> "$GITHUB_OUTPUT"
