@@ -20,6 +20,16 @@
   already jumps to the next device deadline, so halts needed no change. On
   one core, the six Red and Crystal bench scenes run 2% to 20% faster with
   sound emulated and sampling off, 14% faster on average.
+- CPU reads and writes of work RAM, its echo up to 0xefff, high RAM, video
+  RAM, the ROM banks and MBC3 and MBC5 cartridge RAM look up a table of 4 KiB
+  pages instead of matching the address against every region. Each entry is a
+  buffer offset derived from the bank registers. Bank switches, RAM enable,
+  VBK, SVBK, the boot ROM register and state loads rebuild the table, so it
+  never enters a save state. IO registers, OAM, the clock registers and other
+  cartridge RAM keep the full path. A cartridge write now reads the host clock
+  only when it writes the MBC3 clock. Save states and audio samples are
+  identical to 0.1.6. On one core, the six Red and Crystal bench scenes run 5%
+  to 23% faster with sound emulated and sampling off, 13% faster on average.
 
 ## 0.1.6
 
