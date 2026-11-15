@@ -337,6 +337,9 @@ impl Machine {
     }
 
     fn codec(&mut self, c: &mut Codec, wall: f64) -> Result<(), &'static str> {
+        // A save stores the channel timers as of now, and a load replaces
+        // them, so no lag may outlive this.
+        self.mb.sound.settle_channels();
         let mut version = 15;
         c.byte(&mut version)?;
         if version != 15 {

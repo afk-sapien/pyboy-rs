@@ -12,14 +12,41 @@
 
 use crate::channels::{NoiseChannel, SweepChannel, ToneChannel, WaveChannel};
 
+/// Divides by one channel's period with a cached reciprocal. A 64-bit
+/// division costs tens of cycles, and a period shorter than the time between
+/// two samples reloads more than once on most ticks. For a dividend and a
+/// divisor below 2^32 the quotient is `ceil(2^64 / d) * n >> 64`, which is
+/// exact (Lemire, Kaser and Kurz, "Faster Remainder by Direct Computation",
+/// 2019). Anything else uses the division.
+#[derive(Debug, Clone, Default)]
+pub struct Divider {
+    divisor: u64,
+    reciprocal: u64,
+}
+
+impl Divider {
+    #[inline(always)]
+    fn quotient(&mut self, dividend: i64, divisor: i64) -> i64 {
+        const LIMIT: i64 = 1 << 32;
+        if !(0..LIMIT).contains(&dividend) || !(2..LIMIT).contains(&divisor) {
+            return dividend / divisor;
+        }
+        if self.divisor != divisor as u64 {
+            self.divisor = divisor as u64;
+            self.reciprocal = u64::MAX / self.divisor + 1;
+        }
+        ((u128::from(self.reciprocal) * dividend as u128) >> 64) as i64
+    }
+}
+
 /// The timer after `timer <= 0` has been reloaded until positive, and the
 /// number of reloads. `period` must be positive.
 #[inline(always)]
-fn reload(timer: i64, period: i64) -> (i64, i64) {
+fn reload(timer: i64, period: i64, divider: &mut Divider) -> (i64, i64) {
     if timer + period > 0 {
         (timer + period, 1)
     } else {
-        let reloads = -timer / period + 1;
+        let reloads = divider.quotient(-timer, period) + 1;
         (timer + reloads * period, reloads)
     }
 }
@@ -27,7 +54,14 @@ fn reload(timer: i64, period: i64) -> (i64, i64) {
 /// Runs a square or wave timer forward. Returns false, with nothing changed,
 /// when the caller must fall back to the generated loop.
 #[inline(always)]
-fn step_frames(timer: &mut i64, period: i64, frame: &mut i64, frames: i64, cycles: i64) -> bool {
+fn step_frames(
+    timer: &mut i64,
+    period: i64,
+    frame: &mut i64,
+    frames: i64,
+    cycles: i64,
+    divider: &mut Divider,
+) -> bool {
     let left = *timer - cycles;
     if left > 0 {
         *timer = left;
@@ -36,7 +70,7 @@ fn step_frames(timer: &mut i64, period: i64, frame: &mut i64, frames: i64, cycle
     if period <= 0 || !(0..frames).contains(frame) {
         return false;
     }
-    let (left, reloads) = reload(left, period);
+    let (left, reloads) = reload(left, period, divider);
     *timer = left;
     *frame = (*frame + reloads) % frames;
     true
@@ -44,42 +78,42 @@ fn step_frames(timer: &mut i64, period: i64, frame: &mut i64, frames: i64, cycle
 
 /// Same result as `ToneChannel::tick`.
 #[inline]
-pub fn advance_tone(channel: &mut ToneChannel, cycles: i64) {
+pub fn advance_tone(channel: &mut ToneChannel, cycles: i64, divider: &mut Divider) {
     let ToneChannel {
         periodtimer,
         period,
         waveframe,
         ..
     } = channel;
-    if !step_frames(periodtimer, *period, waveframe, 8, cycles) {
+    if !step_frames(periodtimer, *period, waveframe, 8, cycles, divider) {
         channel.tick(cycles);
     }
 }
 
 /// Same result as `SweepChannel::tick`.
 #[inline]
-pub fn advance_sweep(channel: &mut SweepChannel, cycles: i64) {
+pub fn advance_sweep(channel: &mut SweepChannel, cycles: i64, divider: &mut Divider) {
     let SweepChannel {
         periodtimer,
         period,
         waveframe,
         ..
     } = channel;
-    if !step_frames(periodtimer, *period, waveframe, 8, cycles) {
+    if !step_frames(periodtimer, *period, waveframe, 8, cycles, divider) {
         channel.tick(cycles);
     }
 }
 
 /// Same result as `WaveChannel::tick`.
 #[inline]
-pub fn advance_wave(channel: &mut WaveChannel, cycles: i64) {
+pub fn advance_wave(channel: &mut WaveChannel, cycles: i64, divider: &mut Divider) {
     let WaveChannel {
         periodtimer,
         period,
         waveframe,
         ..
     } = channel;
-    if !step_frames(periodtimer, *period, waveframe, 32, cycles) {
+    if !step_frames(periodtimer, *period, waveframe, 32, cycles, divider) {
         channel.tick(cycles);
     }
 }
@@ -94,7 +128,7 @@ pub fn advance_wave(channel: &mut WaveChannel, cycles: i64) {
 /// part), so they are `(r ^ r >> 1)` masked to k bits. One update covers that
 /// many steps.
 #[inline]
-pub fn advance_noise(channel: &mut NoiseChannel, cycles: i64) {
+pub fn advance_noise(channel: &mut NoiseChannel, cycles: i64, divider: &mut Divider) {
     let left = channel.periodtimer - cycles;
     if left > 0 {
         channel.periodtimer = left;
@@ -109,7 +143,7 @@ pub fn advance_noise(channel: &mut NoiseChannel, cycles: i64) {
         channel.tick(cycles);
         return;
     }
-    let (left, mut steps) = reload(left, channel.period);
+    let (left, mut steps) = reload(left, channel.period, divider);
     channel.periodtimer = left;
     let mut register = channel.shiftregister;
     while steps > 0 {
@@ -145,7 +179,57 @@ mod tests {
     }
 
     #[test]
+    fn divider_matches_division() {
+        let mut rng = Lcg(0xd1d);
+        let wide = |rng: &mut Lcg| (rng.below(1 << 16) << 16) | rng.below(1 << 16);
+        let mut divider = Divider::default();
+        let edges = [
+            0,
+            1,
+            2,
+            3,
+            7,
+            8,
+            87,
+            88,
+            4095,
+            1 << 31,
+            (1 << 32) - 2,
+            (1 << 32) - 1,
+        ];
+        let mut check = |dividend: i64, divisor: i64| {
+            assert_eq!(
+                divider.quotient(dividend, divisor),
+                dividend / divisor,
+                "{dividend} / {divisor}"
+            );
+        };
+        for &divisor in &edges[1..] {
+            for &dividend in &edges {
+                check(dividend, divisor);
+            }
+            check(1 << 32, divisor);
+            check(i64::MAX, divisor);
+        }
+        for _ in 0..1_000_000 {
+            let divisor = if rng.below(2) == 0 {
+                1 + rng.below(112 << 15)
+            } else {
+                wide(&mut rng).max(1)
+            };
+            let dividend = match rng.below(3) {
+                0 => wide(&mut rng),
+                1 => rng.below(divisor * 40 + 1),
+                _ => (divisor * rng.below(1 << 10)).min((1 << 32) - 1),
+            };
+            check(dividend, divisor);
+            check(dividend, 1 << rng.below(32));
+        }
+    }
+
+    #[test]
     fn noise_matches_the_generated_loop_for_every_register() {
+        let mut divider = Divider::default();
         let mut reference = NoiseChannel::new();
         let mut fast = NoiseChannel::new();
         for feed in [0x4000, 0x4040] {
@@ -158,7 +242,7 @@ mod tests {
                         channel.shiftregister = register;
                     }
                     reference.tick(8 * steps);
-                    advance_noise(&mut fast, 8 * steps);
+                    advance_noise(&mut fast, 8 * steps, &mut divider);
                     assert_eq!(
                         (fast.shiftregister, fast.periodtimer),
                         (reference.shiftregister, reference.periodtimer),
@@ -174,6 +258,7 @@ mod tests {
     #[test]
     fn every_channel_matches_the_generated_loop() {
         let mut rng = Lcg(0x5eed);
+        let mut dividers: [Divider; 4] = Default::default();
         let mut tone = ToneChannel::new();
         let mut sweep = SweepChannel::new();
         let mut wave = WaveChannel::new(1);
@@ -199,7 +284,7 @@ mod tests {
             tone.waveframe = frame;
             let mut expected = tone.clone();
             expected.tick(cycles);
-            advance_tone(&mut tone, cycles);
+            advance_tone(&mut tone, cycles, &mut dividers[0]);
             assert_eq!(format!("{tone:?}"), format!("{expected:?}"));
 
             sweep.period = period;
@@ -207,7 +292,7 @@ mod tests {
             sweep.waveframe = frame;
             let mut expected = sweep.clone();
             expected.tick(cycles);
-            advance_sweep(&mut sweep, cycles);
+            advance_sweep(&mut sweep, cycles, &mut dividers[1]);
             assert_eq!(format!("{sweep:?}"), format!("{expected:?}"));
 
             wave.period = period;
@@ -219,7 +304,7 @@ mod tests {
             };
             let mut expected = wave.clone();
             expected.tick(cycles);
-            advance_wave(&mut wave, cycles);
+            advance_wave(&mut wave, cycles, &mut dividers[2]);
             assert_eq!(format!("{wave:?}"), format!("{expected:?}"));
 
             noise.period = period;
@@ -236,7 +321,7 @@ mod tests {
             };
             let mut expected = noise.clone();
             expected.tick(cycles);
-            advance_noise(&mut noise, cycles);
+            advance_noise(&mut noise, cycles, &mut dividers[3]);
             assert_eq!(format!("{noise:?}"), format!("{expected:?}"));
         }
     }
