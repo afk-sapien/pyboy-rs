@@ -199,6 +199,21 @@ impl Lcd {
         }
     }
 
+    /// The cycle of the next mode change in single speed. A tick that ends
+    /// before it only advances the clock, so the scheduler can merge such
+    /// ticks.
+    #[inline]
+    pub fn next_mode_change(&self) -> i64 {
+        self.last_cycles + self.clock_target - self.clock
+    }
+
+    /// Whether a tick to `cycles` in single speed would change mode. It stays
+    /// true while the clock lags its target, since each tick takes one step.
+    #[inline]
+    pub fn mode_change_due(&self, cycles: i64) -> bool {
+        self.next_mode_change() <= cycles
+    }
+
     pub fn tick(&mut self, cycles: i64) -> u8 {
         let elapsed = cycles - self.last_cycles;
         if elapsed == 0 {

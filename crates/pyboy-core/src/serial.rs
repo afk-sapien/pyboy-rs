@@ -47,6 +47,19 @@ impl Serial {
         self.cycles_to_interrupt = self.clock_target - self.clock;
     }
 
+    /// The cycle at which the serial clock reaches its target. A tick that
+    /// ends before it only counts, so the scheduler can merge such ticks.
+    #[inline]
+    pub fn next_target(&self) -> i64 {
+        self.last_cycles + self.clock_target - self.clock
+    }
+
+    /// Whether a tick to `absolute_cycles` would finish a transfer.
+    #[inline]
+    pub fn transfer_due(&self, absolute_cycles: i64) -> bool {
+        self.transfer_enabled != 0 && self.next_target() <= absolute_cycles
+    }
+
     pub fn tick(&mut self, absolute_cycles: i64) -> bool {
         let cycles = absolute_cycles - self.last_cycles;
         if cycles == 0 {

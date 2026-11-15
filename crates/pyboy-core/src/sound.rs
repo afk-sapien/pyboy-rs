@@ -212,6 +212,36 @@ impl Sound {
         }
     }
 
+    /// Whether a tick to `absolute_cycles` in single speed would start or
+    /// finish a 512 Hz frame sequencer step. A step is found at the start of
+    /// the first tick that begins at or past its target and lands at the end
+    /// of that tick, so the scheduler has to tick at both of those points.
+    /// Other ticks only advance the channels in closed form and take samples
+    /// at fixed deadlines, so it can merge them.
+    #[inline]
+    pub fn frame_step_due(&self, absolute_cycles: i64) -> bool {
+        self.emulate
+            && (self.cycles + absolute_cycles - self.last_cycles) as f64 >= self.cycles_target_512hz
+    }
+
+    /// PyBoy compares `cycles_to_interrupt`, a reading of the sound clock,
+    /// with deadlines of the other devices that count from now. A tick in
+    /// single speed sets it to the rounded up sample or frame sequencer
+    /// target, and both targets only grow. Returns true when neither the
+    /// value now nor any value a tick could leave is below `bound`, so a
+    /// skipped tick cannot change the length of the next slice.
+    #[inline]
+    pub fn deadline_settled(&self, bound: u64) -> bool {
+        if !self.emulate {
+            return true;
+        }
+        // For a whole number m, x.ceil() >= m exactly when x > m - 1.
+        let floor = bound as f64 - 1.0;
+        self.cycles_to_interrupt as u64 >= bound
+            && self.cycles_target > floor
+            && self.cycles_target_512hz > floor
+    }
+
     // Long-running checkpoints can call this at instruction granularity.
     #[inline(always)]
     pub fn tick(&mut self, absolute_cycles: i64) {

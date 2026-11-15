@@ -10,6 +10,16 @@
   samples are identical to 0.1.6. On one core, Red and Crystal scenes run up to
   18% faster with sound emulated and sampling off, and up to 8% faster with
   sound sampled. Scenes with little sound activity are unchanged.
+- The end of each run of CPU time ticks only the devices with an event due.
+  PyBoy ticks the sound, serial port, timer and LCD every time, 470 to 620
+  times a frame, although most of those ticks only advance a clock. In single
+  speed a skipped device catches up when the CPU reads or writes one of its
+  registers and at the end of the frame, so every run of CPU time ends at the
+  same cycle as before. Double speed and single stepping still tick every
+  device. Save states and audio samples are identical to 0.1.6. A halted CPU
+  already jumps to the next device deadline, so halts needed no change. On
+  one core, the six Red and Crystal bench scenes run 2% to 20% faster with
+  sound emulated and sampling off, 14% faster on average.
 
 ## 0.1.6
 
