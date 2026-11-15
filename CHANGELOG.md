@@ -33,9 +33,9 @@
 - The Linux x86_64 wheel is built with profile-guided optimization from a
   committed profile of Red and Crystal play, recorded with `tools/pgo.sh` and
   built with Rust 1.97.1. Save states and audio are identical to a build
-  without it. Through Python on one core, Red and Crystal scenes run 12% to 50%
-  faster in the PokeSim pattern (a render every 30 frames, no sampling), 4% to
-  22% faster with render and sound every frame, and up to 15% faster headless.
+  without it. Through Python on one core, Red and Crystal scenes run 12% to 33%
+  faster in the PokeSim pattern (a render every 30 frames, no sampling), up to
+  12% faster with render and sound every frame, and 12% to 24% faster headless.
   The other wheels and the sdist are unchanged. The profile holds no ROM or
   save data. See `docs/RELEASING.md` for how to refresh it.
 

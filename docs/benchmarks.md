@@ -84,40 +84,41 @@ install a wheel built with `maturin build --release` first.
 The Linux x86_64 wheel is built with a committed PGO profile (see
 [Releasing](RELEASING.md#profile-guided-linux-x86_64-wheel)). The profile was
 recorded from ten Red and Crystal states that are not among the scenes below.
-The tables give the change in median emulated frames per second against a
-build of the same source without PGO, on one pinned core of the same machine.
-The two builds alternate per mode over two rounds of three trials. The machine
-was not idle, so trials spread widely and changes under about 5% are noise.
+The tables give the change in emulated frames per second against a build of
+the same source without PGO, on one pinned core of the same machine. For each
+mode and scene the two builds alternate one trial at a time over eight pairs,
+and the table gives the median of the eight ratios. The machine was not idle,
+so single pairs spread widely and changes under about 5% are noise.
 
 The native harness, built with a profile recorded from the harness itself, at
-30,000 frames per trial:
+20,000 frames per trial:
 
 | Game and scene | pokesim | full | headless |
 | --- | ---: | ---: | ---: |
-| Red overworld | +13.4% | +18.1% | +23.1% |
-| Red battle | +55.8% | +27.3% | +28.0% |
-| Red menu | +39.6% | +28.6% | +19.0% |
-| Crystal overworld | +26.8% | +1.8% | +14.7% |
-| Crystal battle | +45.3% | +40.7% | +56.6% |
-| Crystal start menu | +13.0% | +2.8% | +21.9% |
+| Red overworld | +12.0% | +8.1% | +13.3% |
+| Red battle | +17.5% | +9.9% | +18.2% |
+| Red menu | +16.0% | +11.1% | +28.6% |
+| Crystal overworld | +11.9% | +9.2% | +13.4% |
+| Crystal battle | +19.3% | +12.0% | +29.2% |
+| Crystal start menu | +17.4% | +14.7% | +16.8% |
 
 The Linux x86_64 wheel through Python, built with the committed profile, at
 12,000 frames per trial:
 
 | Game and scene | pokesim | full | headless |
 | --- | ---: | ---: | ---: |
-| Red overworld | +12.4% | +4.3% | +0.1% |
-| Red battle | +49.8% | +7.2% | +2.4% |
-| Red menu | +40.6% | +9.0% | +6.3% |
-| Crystal overworld | +20.3% | +11.6% | +2.7% |
-| Crystal battle | +13.6% | +12.5% | +14.7% |
-| Crystal start menu | +28.3% | +21.6% | +5.1% |
+| Red overworld | +15.0% | +3.3% | +15.3% |
+| Red battle | +33.3% | +11.9% | +24.4% |
+| Red menu | +16.7% | +0.8% | +16.8% |
+| Crystal overworld | +13.7% | +3.0% | +13.6% |
+| Crystal battle | +22.1% | +8.4% | +17.5% |
+| Crystal start menu | +11.6% | +8.6% | +12.3% |
 
 pokesim renders one frame in 30 and does not sample sound. full renders and
 samples sound every frame. headless does neither. Sound hardware stays
 emulated in all three. Through Python, pokesim and headless call `tick(4)` and
 full calls `tick(1)` and reads the samples. The profile was recorded mostly
-from the pokesim pattern, which gains the most.
+from the pokesim pattern.
 
 Save states and audio matched the build without PGO on 44 scenario states
 over 40,000 frames each, with sound sampling off and on.
