@@ -21,6 +21,20 @@ impl Timer {
         self.div = 0;
     }
 
+    /// The cycle of the next TIMA overflow while the timer runs. A tick that
+    /// ends before it only counts, so the scheduler can merge such ticks.
+    #[inline]
+    pub fn next_overflow(&self) -> i64 {
+        let divider = [10, 4, 6, 8][usize::from(self.tac & 3)];
+        self.last_cycles + ((256 - i64::from(self.tima)) << divider) - self.tima_counter
+    }
+
+    /// Whether a tick to `absolute_cycles` would overflow TIMA.
+    #[inline]
+    pub fn overflow_due(&self, absolute_cycles: i64) -> bool {
+        self.tac & 4 != 0 && self.next_overflow() <= absolute_cycles
+    }
+
     pub fn tick(&mut self, absolute_cycles: i64) -> bool {
         let cycles = absolute_cycles - self.last_cycles;
         if cycles == 0 {

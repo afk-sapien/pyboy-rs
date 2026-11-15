@@ -5,7 +5,7 @@ use crate::{
     cartridge::{Cartridge, Rtc},
     cpu::{Bus, Cpu, NoProgress},
     interaction::{Button, Interaction},
-    lcd::Lcd,
+    lcd::{FRAME_CYCLES, Lcd},
     serial::Serial,
     sound::Sound,
     timer::Timer,
@@ -170,63 +170,71 @@ impl Machine {
     }
 
     /// Returns false when opcode 0xDB yields to a debugger or Python hook.
+    ///
+    /// Each slice of CPU time ends where PyBoy ends it, at the nearest device
+    /// deadline or after an instruction that bails, since interrupts are
+    /// taken only at the start of a slice. PyBoy then ticks every device. In
+    /// single speed a device ticked once over several slices ends in the same
+    /// state as one ticked at each slice end, as long as none of its events
+    /// falls in between. So a slice end here ticks only the devices with an
+    /// event due. The others catch up when the CPU reaches their registers
+    /// and at the end of the frame, before anything outside can see them.
     pub fn run_frame(&mut self) -> Result<bool, NoProgress> {
+        // Whether every device was ticked at the last slice end, so that its
+        // deadline fields hold what PyBoy sizes the next slice from.
+        let mut current = true;
         while !self.mb.lcd.frame_done {
             #[cfg(feature = "profile")]
             self.profile.begin();
+            let start = self.cpu.cycles;
             if self.mb.cgb && self.mb.hdma.active && self.mb.lcd.stat & 3 == 0 {
                 self.mb.hdma_tick(&mut self.cpu);
                 self.cpu.cycles += 206;
             } else {
-                let mode0 = if self.mb.cgb && self.mb.hdma.active {
-                    self.mb.lcd.cycles_to_mode0()
-                } else {
-                    MAX_CYCLES
-                };
                 let target = if self.mb.singlestep {
                     4
+                } else if current {
+                    self.mb.slice_target()
                 } else {
-                    [
-                        self.mb.timer.cycles_to_interrupt,
-                        self.mb.lcd.cycles_to_interrupt,
-                        self.mb.lcd.cycles_to_frame,
-                        self.mb.sound.cycles_to_interrupt,
-                        self.mb.serial.cycles_to_interrupt,
-                        mode0,
-                    ]
-                    .into_iter()
-                    // Cython promotes this minimum to uint64 because the
-                    // sound deadline is unsigned. Expired signed deadlines
-                    // must not force four-cycle steps on long-running saves.
-                    .map(|deadline| deadline as u64)
-                    .min()
-                    .unwrap()
-                    .max(4) as i64
+                    self.mb.lazy_slice_target(start)
                 };
-                self.cpu.tick(&mut self.mb, target)?;
+                if let Err(error) = self.cpu.tick(&mut self.mb, target) {
+                    // PyBoy leaves every device at the last slice end.
+                    self.mb.catch_up(start, &mut self.cpu);
+                    return Err(error);
+                }
             }
             #[cfg(feature = "profile")]
             self.profile.mark(0);
-            self.mb.sound.tick(self.cpu.cycles);
+            let now = self.cpu.cycles;
+            let lazy = self.mb.lazy_ticks();
+            if !lazy || self.mb.sound.frame_step_due(now) {
+                self.mb.sound.tick(now);
+            }
             #[cfg(feature = "profile")]
             self.profile.mark(1);
-            if self.mb.serial.tick(self.cpu.cycles) {
-                self.cpu.set_interruptflag(8);
+            if !lazy || self.mb.serial.transfer_due(now) {
+                self.mb.tick_serial(&mut self.cpu);
             }
             #[cfg(feature = "profile")]
             self.profile.mark(2);
-            if self.mb.timer.tick(self.cpu.cycles) {
-                self.cpu.set_interruptflag(4);
+            if !lazy || self.mb.timer.overflow_due(now) {
+                self.mb.tick_timer(&mut self.cpu);
             }
             #[cfg(feature = "profile")]
             self.profile.mark(3);
-            let interrupt = self.mb.lcd.tick(self.cpu.cycles);
-            self.cpu.set_interruptflag(interrupt);
+            if !lazy || self.mb.lcd.mode_change_due(now) {
+                self.mb.tick_lcd(&mut self.cpu);
+            }
             #[cfg(feature = "profile")]
             self.profile.mark(4);
+            current = !lazy;
             if self.mb.singlestep {
                 return Ok(false);
             }
+        }
+        if !current {
+            self.mb.catch_up(self.cpu.cycles, &mut self.cpu);
         }
         self.frame_count += 1;
         self.mb.cartridge.advance_clock_frame();
@@ -326,6 +334,100 @@ impl Motherboard {
     }
     fn tick_lcd(&mut self, cpu: &mut Cpu) {
         cpu.set_interruptflag(self.lcd.tick(cpu.cycles));
+    }
+
+    /// Whether a slice end may skip the devices with no event due. Double
+    /// speed drops the low cycle bit on every LCD and sound tick, so there
+    /// each tick counts and every device is ticked as in PyBoy.
+    #[inline]
+    fn lazy_ticks(&self) -> bool {
+        !self.singlestep
+            && !self.double_speed
+            && self.lcd.speed_shift == 0
+            && self.sound.speed_shift == 0
+    }
+
+    /// PyBoy's slice length, the nearest device deadline as of the last
+    /// tick. Valid when every device was ticked at the last slice end.
+    #[inline]
+    fn slice_target(&self) -> i64 {
+        let mode0 = if self.cgb && self.hdma.active {
+            self.lcd.cycles_to_mode0()
+        } else {
+            MAX_CYCLES
+        };
+        [
+            self.timer.cycles_to_interrupt,
+            self.lcd.cycles_to_interrupt,
+            self.lcd.cycles_to_frame,
+            self.sound.cycles_to_interrupt,
+            self.serial.cycles_to_interrupt,
+            mode0,
+        ]
+        .into_iter()
+        // Cython promotes this minimum to uint64 because the sound deadline
+        // is unsigned. Expired signed deadlines must not force four-cycle
+        // steps on long-running saves.
+        .map(|deadline| deadline as u64)
+        .min()
+        .unwrap()
+        .max(4) as i64
+    }
+
+    /// The slice length `slice_target` would give had every device been
+    /// ticked at `now`, the last slice end. A skipped tick moves no event,
+    /// so each deadline is its event cycle less `now`. The sound deadline
+    /// is a reading of the sound clock instead, so the sound is ticked
+    /// whenever a tick could change the minimum.
+    #[inline]
+    fn lazy_slice_target(&mut self, now: i64) -> i64 {
+        let lcd = &self.lcd;
+        let lag = now - lcd.last_cycles;
+        let mode0 = if !(self.cgb && self.hdma.active) {
+            MAX_CYCLES
+        } else if lcd.stat & 3 == 0 {
+            0
+        } else {
+            lcd.cycles_to_mode0() - lag
+        };
+        let timer = if self.timer.tac & 4 != 0 {
+            self.timer.next_overflow() - now
+        } else {
+            MAX_CYCLES
+        };
+        let others = [
+            timer,
+            lcd.next_mode_change() - now,
+            FRAME_CYCLES - lcd.clock - lag,
+            self.serial.next_target() - now,
+            mode0,
+        ]
+        .into_iter()
+        .map(|deadline| deadline as u64)
+        .min()
+        .unwrap();
+        if !self.sound.deadline_settled(others) {
+            self.sound.tick(now);
+        }
+        others.min(self.sound.cycles_to_interrupt as u64).max(4) as i64
+    }
+
+    /// Ticks every device that a slice end skipped up to `cycles`. None of
+    /// them has an event due by then, but the interrupt flags are set as
+    /// in a plain tick all the same.
+    fn catch_up(&mut self, cycles: i64, cpu: &mut Cpu) {
+        if self.sound.last_cycles < cycles {
+            self.sound.tick(cycles);
+        }
+        if self.serial.last_cycles < cycles && self.serial.tick(cycles) {
+            cpu.set_interruptflag(8);
+        }
+        if self.timer.last_cycles < cycles && self.timer.tick(cycles) {
+            cpu.set_interruptflag(4);
+        }
+        if self.lcd.last_cycles < cycles {
+            cpu.set_interruptflag(self.lcd.tick(cycles));
+        }
     }
 }
 
