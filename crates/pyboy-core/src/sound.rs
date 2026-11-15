@@ -1,6 +1,7 @@
 // Rust translation of PyBoy core/sound.py, version 2.7.0.
 // SPDX-License-Identifier: LGPL-3.0-only
 use crate::MAX_CYCLES;
+use crate::channel_clock;
 use crate::channels::{NoiseChannel, SweepChannel, ToneChannel, WaveChannel};
 
 // Equivalent to value.ceil() as i64, including saturation and NaN handling.
@@ -234,10 +235,10 @@ impl Sound {
                 self.cycles_target_512hz += 8192.0;
             }
             if self.poweron != 0 {
-                self.sweepchannel.tick(elapsed);
-                self.tonechannel.tick(elapsed);
-                self.wavechannel.tick(elapsed);
-                self.noisechannel.tick(elapsed);
+                channel_clock::advance_sweep(&mut self.sweepchannel, elapsed);
+                channel_clock::advance_tone(&mut self.tonechannel, elapsed);
+                channel_clock::advance_wave(&mut self.wavechannel, elapsed);
+                channel_clock::advance_noise(&mut self.noisechannel, elapsed);
                 for _ in 0..self.div_apu - old_div {
                     if self.div_apu % 2 == 0 {
                         self.sweepchannel.tick_length();

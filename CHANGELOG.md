@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The four sound channels advance their period timers in closed form instead
+  of one period at a time. The square and wave positions move by division and
+  the noise register jumps up to 14 steps at once. Save states and audio
+  samples are identical to 0.1.6, and emulation is faster with sound on or off.
+
 ## 0.1.6
 
 A run of any length keeps saving states that load again.
