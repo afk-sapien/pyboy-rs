@@ -2,8 +2,8 @@
 toolchain=1.97.1
 target=x86_64-unknown-linux-gnu
 maturin=1.15.0
-version=0.1.6
-source=e8c84353b089782bb86245d83ceaf398c7433574
-commit=604f952832df5ab8d7e24e6b4070be5c80caab16
+version=0.1.7
+source=f65f06bd3b26e55d55603b13db16aa0d54e28e9f
+commit=b66c266fe032fd0a67c8c03f3163bf8c86447b4f
 frames=9000
 states=10
