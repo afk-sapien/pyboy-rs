@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.7
+
+The same save states and audio as 0.1.6, in less time.
 
 ### Changed
 
