@@ -3,6 +3,22 @@
 pyboy-rs is a headless Rust port of PyBoy 2.7.0. It does not invoke Python
 PyBoy at runtime. Upstream PyBoy is a test oracle, not a runtime backend.
 
+## Direction
+
+PyBoy parity was a requirement because PokeSim was built on PyBoy. On
+2026-11-18 the owner lifted it, in these words:
+
+> idk if we have to behave exactly liek pyboy, this was a requirement
+> originally sicne we built pokesim from pyboy, but we own the whole stack now
+> so we can diverge wherever we see fit
+
+The target is now real Game Boy behaviour. The core may diverge from PyBoy
+2.7.0 wherever that is the better choice, and every such change is listed
+under [Divergences](#divergences). Until the owner picks specific accuracy
+fixes, emulated behaviour stays as it is: the same save states and pictures
+as before. [conformance.md](conformance.md) scores the core against the
+public test ROM suites, which measure the distance to real hardware.
+
 ## Scope
 
 The core and the Python API needed for headless emulation are implemented.
