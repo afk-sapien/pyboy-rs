@@ -338,23 +338,65 @@ jump erratum fix, which makes speed depend on where jumps fall against
 and rebuilding the unchanged parent changes 8 CPU and LCD functions and
 reads slower than the A/A control in 13 modes, by up to 2.7%.
 
-### B2. Less work per line
+### B2. Less work per line (built)
 
-Each line scans all 40 OAM entries (2% to 5%), and each CGB line converts 32
-palette colors (1% to 1.5%). A sprite list per line can be built once per
-frame and rebuilt only after an OAM write, an OAM DMA or a change of sprite
-height. The converted CGB colors can be kept until a write to the palette
-data registers.
+Each line scanned all 40 OAM entries with two signed compares per entry (2%
+to 5% of every-frame time), and each CGB line converted its 32 palette
+colors one call at a time (1% to 1.5%). What was built:
 
-- Identical framebuffers: each cache is a pure function of its inputs and is
-  dropped by every write to them. The per-line list keeps the first 10 sprites
-  in OAM order, as the scan does today.
-- Proof: the same random comparison as B1, plus lockstep tests that write
-  OAM, run OAM DMA and change palettes in the middle of a frame.
-- Gain: 3% to 6% of every-frame time.
-- Risk: low to medium. OAM DMA and the palette registers write directly, so
-  each needs an explicit invalidation, and a missed one gives wrong sprites
-  only in frames that change OAM mid-frame.
+1. The OAM scan tests each entry with one unsigned compare,
+   `ly + 16 - oam_y < height` with wraparound. It still keeps the first 10
+   sprites on the line in OAM order.
+2. The 32 CGB background colors are converted in one pass and split into the
+   eight palettes.
+
+The plan was two caches: a sprite list per line kept until an OAM write, an
+OAM DMA or a change of sprite height, and the converted CGB colors kept until
+a palette write. Each needs every one of those writes to drop it, and a
+missed one gives a wrong picture only in frames that change OAM or palettes
+mid-frame. The built version keeps nothing between lines, so no write has to
+invalidate anything.
+
+- Identical framebuffers: the unsigned test is true for exactly the lines,
+  OAM Y bytes and heights the two signed compares accept, and the colors are
+  the same function of the same palette bytes.
+- Proof: one test checks the new line test against the signed one for every
+  line, OAM Y byte and sprite height, and another checks every color of 1,000
+  random palettes against the old conversion. The random comparison from B1
+  now also crowds sprites into a band in some frames, so lines pass the
+  ten-sprite limit. All 18 long-run cells give the same state and frame
+  hashes as the parent over 216,000 frames, in the default and the PGO build.
+- Memory: peak resident memory is unchanged in all 18 cells.
+- Risk: low. Nothing is cached, and both changes are checked against the old
+  code over every input or over random ones.
+
+Harness frames per second with the picture drawn every frame, best of 9
+rounds interleaved with the parent (B1), PGO build as released:
+
+| Save | Mode | Parent | B2 | Gain |
+| --- | --- | ---: | ---: | ---: |
+| Red | idle | 17,775 | 18,237 | +2.6% |
+| Red | input | 19,018 | 19,675 | +3.5% |
+| Gold | idle | 14,151 | 14,760 | +4.3% |
+| Gold | input | 15,668 | 16,327 | +4.2% |
+| Crystal | idle | 11,658 | 12,024 | +3.1% |
+| Crystal | input | 15,045 | 15,648 | +4.0% |
+
+The default release build gains +0.5% to +4.8% in the same cells. In
+`benchmark.rs` the PGO build gains +1.0% to +3.9% in render mode and +1.3% to
++3.1% in audio mode. The estimate was 3% to 6%.
+
+With the picture off none of the changed code runs, and with it drawn every
+30th frame little of it does. In the default build 73 of 75 pyboy-core
+functions are instruction-identical to the parent. The two that differ are
+`Lcd::scanline` and `Lcd::scanline_sprites`, and `opcodes::execute` does not
+move. A few of these modes still read slower than the A/A control, by up to
+2.0% in the default build (`benchmark.rs` frame mode, which never draws) and
+up to 1.7% in the PGO build. A recheck of the three PGO ones read -0.9% to
++0.4%, while Red batch, which ran with them, went from -0.9% to -1.4%. That
+is code placement, as for B1. In the PGO build 9
+functions differ, and 7 of them are among the 8 that a new profile alone
+changes.
 
 ### B3. Deferred one-pass drawing
 
