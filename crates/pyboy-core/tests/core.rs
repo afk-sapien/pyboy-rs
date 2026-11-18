@@ -636,3 +636,99 @@ fn a_run_across_the_rebase_matches_the_same_run_at_small_clocks() {
         assert_same_run(&mut short, &mut loaded, 60);
     }
 }
+
+/// The same machine with the instruction cache off, which fetches and
+/// decodes every instruction through the bus.
+fn fetching_copy(machine: &Machine) -> Machine {
+    let mut copy = machine.clone();
+    copy.mb.instruction_cache = false;
+    copy
+}
+
+#[test]
+fn the_instruction_cache_runs_the_same_frames_as_fetching() {
+    const BUTTONS: [Button; 8] = [
+        Button::Start,
+        Button::A,
+        Button::Right,
+        Button::Down,
+        Button::B,
+        Button::Left,
+        Button::Up,
+        Button::Select,
+    ];
+    for cgb in [false, true] {
+        // From power on, so the boot ROM and its unmapping run too.
+        let mut cached = new_machine(cgb, true, EXACT_RATE);
+        let mut fetched = fetching_copy(&cached);
+        for frame in 0..400 {
+            let button = BUTTONS[frame / 25 % BUTTONS.len()];
+            for machine in [&mut cached, &mut fetched] {
+                match frame % 25 {
+                    0 => machine.button(button, true),
+                    6 => machine.button(button, false),
+                    _ => {}
+                }
+                // Rendered and unrendered frames, as an app runs them.
+                machine.begin_frame(frame % 4 == 0, true);
+                assert!(machine.run_frame().unwrap());
+            }
+            assert_eq!(
+                cached.save_state().unwrap(),
+                fetched.save_state().unwrap(),
+                "cgb {cgb}, frame {frame}"
+            );
+            assert_eq!(cached.mb.sound.samples(), fetched.mb.sound.samples());
+        }
+        assert!(cached.mb.instruction_cache_bytes() > 0);
+        assert_eq!(fetched.mb.instruction_cache_bytes(), 0);
+    }
+}
+
+#[test]
+fn a_rom_patch_reaches_code_the_cache_already_decoded() {
+    let mut cached = new_machine(false, false, 48000);
+    run_frames(&mut cached, 120);
+    let mut fetched = fetching_copy(&cached);
+    let mut unpatched = cached.clone();
+    // The demo idles in a loop in ROM, so the frame ends inside code that
+    // ran, and was decoded, many times.
+    let pc = cached.cpu.pc as usize;
+    assert!(pc < 0x8000, "the demo idles at {pc:#x}");
+    let (bank, address) = if pc < 0x4000 {
+        (0, pc)
+    } else {
+        (cached.mb.cartridge.rombank_selected, pc - 0x4000)
+    };
+    for machine in [&mut cached, &mut fetched] {
+        // Half through the cartridge, half as the Python ROM writes do.
+        for address in address.saturating_sub(8)..address {
+            let address = u16::try_from(address).unwrap();
+            machine.mb.cartridge.override_rom(bank, address, 0).unwrap();
+        }
+        for address in address..(address + 8).min(0x4000) {
+            machine.mb.cartridge.rom[bank * 16384 + address] = 0;
+        }
+    }
+    for frame in 0..60 {
+        let mut results = Vec::new();
+        for machine in [&mut cached, &mut fetched, &mut unpatched] {
+            machine.begin_frame(true, false);
+            results.push(machine.run_frame());
+        }
+        assert_eq!(results[0], results[1], "frame {frame}");
+        assert_eq!(
+            cached.save_state().unwrap(),
+            fetched.save_state().unwrap(),
+            "frame {frame}"
+        );
+        if results[0].is_err() {
+            break;
+        }
+    }
+    assert_ne!(
+        cached.save_state().unwrap(),
+        unpatched.save_state().unwrap(),
+        "the patched code ran"
+    );
+}

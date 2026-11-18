@@ -3,9 +3,11 @@
 use crate::{
     MAX_CYCLES,
     cartridge::{Cartridge, Controller, Rtc},
-    cpu::{Bus, Cpu, NoProgress},
+    cpu::{Bus, Cpu, NoProgress, run_fetched},
+    decoded::{DecodedRom, decode},
     interaction::{Button, Interaction},
     lcd::{FRAME_CYCLES, Lcd},
+    opcodes,
     serial::Serial,
     sound::Sound,
     timer::Timer,
@@ -126,7 +128,13 @@ pub struct Motherboard {
     pub singlestep: bool,
     pub singlestep_latch: bool,
     pub serialbuffer: Vec<u8>,
+    /// Run code from ROM through instructions decoded once per ROM byte.
+    /// Off, every instruction is fetched and decoded through the bus. Both
+    /// execute the same instructions with the same results. The switch is
+    /// for tests and benchmarks.
+    pub instruction_cache: bool,
     map: MemoryMap,
+    decoded: DecodedRom,
 }
 
 #[derive(Debug, Clone)]
@@ -236,7 +244,9 @@ impl Machine {
                 singlestep: false,
                 singlestep_latch: false,
                 serialbuffer: Vec::new(),
+                instruction_cache: true,
                 map: MemoryMap::default(),
+                decoded: DecodedRom::default(),
             }
             .remapped(),
         })
@@ -352,6 +362,33 @@ impl Machine {
 }
 
 impl Motherboard {
+    /// Bytes held by the decoded ROM instructions.
+    pub fn instruction_cache_bytes(&self) -> usize {
+        self.decoded.heap_bytes()
+    }
+
+    /// The decoded instruction at `pc` when `fetch` reads its three bytes
+    /// straight from ROM, under the same conditions and from the same
+    /// offset. None when `fetch` would read them through the bus.
+    #[inline(always)]
+    fn decoded_at(&mut self, pc: i64) -> Option<(u16, u16)> {
+        let offset = if pc + 2 < 0x4000 {
+            self.cartridge.rombank_selected_low * 16384 + pc as usize
+        } else if pc >= 0x4000 && pc + 2 < 0x8000 {
+            self.cartridge.rombank_selected * 16384 + (pc as usize - 0x4000)
+        } else {
+            return None;
+        };
+        self.decoded.get(&self.cartridge.rom, offset)
+    }
+
+    /// Fetch, decode and execute one instruction the decoded ROM does not
+    /// hold, out of line so the decoded loop stays small.
+    #[inline(never)]
+    fn execute_fetched(&mut self, cpu: &mut Cpu) {
+        cpu.fetch_and_execute(self);
+    }
+
     fn wram_index(&self, address: u16) -> usize {
         let offset = if self.cgb && address >= 0xd000 {
             usize::from((self.ram[0xff70] & 7).max(1) - 1) * 4096
@@ -526,6 +563,9 @@ impl Motherboard {
 }
 
 impl Bus for Motherboard {
+    // Inlined into the fetching loop as before the decoded ROM. The decoded
+    // loop reaches it only through the out-of-line `execute_fetched`.
+    #[inline(always)]
     fn fetch(&mut self, cpu: &mut Cpu) -> [u8; 3] {
         if !self.bootrom_enabled && cpu.pc + 2 < 0x8000 {
             let (bank, offset) = if cpu.pc + 2 < 0x4000 {
@@ -549,6 +589,44 @@ impl Bus for Motherboard {
             self.read((cpu.pc + 1) as u16, cpu),
             self.read((cpu.pc + 2) as u16, cpu),
         ]
+    }
+    /// The loop of `run_fetched`, taking each instruction that `fetch` would
+    /// read straight from ROM from the decoded ROM instead.
+    ///
+    /// The ROM bytes do not change during a slice: only `override_rom` and
+    /// the Python ROM writes change them, and neither runs from an
+    /// instruction. So one `sync` per slice keeps every entry equal to the
+    /// decoding of the bytes `fetch` reads. The boot ROM stays mapped or
+    /// unmapped for a whole slice because the ff50 write that unmaps it bails.
+    fn run(&mut self, cpu: &mut Cpu, target: i64) -> Result<(), NoProgress> {
+        if !self.instruction_cache || self.bootrom_enabled {
+            return run_fetched(self, cpu, target);
+        }
+        self.decoded.sync(&self.cartridge.rom);
+        while cpu.cycles < target {
+            let before = cpu.cycles;
+            match self.decoded_at(cpu.pc) {
+                Some((opcode, value)) => {
+                    // Debug builds check every cached instruction against the
+                    // bytes fetch reads, which here come straight from ROM.
+                    debug_assert_eq!(
+                        decode(Bus::fetch(self, cpu)),
+                        (opcode, value),
+                        "stale decoded instruction at {:#06x}",
+                        cpu.pc
+                    );
+                    opcodes::execute(cpu, self, opcode, i64::from(value));
+                }
+                None => self.execute_fetched(cpu),
+            }
+            if cpu.bail {
+                break;
+            }
+            if cpu.cycles == before {
+                return Err(cpu.no_progress(self));
+            }
+        }
+        Ok(())
     }
     fn cgb(&self) -> bool {
         self.cgb
@@ -683,7 +761,7 @@ impl Motherboard {
         }
         let page = self.map.read[index];
         let from = page.base as usize + offset;
-        let buffer = match page.target {
+        let buffer: &[u8] = match page.target {
             Target::Slow => return Run::Slow(len),
             Target::Rom => &self.cartridge.rom,
             Target::Vram0 => &self.lcd.vram[0],

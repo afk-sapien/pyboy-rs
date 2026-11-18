@@ -19,6 +19,31 @@ pub trait Bus {
     fn switch_speed(&mut self, _cpu: &mut Cpu) {}
     fn breakpoint_singlestep(&mut self, _enabled: bool) {}
     fn breakpoint_singlestep_latch(&mut self, _enabled: bool) {}
+    /// Execute instructions until the cycle count reaches `target` or one
+    /// bails, as the loop in PyBoy CPU.tick does. A bus may replace this
+    /// with a faster loop that executes the same instructions.
+    fn run(&mut self, cpu: &mut Cpu, target: i64) -> Result<(), NoProgress>
+    where
+        Self: Sized,
+    {
+        run_fetched(self, cpu, target)
+    }
+}
+
+/// The loop of PyBoy CPU.tick, fetching and decoding every instruction.
+#[inline]
+pub fn run_fetched<B: Bus>(bus: &mut B, cpu: &mut Cpu, target: i64) -> Result<(), NoProgress> {
+    while cpu.cycles < target {
+        let before = cpu.cycles;
+        cpu.fetch_and_execute(bus);
+        if cpu.bail {
+            break;
+        }
+        if cpu.cycles == before {
+            return Err(cpu.no_progress(bus));
+        }
+    }
+    Ok(())
 }
 
 /// Wide signed intermediate values preserve the upstream flag calculations.
@@ -87,6 +112,7 @@ impl Cpu {
     }
 
     /// Execute one instruction with exactly the upstream opcode semantics.
+    #[inline(always)]
     pub fn fetch_and_execute<B: Bus>(&mut self, bus: &mut B) {
         let [pc1, pc2, pc3] = bus.fetch(self);
         let (opcode, value) = if pc1 == 0xcb {
@@ -117,20 +143,16 @@ impl Cpu {
         }
         self.interrupt_queued = false;
         self.bail = false;
-        while self.cycles < target {
-            let before = self.cycles;
-            self.fetch_and_execute(bus);
-            if self.bail {
-                break;
-            }
-            if self.cycles == before {
-                return Err(NoProgress {
-                    pc: self.pc as u16,
-                    opcode: bus.read(self.pc as u16, self),
-                });
-            }
+        bus.run(self, target)
+    }
+
+    /// The error for an instruction that left the cycle count unchanged.
+    #[cold]
+    pub fn no_progress<B: Bus>(&mut self, bus: &mut B) -> NoProgress {
+        NoProgress {
+            pc: self.pc as u16,
+            opcode: bus.read(self.pc as u16, self),
         }
-        Ok(())
     }
 }
 
