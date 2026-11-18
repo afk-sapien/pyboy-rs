@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.1.8
+
+The same save states, screens and audio as 0.1.7, in less time. The emulator
+core runs 22% to 47% faster with the picture off and 15% to 18% faster with
+the picture drawn every frame.
+
+### Changed
+
+- Instruction cache. Code that runs from the cartridge ROM is decoded once
+  per ROM byte and kept in a table, so each later run of that instruction
+  skips the fetch and decode through the bus. Code in work RAM, high RAM or
+  the boot ROM still takes the fetch path. Any change to the ROM bytes, such
+  as a patch or a breakpoint, clears the table.
+- Faster tile drawing. A background tile row is drawn eight pixels at a time
+  through a loop of fixed length, with one store for its eight attribute
+  bytes. Lines without the color renderer build one palette instead of eight.
+- Less work per line. The sprite scan tests each of the 40 OAM entries with
+  one compare instead of two, and on CGB the 32 background colors of a line
+  are converted in one pass. Nothing is kept between lines, so no write has
+  to clear a cache.
+- Skipped unobserved LCD mode changes. PyBoy ends a run of CPU time at every
+  LCD mode change, about 450 times a frame. With the picture off, 0.1.8 ends
+  one only at a mode change that sets an interrupt flag, at the last mode
+  change before each 512 Hz sound step, and at the end of the frame. The LCD
+  takes the skipped changes at their own cycles the next time it runs, so
+  every interrupt happens at the same cycle as before. Skipping is off while
+  CGB HDMA runs. With the picture on, every mode change still ends a run,
+  since drawing needs each one.
+- The Linux x86_64 wheel's PGO profile is recorded again from the 0.1.8
+  source, from five Red and five Crystal play states as in 0.1.7, with Rust
+  1.97.1. The profile holds no ROM or save data.
+
+### Speed
+
+Frames per second of the emulator core alone, without Python, each side built
+as its Linux x86_64 wheel is (with PGO from its own profile). 0.1.7 (af89e51,
+the same core code as v0.1.7) against 0.1.8 (48cbb91, the same core code as
+this release apart from the version), best of 9 rounds of 43,200 frames on
+one core. Each round ran
+0.1.7, 0.1.8 and 0.1.7 again, and the two 0.1.7 runs agreed within 1%.
+"Input" presses a seeded random button for 1 to 16 frames, then waits 1 to
+30 frames.
+
+| Game | Input | Picture off | Every 30th frame | Every frame |
+| --- | --- | ---: | ---: | ---: |
+| Red | idle | +46.6% | +44.8% | +16.9% |
+| Red | input | +36.4% | +34.0% | +17.7% |
+| Gold | idle | +27.1% | +26.2% | +16.5% |
+| Gold | input | +22.2% | +20.7% | +17.9% |
+| Crystal | idle | +29.8% | +29.2% | +15.1% |
+| Crystal | input | +22.4% | +22.5% | +17.7% |
+
+Time spent in Python is unchanged, so a program that does more work per frame
+in Python gains less. The other four wheels are built without PGO and were
+not measured end to end. Peak resident memory rose by 128 to 132 kB, for the
+instruction cache.
+
+### Identical output
+
+- In each of the 18 cases in the table, run for 216,000 frames, 0.1.8 ends
+  with the same save state as 0.1.7, and every drawn frame has the same
+  pixels and pixel attributes. Each case compares a 64-bit hash of the final
+  state and one of all drawn frames.
+- Tests run each change beside the code it replaces. The drawing tests
+  compare frames on random video memory and registers. The instruction cache
+  and mode change tests compare save states, frames and audio samples.
+- No save state format change. 0.1.8 writes the same state bytes as 0.1.7,
+  and each version loads the other's states. The Python API is unchanged.
+
 ## 0.1.7
 
 The same save states and audio as 0.1.6, in less time.
