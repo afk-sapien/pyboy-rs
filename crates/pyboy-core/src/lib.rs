@@ -3,6 +3,7 @@ pub mod cartridge;
 mod channel_clock;
 pub mod channels;
 pub mod cpu;
+mod decoded;
 pub mod interaction;
 pub mod lcd;
 pub mod mb;

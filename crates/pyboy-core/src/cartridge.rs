@@ -1,5 +1,6 @@
 // Rust translation of PyBoy core/cartridge, version 2.7.0.
 // SPDX-License-Identifier: LGPL-3.0-only
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Controller {
@@ -500,9 +501,58 @@ impl Rtc {
     }
 }
 
+/// Source of ROM generations. Each new ROM and each mutable borrow of one
+/// takes the next value, so two ROMs share a generation only when one is an
+/// unchanged clone of the other.
+static GENERATIONS: AtomicU64 = AtomicU64::new(1);
+
+/// Cartridge ROM bytes, read as a slice.
+///
+/// Every mutable borrow counts as a write and gives the ROM a new
+/// generation, so the motherboard's decoded instructions start over after
+/// the ROM is patched. A ROM bank switch is not a write: it changes which
+/// bytes are mapped, not the bytes.
+#[derive(Debug, Clone)]
+pub struct Rom {
+    bytes: Vec<u8>,
+    generation: u64,
+}
+
+impl Rom {
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self {
+            bytes,
+            generation: GENERATIONS.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// Equal for two reads only when the bytes did not change in between.
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+impl std::ops::Deref for Rom {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+impl std::ops::DerefMut for Rom {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        self.generation = GENERATIONS.fetch_add(1, Ordering::Relaxed);
+        &mut self.bytes
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Cartridge {
-    pub rom: Vec<u8>,
+    pub rom: Rom,
     pub ram: Vec<u8>,
     pub controller: Controller,
     pub carttype: u8,
@@ -554,7 +604,7 @@ impl Cartridge {
             .map(|byte| char::from(*byte))
             .collect();
         Ok(Self {
-            rom,
+            rom: Rom::new(rom),
             ram: vec![0; 16 * 8192],
             controller,
             carttype,

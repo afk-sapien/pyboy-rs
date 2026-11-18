@@ -8,3 +8,7 @@ description = "Native Rust translation of PyBoy emulator components"
 
 [features]
 profile = []
+# Test machinery. Adds `Motherboard::instruction_cache`, a switch that runs
+# every instruction through the fetch path instead of the decoded ROM, for the
+# tests that run both side by side. Builds for use leave it off.
+instruction-cache-switch = []
