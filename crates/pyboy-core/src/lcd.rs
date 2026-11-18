@@ -52,12 +52,25 @@ impl ColorPalette {
         }
     }
     pub fn color(&self, palette: usize, color: u8) -> u32 {
-        let value = u32::from(self.colors[palette * 4 + usize::from(color)]);
-        0xff000000
-            | ((value & 31) << 3)
-            | (((value >> 5) & 31) << 11)
-            | (((value >> 10) & 31) << 19)
+        rgb555(self.colors[palette * 4 + usize::from(color)])
     }
+    /// All eight palettes, converted in one pass over the 32 colors.
+    pub fn palettes(&self) -> [[u32; 4]; 8] {
+        let colors = self.colors.map(rgb555);
+        std::array::from_fn(|palette| std::array::from_fn(|color| colors[palette * 4 + color]))
+    }
+}
+
+fn rgb555(value: u16) -> u32 {
+    let value = u32::from(value);
+    0xff000000 | ((value & 31) << 3) | (((value >> 5) & 31) << 11) | (((value >> 10) & 31) << 19)
+}
+
+/// Whether a sprite whose OAM Y byte is `oam_y` covers line `ly`. The sprite
+/// starts 16 lines above `oam_y`, so it covers `ly` when `ly + 16 - oam_y` is
+/// below the height. A negative difference wraps far past any height.
+fn sprite_on_line(ly: u8, oam_y: u8, height: u16) -> bool {
+    (u16::from(ly) + 16).wrapping_sub(u16::from(oam_y)) < height
 }
 
 #[derive(Debug, Clone)]
@@ -347,9 +360,7 @@ impl Lcd {
         // Without the color renderer every tile attribute is zero, so only
         // the first palette is read.
         let palettes: [[u32; 4]; 8] = if COLOR {
-            std::array::from_fn(|palette| {
-                std::array::from_fn(|color| self.bg_color.color(palette, color as u8))
-            })
+            self.bg_color.palettes()
         } else {
             [std::array::from_fn(|color| self.dmg_color(0, self.bgp, color as u8)); 8]
         };
@@ -437,12 +448,13 @@ impl Lcd {
         }
         let height = if self.lcdc & 4 != 0 { 16 } else { 8 };
         let ly = i64::from(self.ly);
+        // The first ten sprites on this line in OAM order are drawn, as the
+        // hardware does.
         let mut sprites = [0i64; 10];
         let mut sprite_count = 0;
         for n in (0..160).step_by(4) {
-            let y = i64::from(self.oam[n]) - 16;
-            let x = i64::from(self.oam[n + 1]) - 8;
-            if y <= ly && ly < y + height {
+            if sprite_on_line(self.ly, self.oam[n], height as u16) {
+                let x = i64::from(self.oam[n + 1]) - 8;
                 sprites[sprite_count] = if self.color_renderer {
                     n as i64
                 } else {
@@ -517,6 +529,15 @@ mod tests {
     mod reference {
         use super::super::*;
 
+        /// `ColorPalette::color` as it was, one color at a time.
+        pub fn color(palette: &ColorPalette, index: usize, color: u8) -> u32 {
+            let value = u32::from(palette.colors[index * 4 + usize::from(color)]);
+            0xff000000
+                | ((value & 31) << 3)
+                | (((value >> 5) & 31) << 11)
+                | (((value >> 10) & 31) << 19)
+        }
+
         pub fn scanline(lcd: &mut Lcd) {
             if lcd.disable_renderer {
                 return;
@@ -549,7 +570,7 @@ mod tests {
             let palettes: [[u32; 4]; 8] = std::array::from_fn(|palette| {
                 std::array::from_fn(|color| {
                     if COLOR {
-                        lcd.bg_color.color(palette, color as u8)
+                        self::color(&lcd.bg_color, palette, color as u8)
                     } else {
                         lcd.dmg_color(0, lcd.bgp, color as u8)
                     }
@@ -692,7 +713,7 @@ mod tests {
                         continue;
                     }
                     lcd.framebuffer[pos] = if lcd.color_renderer {
-                        lcd.obj_color.color(usize::from(attr & 7), color)
+                        self::color(&lcd.obj_color, usize::from(attr & 7), color)
                     } else if attr & 16 != 0 {
                         lcd.dmg_color(2, lcd.obp1, color)
                     } else {
@@ -734,9 +755,14 @@ mod tests {
             bank.iter_mut().for_each(|byte| *byte = rng.byte());
         }
         lcd.oam.iter_mut().for_each(|byte| *byte = rng.byte());
-        // Put sprites on the screen often enough to overlap and clip.
+        // Put sprites on the screen often enough to overlap and clip. Some
+        // frames crowd them into a band, so lines pass the ten-sprite limit.
+        let band = (rng.next() % 4 == 0).then(|| 16 + rng.byte() % 140);
         for n in (0..160).step_by(4) {
-            if rng.next() % 2 == 0 {
+            if let Some(top) = band {
+                lcd.oam[n] = top + rng.byte() % 12;
+                lcd.oam[n + 1] = rng.byte() % 176;
+            } else if rng.next() % 2 == 0 {
                 lcd.oam[n] = 16 + rng.byte() % 150;
                 lcd.oam[n + 1] = rng.byte() % 176;
             }
@@ -764,6 +790,41 @@ mod tests {
             lcd.bgp = rng.byte();
             lcd.obp0 = rng.byte();
             lcd.obp1 = rng.byte();
+        }
+    }
+
+    #[test]
+    fn the_sprite_line_test_matches_the_signed_one_everywhere() {
+        for ly in 0..=255u8 {
+            for oam_y in 0..=255u8 {
+                for height in [8, 16] {
+                    let y = i64::from(oam_y) - 16;
+                    let line = i64::from(ly);
+                    assert_eq!(
+                        sprite_on_line(ly, oam_y, height),
+                        y <= line && line < y + i64::from(height),
+                        "ly {ly} oam_y {oam_y} height {height}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_palettes_match_one_color_at_a_time() {
+        let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+        for _ in 0..1000 {
+            let mut palette = ColorPalette::default();
+            for color in palette.colors.iter_mut() {
+                *color = rng.next() as u16;
+            }
+            let all = palette.palettes();
+            for (index, colors) in all.iter().enumerate() {
+                for (color, &value) in colors.iter().enumerate() {
+                    assert_eq!(value, palette.color(index, color as u8));
+                    assert_eq!(value, reference::color(&palette, index, color as u8));
+                }
+            }
         }
     }
 
