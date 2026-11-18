@@ -735,3 +735,263 @@ fn a_rom_patch_reaches_code_the_cache_already_decoded() {
         "the patched code ran"
     );
 }
+
+/// A 32 KiB cartridge that keeps changing what the LCD interrupts on, with
+/// VBlank, STAT and timer interrupts on. Each pass of the main loop picks
+/// STAT sources from a table, none for long stretches, and sets LYC. Then
+/// it runs a delay loop of up to a frame that touches no register, reads
+/// LY and STAT, and on 1 pass in 4 polls LY for the next line. Every 8th
+/// pass it requests a STAT interrupt through IF under DI and enables
+/// interrupts with it pending, and every 16th it halts. Twice in 256
+/// passes it switches the LCD off, once for less than a frame and once for
+/// more. On CGB it also starts HBlank DMA and switches speed, staying in
+/// double speed for 16 passes in 256. The STAT handler moves LYC 7 lines
+/// on, and the timer handler reads STAT. Counters in work RAM show that
+/// the handlers ran and the LCD went off.
+#[cfg(feature = "instruction-cache-switch")]
+fn lcd_source_rom(cgb: bool) -> Vec<u8> {
+    let mut rom = vec![0u8; 0x8000];
+    let mut put = |at: usize, code: &[u8]| rom[at..at + code.len()].copy_from_slice(code);
+    // The logo and title of the demo, so any boot ROM accepts the header.
+    put(0x100, &DEMO[0x100..0x150]);
+    put(0x100, &[0x00, 0xc3, 0x50, 0x01]); // nop; jp 0x0150
+    put(0x143, &[if cgb { 0x80 } else { 0x00 }]);
+    put(0x147, &[0x00, 0x00, 0x00]); // ROM only, 32 KiB, no RAM
+    put(0x40, &[0xc3, 0x40, 0x02]); // VBlank: jp 0x0240
+    put(0x48, &[0xc3, 0x60, 0x02]); // STAT: jp 0x0260
+    put(0x50, &[0xc3, 0x80, 0x02]); // timer: jp 0x0280
+    #[rustfmt::skip]
+    put(0x150, &[
+        0xf3,             // di
+        0x31, 0xf0, 0xdf, // ld sp, 0xdff0
+        0xaf,             // xor a
+        0x21, 0x00, 0xc0, // ld hl, 0xc000
+        0x06, 0x10,       // ld b, 16
+        0x22,             // ld (hl+), a       clear the counters
+        0x05,             // dec b
+        0x20, 0xfc,       // jr nz, 0x015a
+        0x3e, 0x80,       // ld a, 0x80
+        0xe0, 0x06,       // ldh (TMA), a
+        0x3e, 0x05,       // ld a, 5
+        0xe0, 0x07,       // ldh (TAC), a      overflow every 2048 cycles
+        0x3e, 0x07,       // ld a, 7
+        0xe0, 0xff,       // ldh (IE), a
+        0xfb,             // ei
+        // 0x016b, the main loop
+        0x21, 0x03, 0xc0, // ld hl, 0xc003
+        0x34,             // inc (hl)
+        0x4e,             // ld c, (hl)        c counts passes
+        0x79,             // ld a, c
+        0x0f, 0x0f, 0x0f, // rrca x3
+        0xe6, 0x07,       // and 7
+        0x5f,             // ld e, a
+        0x16, 0x00,       // ld d, 0
+        0x21, 0x00, 0x03, // ld hl, 0x0300
+        0x19,             // add hl, de
+        0x7e,             // ld a, (hl)
+        0xe0, 0x41,       // ldh (STAT), a     sources for 8 passes
+        0x79,             // ld a, c
+        0xe6, 0x7f,       // and 0x7f
+        0xc6, 0x05,       // add a, 5
+        0xe0, 0x45,       // ldh (LYC), a
+        0x79,             // ld a, c
+        0x87,             // add a, a
+        0x81,             // add a, c
+        0xe6, 0x7f,       // and 0x7f
+        0x47,             // ld b, a           3c mod 128, 0 counts 256
+        0x16, 0x10,       // ld d, 16          0x018d
+        0x15,             // dec d             0x018f
+        0x20, 0xfd,       // jr nz, 0x018f
+        0x05,             // dec b
+        0x20, 0xf8,       // jr nz, 0x018d     276 cycles a count
+        0xf0, 0x44,       // ldh a, (LY)
+        0x47,             // ld b, a
+        0x79,             // ld a, c
+        0xe6, 0x03,       // and 3
+        0x20, 0x05,       // jr nz, 0x01a2
+        0xf0, 0x44,       // ldh a, (LY)       0x019d
+        0xb8,             // cp b
+        0x28, 0xfb,       // jr z, 0x019d      wait for the next line
+        0xf0, 0x41,       // ldh a, (STAT)     0x01a2
+        0xa8,             // xor b
+        0x21, 0x04, 0xc0, // ld hl, 0xc004
+        0xae,             // xor (hl)
+        0x77,             // ld (hl), a
+        0x79,             // ld a, c
+        0xe6, 0x07,       // and 7
+        0x20, 0x0a,       // jr nz, 0x01b9
+        0xf3,             // di
+        0xf0, 0x0f,       // ldh a, (IF)
+        0xf6, 0x02,       // or 2
+        0xe0, 0x0f,       // ldh (IF), a       a STAT interrupt waits
+        0x00,             // nop
+        0xfb,             // ei
+        0x00,             // nop
+        0x79,             // ld a, c           0x01b9
+        0xe6, 0x0f,       // and 0x0f
+        0xfe, 0x03,       // cp 3
+        0x20, 0x02,       // jr nz, 0x01c2
+        0x76,             // halt
+        0x00,             // nop
+        0xfa, 0x43, 0x01, // ld a, (0x0143)    0x01c2
+        0xfe, 0x80,       // cp 0x80
+        0x20, 0x27,       // jr nz, 0x01f0     DMG skips HDMA and speed
+        0x79,             // ld a, c
+        0xe6, 0x1f,       // and 0x1f
+        0xfe, 0x10,       // cp 0x10
+        0x20, 0x13,       // jr nz, 0x01e3
+        0x3e, 0xc1,       // ld a, 0xc1
+        0xe0, 0x51,       // ldh (HDMA1), a
+        0xaf,             // xor a
+        0xe0, 0x52,       // ldh (HDMA2), a    from 0xc100
+        0x3e, 0x08,       // ld a, 0x08
+        0xe0, 0x53,       // ldh (HDMA3), a
+        0xaf,             // xor a
+        0xe0, 0x54,       // ldh (HDMA4), a    to 0x8800
+        0x3e, 0x83,       // ld a, 0x83
+        0xe0, 0x55,       // ldh (HDMA5), a    4 blocks in HBlank
+        0x00,             // nop
+        0x79,             // ld a, c           0x01e3
+        0xe6, 0xef,       // and 0xef
+        0xfe, 0x08,       // cp 8
+        0x20, 0x06,       // jr nz, 0x01f0     passes 8 and 24 switch
+        0x3e, 0x01,       // ld a, 1
+        0xe0, 0x4d,       // ldh (KEY1), a
+        0x10, 0x00,       // stop
+        0x79,             // ld a, c           0x01f0
+        0xfe, 0x20,       // cp 0x20
+        0x20, 0x05,       // jr nz, 0x01fa
+        0x01, 0x40, 0x00, // ld bc, 0x0040     LCD off for some 1800 cycles
+        0x18, 0x07,       // jr 0x0201
+        0xfe, 0xa0,       // cp 0xa0           0x01fa
+        0x20, 0x06,       // jr nz, 0x0204
+        0x01, 0x00, 0x0c, // ld bc, 0x0c00     LCD off for some 74000 cycles
+        0xcd, 0xc0, 0x02, // call 0x02c0       0x0201
+        0xc3, 0x6b, 0x01, // jp 0x016b         0x0204
+    ]);
+    #[rustfmt::skip]
+    put(0x240, &[
+        0xf5,             // push af
+        0xe5,             // push hl
+        0x21, 0x00, 0xc0, // ld hl, 0xc000
+        0x34,             // inc (hl)          VBlank count
+        0xe1,             // pop hl
+        0xf1,             // pop af
+        0xd9,             // reti
+    ]);
+    #[rustfmt::skip]
+    put(0x260, &[
+        0xf5,             // push af
+        0xe5,             // push hl
+        0x21, 0x01, 0xc0, // ld hl, 0xc001
+        0x34,             // inc (hl)          STAT count
+        0xf0, 0x44,       // ldh a, (LY)
+        0xc6, 0x07,       // add a, 7
+        0xfe, 0x9a,       // cp 154
+        0x38, 0x02,       // jr c, 0x0270
+        0xd6, 0x9a,       // sub 154
+        0xe0, 0x45,       // ldh (LYC), a      0x0270
+        0xe1,             // pop hl
+        0xf1,             // pop af
+        0xd9,             // reti
+    ]);
+    #[rustfmt::skip]
+    put(0x280, &[
+        0xf5,             // push af
+        0xe5,             // push hl
+        0x21, 0x02, 0xc0, // ld hl, 0xc002
+        0x34,             // inc (hl)          timer count
+        0xf0, 0x41,       // ldh a, (STAT)
+        0x21, 0x06, 0xc0, // ld hl, 0xc006
+        0xae,             // xor (hl)
+        0x77,             // ld (hl), a
+        0xe1,             // pop hl
+        0xf1,             // pop af
+        0xd9,             // reti
+    ]);
+    #[rustfmt::skip]
+    put(0x2c0, &[
+        0xf0, 0x40,       // ldh a, (LCDC)
+        0xe6, 0x7f,       // and 0x7f
+        0xe0, 0x40,       // ldh (LCDC), a     off
+        0x0b,             // dec bc            0x02c6
+        0x78,             // ld a, b
+        0xb1,             // or c
+        0x20, 0xfb,       // jr nz, 0x02c6
+        0xf0, 0x40,       // ldh a, (LCDC)
+        0xf6, 0x80,       // or 0x80
+        0xe0, 0x40,       // ldh (LCDC), a     on
+        0x21, 0x05, 0xc0, // ld hl, 0xc005
+        0x34,             // inc (hl)          LCD off count
+        0xc9,             // ret
+    ]);
+    // STAT sources by pass: none, LYC, none, OAM, VBlank, HBlank, none, all
+    // but HBlank.
+    put(0x300, &[0x00, 0x40, 0x00, 0x20, 0x10, 0x08, 0x00, 0x70]);
+    rom[0x14d] = rom[0x134..0x14d]
+        .iter()
+        .fold(0u8, |sum, byte| sum.wrapping_sub(*byte).wrapping_sub(1));
+    rom
+}
+
+/// PyBoy ends a slice at every LCD mode change. With the picture off the
+/// cache ends one only where a flag is set or the frame ends, which must
+/// not move an interrupt or change a single cycle.
+#[test]
+#[cfg(feature = "instruction-cache-switch")]
+fn skipped_lcd_mode_changes_run_as_every_slice_end() {
+    for cgb in [false, true] {
+        let rom = lcd_source_rom(cgb);
+        let mut cached = Machine::new(rom, None, None, true, EXACT_RATE).unwrap();
+        cached.cpu.interrupt_log = Some(Vec::new());
+        let mut fetched = fetching_copy(&cached);
+        // Interrupts taken by both machines, by flag bit.
+        let mut interrupts = [0; 5];
+        let mut double_speed_frames = 0;
+        for frame in 0..600 {
+            let render = frame % 5 == 0;
+            for machine in [&mut cached, &mut fetched] {
+                if frame % 30 == 0 {
+                    play_notes(machine);
+                }
+                machine.begin_frame(render, true);
+                assert!(machine.run_frame().unwrap());
+            }
+            // A moved interrupt can leave no trace in the state once its
+            // return address on the stack is overwritten, so compare where
+            // each one was taken.
+            assert_eq!(
+                cached.cpu.interrupt_log, fetched.cpu.interrupt_log,
+                "cgb {cgb}, frame {frame}"
+            );
+            assert_eq!(
+                cached.save_state().unwrap(),
+                fetched.save_state().unwrap(),
+                "cgb {cgb}, frame {frame}"
+            );
+            assert_eq!(cached.mb.sound.samples(), fetched.mb.sound.samples());
+            if render {
+                assert!(cached.mb.lcd.framebuffer == fetched.mb.lcd.framebuffer);
+            }
+            for machine in [&mut cached, &mut fetched] {
+                for (_, _, flag) in machine.cpu.interrupt_log.replace(Vec::new()).unwrap() {
+                    interrupts[flag.trailing_zeros() as usize] += 1;
+                }
+            }
+            double_speed_frames += usize::from(cached.mb.double_speed);
+        }
+        // VBlank, STAT and timer interrupts all ran, and the LCD went off.
+        assert!(
+            interrupts[..3].iter().all(|&count| count > 600),
+            "cgb {cgb}, interrupts {interrupts:?}"
+        );
+        assert_ne!(cached.read(0xc005), 0, "cgb {cgb}");
+        assert!(
+            cached.mb.skipped_lcd_steps > 50_000,
+            "cgb {cgb}, {} skipped",
+            cached.mb.skipped_lcd_steps
+        );
+        assert_eq!(fetched.mb.skipped_lcd_steps, 0);
+        assert_eq!(double_speed_frames > 0, cgb, "{double_speed_frames} frames");
+    }
+}
