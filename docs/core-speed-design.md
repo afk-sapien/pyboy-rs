@@ -270,29 +270,73 @@ each frame gains far more from drawing than from the CPU.
 
 Four options, each judged by what it needs for identical framebuffers.
 
-### B1. A faster pixel loop (recommended first)
+### B1. A faster pixel loop (built)
 
-`tile_span` stores each pixel through a loop whose length is known only at
-run time, and indexes a four-color palette with a value the compiler cannot
-prove is below 4. That loop is 14% to 20% of every-frame time, and the setup
-around it another 6% to 7%. Most tiles in a span are whole, so a fixed path
-for whole tiles can build the 8 colors and 8 attribute bytes as arrays and
-store each as one block, with the color index masked to two bits. Partial
-tiles at the edges keep today's loop. The sprite pixel loop can hoist its
-DMG or CGB palette choice out of the per-pixel loop in the same way.
+`tile_span` stored each pixel through a loop whose length was known only at
+run time, and indexed a four-color palette with a value the compiler could
+not prove is below 4. That loop was 14% to 20% of every-frame time, and the
+setup around it another 6% to 7%. What was built:
+
+1. Each tile row stays one u64 of eight color bytes. A flipped tile swaps
+   the bytes.
+2. The eight attribute bytes come from one zero-byte test plus the priority
+   bit, stored in one write.
+3. A whole tile looks up its eight pixels in a loop of fixed length 8, with
+   the color index masked to two bits. Partial tiles at the screen edges
+   copy the visible part.
+4. Lines without the color renderer build one palette instead of eight.
+5. Sprites are unchanged. Hoisting the sprite palette choice out of the
+   pixel loop measured slower.
+
+The first plan, building the 8 colors and 8 attributes as arrays and storing
+each as one block, made background drawing 28% to 30% slower and was
+dropped.
 
 - Identical framebuffers: the function still computes the same values from
   the same VRAM, registers and palettes at the same moment. Only how the
   stores are issued changes, and the mask is a no-op because tile colors are
   always 0 to 3.
-- Proof: a test that keeps today's function and compares framebuffer and
-  attributes against the new one on random VRAM, OAM, registers and palettes
-  for every scroll and window position, on DMG and CGB. Then lockstep
-  framebuffers after every frame and the long-run hashes, as for the cache.
-- Gain: halving the loop would raise every-frame fps by 8% to 11%, cutting it
-  to a third by 11% to 15%.
-- Risk: low. The output is easy to compare, but the gain depends on what the
-  compiler makes of it, so it must be measured.
+- Proof: a test keeps the old drawing code and compares framebuffer and
+  attributes against it on random VRAM, OAM, palettes and registers, changed
+  between lines, on DMG, CGB in DMG mode and CGB. All 18 long-run cells give
+  the same state and frame hashes as the parent over 216,000 frames, in the
+  default and the PGO build.
+- Memory: peak resident memory is unchanged in all 18 cells.
+- Risk: low. The output is easy to compare against the old code.
+
+Harness frames per second with the picture drawn every frame, best of 9
+rounds interleaved with the parent (the cache), PGO build as released:
+
+| Save | Mode | Parent | B1 | Gain |
+| --- | --- | ---: | ---: | ---: |
+| Red | idle | 16,660 | 17,722 | +6.4% |
+| Red | input | 17,459 | 18,883 | +8.2% |
+| Gold | idle | 12,910 | 14,164 | +9.7% |
+| Gold | input | 14,372 | 15,656 | +8.9% |
+| Crystal | idle | 10,898 | 11,664 | +7.0% |
+| Crystal | input | 13,868 | 15,050 | +8.5% |
+
+The default release build gains +6.0% to +9.4% in the same cells. With the
+picture drawn every 30th frame the PGO build gains +0.3% to +1.1%. In
+`benchmark.rs` it gains +4.1% to +8.9% in render mode and +4.3% to +5.3% in
+audio mode. The estimate was +8% to +11% for a halved loop.
+
+B1 was first reported as +21% to +26%. That was the background drawing loop
+alone, timed by `benchmark.rs` profile mode, which draws the 144 lines of a
+frame without running the CPU. A whole run that draws every frame gains 6%
+to 10%.
+
+With the picture off none of the changed code runs, and with it drawn every
+30th frame little of it does. In the default build 76 of 78 pyboy-core
+functions are instruction-identical to the parent, and the two that differ
+are the two `tile_span` copies. Everything placed after them moves by 16 to
+464 bytes. Some of these modes still read slower than the A/A control, by up
+to 2.6% in the default build and up to 0.9% in the PGO build. That is code
+placement. The i7-10700K these were measured on has the Skylake family's
+jump erratum fix, which makes speed depend on where jumps fall against
+32-byte boundaries. In the PGO build, recording the parent's profile again
+and rebuilding the unchanged parent changes 8 CPU and LCD functions and
+reads slower than the A/A control in 13 modes, by up to 2.7%.
 
 ### B2. Less work per line
 
