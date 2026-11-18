@@ -29,7 +29,8 @@ the picture drawn every frame.
   CGB HDMA runs. With the picture on, every mode change still ends a run,
   since drawing needs each one.
 - The Linux x86_64 wheel's PGO profile is recorded again from the 0.1.8
-  source, from the same ten play states and with Rust 1.97.1.
+  source, from five Red and five Crystal play states as in 0.1.7, with Rust
+  1.97.1. The profile holds no ROM or save data.
 
 ### Speed
 
