@@ -115,46 +115,65 @@ CPU loop looks up the entry for the current program counter and calls the same
 bail check, the no-progress check and interrupt handling at the start of each
 slice.
 
-Entries are filled the first time an offset runs, in chunks of 256, so memory
-grows with the code a game actually uses rather than with the size of the
-cartridge. Code outside the cartridge ROM (work RAM, high RAM, the boot ROM)
-goes through the existing fetch path.
+Each entry is filled the first time its offset runs. Code outside the
+cartridge ROM (work RAM, high RAM, the boot ROM) goes through the existing
+fetch path.
+
+Built as one flat table, one 4-byte entry per ROM byte, so a lookup is one
+load. A first version kept an index of 256-byte chunks to save memory, but
+its two dependent loads made it slower than main even with the cache on
+(Red 22,492 against 25,098 frames per second). The flat table is allocated
+zeroed, which keeps its memory cost small (see Memory below).
 
 A block cache, which runs a straight line of instructions with one set of
 checks, is not worth building. Blocks average 2.9 to 4.2 instructions, so it
 would save little over a per-instruction cache, and it is much harder to
 prove identical.
 
-### Expected gain
+### Measured gain
 
 The cache removes the ROM read, the bounds check, the length lookup and the
 operand assembly. It keeps a range check, the bank mapping and one load from
-the entry table per instruction. It should remove 35% to 60% of each save's
-fetch and decode share:
+the entry table per instruction. The estimate was +9% to +21% with the
+picture off. The measured gain is a third to a half of that.
 
-| Save | Input | Picture off now | Expected with the cache |
-| --- | --- | ---: | ---: |
-| Red | idle | 24,568 | 27,300 to 29,700 (+11% to +21%) |
-| Red | scripted | 19,004 | 21,000 to 22,700 (+10% to +19%) |
-| Gold | idle | 17,176 | 18,900 to 20,400 (+10% to +19%) |
-| Gold | scripted | 22,543 | 24,900 to 26,800 (+10% to +19%) |
-| Crystal | idle | 13,603 | 14,800 to 15,900 (+9% to +17%) |
-| Crystal | scripted | 21,350 | 23,600 to 25,500 (+11% to +20%) |
+Frames per second of the harness with the picture off, best of 5 runs of
+43,200 frames, main and the cache build interleaved:
 
-With the picture drawn the gain shrinks in proportion to the drawing share.
-The PR reports the measured numbers for every mode either way.
+| Save | Mode | Main | With the cache | Gain |
+| --- | --- | ---: | ---: | ---: |
+| Red | idle | 25,889 | 26,855 | +3.7% |
+| Red | input | 25,449 | 26,513 | +4.2% |
+| Gold | idle | 18,449 | 20,004 | +8.4% |
+| Gold | input | 24,076 | 25,698 | +6.7% |
+| Crystal | idle | 14,257 | 15,132 | +6.1% |
+| Crystal | input | 22,812 | 24,563 | +7.7% |
+
+With the picture drawn every frame the gain is +2.8% to +5.3%, and with it
+drawn every 30th frame +3.5% to +7.9%. In `benchmark.rs` it is +5.0% to
++6.2% in batch mode, +1.8% to +8.7% in frame mode, +2.6% to +4.5% in audio
+mode and +2.0% to +3.7% in render mode. No mode is slower.
+
+These numbers come from a loaded machine: one-minute load average 11 to 13
+during the `benchmark.rs` runs and 1.5 to 3 during the harness runs. Main run
+again in the same rounds, as an A/A control, came within 1.9% of the first
+main run in every mode. All 18 cells give the same state
+and frame hashes as main over 216,000 frames.
 
 ### Memory
 
-1. A table of one 4-byte index per 256 ROM bytes, sized when the CPU first
-   runs: 16 KiB for a 1 MiB cartridge such as Red, 32 KiB for a 2 MiB one such
-   as Gold or Crystal.
-2. 1 KiB of entries (4 bytes per ROM byte) for each 256-byte chunk that has
-   run code. In the hour-long replays that is 35 KiB to 452 KiB. The entry
-   vector grows by doubling, so its capacity can reach twice that.
-3. The bound, reached only if code ran from every chunk, is four times the
-   cartridge size plus the table: 4 MiB and 16 KiB for Red, 8 MiB and 32 KiB
-   for Gold and Crystal.
+1. The table holds one 4-byte entry per ROM byte: 4 MiB for a 1 MiB
+   cartridge such as Red, 8 MiB for a 2 MiB one such as Gold or Crystal. It
+   is allocated zeroed when the CPU first runs, and the system backs a zeroed
+   allocation with memory only for the pages written. Each 4 KiB page holds
+   the entries for 1 KiB of ROM.
+2. Measured at the end of a 43,200-frame run, the cache adds 128 KiB to
+   648 KiB of resident memory. Peak resident memory rises by 8 KiB for Red
+   and not at all for Gold and Crystal, whose peak comes earlier in the run.
+3. The bound, reached only if code ran from every 1 KiB of ROM, is the whole
+   table: 4 MiB for Red, 8 MiB for Gold and Crystal.
+4. A copied machine starts with an empty table, so copying a machine does
+   not copy the table or back it with memory.
 
 Save states do not include the cache. A loaded state leaves the ROM bytes as
 they were, so the entries stay valid.
