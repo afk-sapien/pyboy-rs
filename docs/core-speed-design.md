@@ -477,10 +477,27 @@ Each of these needs its own measurement and proof before it is built.
    on CGB, runs HDMA and switches speed. With the picture on every fifth
    frame and notes playing, it matches the interrupt log, state, sound and
    frames against a machine with no skipping, over 50,000 skipped changes.
-   All 18 long runs match main. Against the cache build it gains 11% to 27%
-   with the picture off and costs nothing measurable with it on, on a loaded
-   machine. That is more than the bound above, so a slice end costs more
-   than the shares the profile gave it.
+   All 18 long runs give the same state and frame hashes as the parent (B2)
+   over 216,000 frames, in the default and the PGO build. On the PGO build,
+   best of 9 rounds interleaved with the parent, it gains 15% to 35% with the
+   picture off and 12% to 35% with it drawn every 30th frame. That is more
+   than the bound above, so a slice end costs more than the shares the
+   profile gave it. The default release build gains 12% to 27% with the
+   picture off and 11% to 25% every 30th frame. Peak resident memory is
+   unchanged.
+
+   With the picture drawn every frame it reads -0.9% to +0.5%, slower than
+   the A/A control in 4 of 6 cells by at most 0.9%, and `benchmark.rs`
+   render and audio modes read -1.0% to +0.2%. The default build reads
+   -1.7% to +0.3% in the same cells. This is not only code
+   placement: the slice loop that runs with the picture on changed too. It
+   now stores the next mode change after each LCD tick and checks the
+   picture switch. But it is inside what a rebuild alone moves on this
+   machine. Recording the parent's profile again and rebuilding the
+   unchanged parent read slower than the A/A control by up to 2.7% (B1). A
+   second copy of the slice loop for the picture-on case could remove the
+   change, at the price of two hot loops to keep in step, so it was not
+   built.
 3. `lazy_slice_target`, 3.3%. No, not on its own. It runs once per slice and
    computes five deadlines without ticking any device unless the sound
    deadline may have moved. Keeping a cached minimum would save part of that
