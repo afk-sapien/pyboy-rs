@@ -81,7 +81,8 @@ and older save-state formats.
 
 - [Python API](docs/python-api.md): full surface, files, buffers and threads
 - [Real-time clock](docs/rtc.md): clock lock, export and save-state rules
-- [PyBoy compatibility](docs/compatibility.md): scope, divergences and tests
+- [PyBoy compatibility](docs/compatibility.md): direction, scope, divergences and tests
+- [Conformance](docs/conformance.md): scores on the public test ROM suites
 - [Benchmarks](docs/benchmarks.md): throughput and memory against PyBoy
 - [Core speed design](docs/core-speed-design.md): where the core spends time and what to change
 - [Execution procedures](EXECUTION.rst): input sequences, replay, profiling

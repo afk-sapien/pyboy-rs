@@ -57,6 +57,10 @@ checkouts that might not load this file automatically.
 ## Project conventions
 
 - Never use em dashes or semicolons in authored output.
+- The target is real Game Boy behaviour, not PyBoy parity (owner decision of
+  2026-11-18, quoted in `docs/compatibility.md`). Change emulated behaviour
+  only for an accuracy fix the owner has picked. Any other change must keep
+  the same save states and pictures.
 
 Required Rust syntax may use semicolons. Preserve upstream attribution.
 Never include commercial ROMs, checkpoints, credentials, or private game data.
