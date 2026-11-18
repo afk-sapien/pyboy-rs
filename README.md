@@ -83,6 +83,7 @@ and older save-state formats.
 - [Real-time clock](docs/rtc.md): clock lock, export and save-state rules
 - [PyBoy compatibility](docs/compatibility.md): scope, divergences and tests
 - [Benchmarks](docs/benchmarks.md): throughput and memory against PyBoy
+- [Core speed design](docs/core-speed-design.md): where the core spends time and what to change
 - [Execution procedures](EXECUTION.rst): input sequences, replay, profiling
 - [Releasing](docs/RELEASING.md) and [changelog](CHANGELOG.md)
 
