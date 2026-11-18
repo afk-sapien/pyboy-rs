@@ -131,7 +131,8 @@ pub struct Motherboard {
     /// Run code from ROM through instructions decoded once per ROM byte.
     /// Off, every instruction is fetched and decoded through the bus. Both
     /// execute the same instructions with the same results. The switch is
-    /// for tests and benchmarks.
+    /// test machinery, so builds without the feature always use the cache.
+    #[cfg(feature = "instruction-cache-switch")]
     pub instruction_cache: bool,
     map: MemoryMap,
     decoded: DecodedRom,
@@ -244,6 +245,7 @@ impl Machine {
                 singlestep: false,
                 singlestep_latch: false,
                 serialbuffer: Vec::new(),
+                #[cfg(feature = "instruction-cache-switch")]
                 instruction_cache: true,
                 map: MemoryMap::default(),
                 decoded: DecodedRom::default(),
@@ -599,7 +601,11 @@ impl Bus for Motherboard {
     /// decoding of the bytes `fetch` reads. The boot ROM stays mapped or
     /// unmapped for a whole slice because the ff50 write that unmaps it bails.
     fn run(&mut self, cpu: &mut Cpu, target: i64) -> Result<(), NoProgress> {
-        if !self.instruction_cache || self.bootrom_enabled {
+        #[cfg(feature = "instruction-cache-switch")]
+        if !self.instruction_cache {
+            return run_fetched(self, cpu, target);
+        }
+        if self.bootrom_enabled {
             return run_fetched(self, cpu, target);
         }
         self.decoded.sync(&self.cartridge.rom);

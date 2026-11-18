@@ -639,6 +639,7 @@ fn a_run_across_the_rebase_matches_the_same_run_at_small_clocks() {
 
 /// The same machine with the instruction cache off, which fetches and
 /// decodes every instruction through the bus.
+#[cfg(feature = "instruction-cache-switch")]
 fn fetching_copy(machine: &Machine) -> Machine {
     let mut copy = machine.clone();
     copy.mb.instruction_cache = false;
@@ -646,6 +647,7 @@ fn fetching_copy(machine: &Machine) -> Machine {
 }
 
 #[test]
+#[cfg(feature = "instruction-cache-switch")]
 fn the_instruction_cache_runs_the_same_frames_as_fetching() {
     const BUTTONS: [Button; 8] = [
         Button::Start,
@@ -686,6 +688,7 @@ fn the_instruction_cache_runs_the_same_frames_as_fetching() {
 }
 
 #[test]
+#[cfg(feature = "instruction-cache-switch")]
 fn a_rom_patch_reaches_code_the_cache_already_decoded() {
     let mut cached = new_machine(false, false, 48000);
     run_frames(&mut cached, 120);
