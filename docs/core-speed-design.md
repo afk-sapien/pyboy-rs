@@ -362,10 +362,14 @@ Each of these needs its own measurement and proof before it is built.
    3.3% at the price of invalidating it on every register write that moves a
    deadline. Item 2 cuts the number of calls instead, with no new
    invalidation rule.
-4. Slice ends on ROM-area writes, 2.7 to 239 per frame. Yes, with item 2 and
-   the same proof. A bank switch sets no interrupt flag and moves no device
-   deadline, and the cache maps banks per instruction. Crystal idle ends 36%
-   of its slices this way, other saves 1% to 15%.
+4. Slice ends on ROM-area writes, 2.7 to 239 per frame. No, measured slower.
+   A bank switch sets no interrupt flag and moves no device deadline, and the
+   cache maps banks per instruction, so a slice can go on past such a write
+   when a check finds no device event, frame end, HDMA block or interrupt
+   due and the slice target unchanged. Built that way it gave identical runs
+   but was slower in every save: 3.7% to 4.0% in batch and 0.8% to 1.4% with
+   the picture on. The likely cause is the check itself: it runs after every
+   ROM-area write and recomputes the slice target, much as a slice end does.
 5. Slice ends on sound and LCD register writes, about 10 per frame. No. Too
    few to matter.
 6. Profile-guided builds for local benchmarks. Yes, for measurement only.
