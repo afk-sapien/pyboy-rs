@@ -489,14 +489,21 @@ impl Motherboard {
             cpu.set_interruptflag(8);
         }
     }
+    #[inline(always)]
     fn tick_lcd(&mut self, cpu: &mut Cpu) {
         self.sync_lcd(cpu.cycles, cpu);
     }
 
     /// Tick the LCD to `cycles`, first taking the mode changes that slice
     /// ends skipped, so it steps as it would with a tick at each of them.
+    #[inline(always)]
     fn sync_lcd(&mut self, cycles: i64, cpu: &mut Cpu) {
-        self.take_skipped_lcd_steps(cycles, cpu);
+        // Slice ends skip mode changes only with the picture off. That
+        // changes only between frames, and run_frame leaves the LCD up to
+        // date whenever it returns.
+        if self.lcd.disable_renderer {
+            self.take_skipped_lcd_steps(cycles, cpu);
+        }
         cpu.set_interruptflag(self.lcd.tick(cycles));
         self.lcd_deadline = self.lcd.next_mode_change();
     }
@@ -505,7 +512,9 @@ impl Motherboard {
     /// the last, which a tick to `cycles` takes. A tick takes one mode
     /// change, and they are at least 80 cycles apart, so any taken here was
     /// skipped by a slice end. Those set no flag and do not end the frame.
-    /// A lagging LCD takes one mode change per tick, as in PyBoy.
+    /// A lagging LCD takes one mode change per tick, as in PyBoy. Kept out
+    /// of line, so the slice loop stays as small with the picture on.
+    #[inline(never)]
     fn take_skipped_lcd_steps(&mut self, cycles: i64, cpu: &mut Cpu) {
         while self.lcd.speed_shift == 0 {
             let next = self.lcd.next_mode_change();

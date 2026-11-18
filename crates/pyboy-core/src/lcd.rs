@@ -239,7 +239,9 @@ impl Lcd {
     /// own position, so it holds until one of those registers is written.
     /// Where it cannot tell, it names an earlier mode change, never a later
     /// one. It stops early at the last mode change before `limit`, or at the
-    /// next one when none comes before `limit`.
+    /// next one when none comes before `limit`. Kept out of line, since it
+    /// runs about once per sound frame step and the slice loop is hot.
+    #[inline(never)]
     pub fn next_flag_change(&self, limit: i64) -> i64 {
         let mut at = self.next_mode_change();
         if self.lcdc & 128 == 0 || self.reset || at >= limit {
