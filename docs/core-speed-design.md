@@ -464,6 +464,23 @@ Each of these needs its own measurement and proof before it is built.
    The proof adds a test that records the program counter at every interrupt
    entry, cache on against off, since a moved interrupt may not show in a
    save state until much later.
+
+   Built. Slice ends skip mode changes that set no flag only with the
+   picture off, since drawing needs the LCD at every mode change, and the
+   picture switch changes only between frames. The LCD takes the skipped
+   changes at their own cycles on its next tick. Sound needs two more
+   limits. A sound tick finds a 512 Hz frame step at the first slice end at
+   or past it, so skipping stops at the last mode change before the next
+   frame step, and it never goes past the sound deadline. Skipping is also
+   off while CGB HDMA runs. The lockstep test runs a ROM that enables STAT
+   sources from a table, polls LY and STAT, halts, switches the LCD off and,
+   on CGB, runs HDMA and switches speed. With the picture on every fifth
+   frame and notes playing, it matches the interrupt log, state, sound and
+   frames against a machine with no skipping, over 50,000 skipped changes.
+   All 18 long runs match main. Against the cache build it gains 11% to 27%
+   with the picture off and costs nothing measurable with it on, on a loaded
+   machine. That is more than the bound above, so a slice end costs more
+   than the shares the profile gave it.
 3. `lazy_slice_target`, 3.3%. No, not on its own. It runs once per slice and
    computes five deadlines without ticking any device unless the sound
    deadline may have moved. Keeping a cached minimum would save part of that
