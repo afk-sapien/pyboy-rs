@@ -300,10 +300,13 @@ impl Lcd {
         self.framebuffer_written = true;
     }
     fn tile_row(&self, bank: usize, tile: usize, row: usize) -> [u8; 8] {
+        self.tile_bits(bank, tile, row).to_le_bytes()
+    }
+    /// One row of a tile as eight color bytes, leftmost pixel in the low byte.
+    fn tile_bits(&self, bank: usize, tile: usize, row: usize) -> u64 {
         let address = tile * 16 + row * 2;
-        (BITPLANE[usize::from(self.vram[bank][address])]
-            | (BITPLANE[usize::from(self.vram[bank][address + 1])] << 1))
-            .to_le_bytes()
+        BITPLANE[usize::from(self.vram[bank][address])]
+            | (BITPLANE[usize::from(self.vram[bank][address + 1])] << 1)
     }
 
     pub fn scanline(&mut self) {
@@ -341,15 +344,15 @@ impl Lcd {
     }
 
     fn scanline_tiles<const COLOR: bool>(&mut self, y: usize, window: bool, wx: i64) {
-        let palettes: [[u32; 4]; 8] = std::array::from_fn(|palette| {
-            std::array::from_fn(|color| {
-                if COLOR {
-                    self.bg_color.color(palette, color as u8)
-                } else {
-                    self.dmg_color(0, self.bgp, color as u8)
-                }
+        // Without the color renderer every tile attribute is zero, so only
+        // the first palette is read.
+        let palettes: [[u32; 4]; 8] = if COLOR {
+            std::array::from_fn(|palette| {
+                std::array::from_fn(|color| self.bg_color.color(palette, color as u8))
             })
-        });
+        } else {
+            [std::array::from_fn(|color| self.dmg_color(0, self.bgp, color as u8)); 8]
+        };
         let background_end = if window { wx.max(0) as usize } else { WIDTH };
         self.tile_span::<COLOR>(
             y,
@@ -391,24 +394,37 @@ impl Lcd {
             let attr = if COLOR { self.vram[1][address] } else { 0 };
             let bank = usize::from((attr >> 3) & 1);
             let ty = if attr & 64 != 0 { 7 - py % 8 } else { py % 8 };
-            let mut colors = self.tile_row(bank, tile, ty);
+            let mut bits = self.tile_bits(bank, tile, ty);
             if attr & 32 != 0 {
-                colors.reverse();
+                bits = bits.swap_bytes();
             }
+            // Each byte is a color from 0 to 3, so bit 0 of `bits | bits >> 1`
+            // in each byte is set unless that color is 0. The attribute byte
+            // is 1 for color 0, plus 2 for a tile with priority.
+            const ONES: u64 = 0x0101_0101_0101_0101;
+            let flags = (!(bits | (bits >> 1)) & ONES) | (u64::from((attr >> 6) & 2) * ONES);
             let palette = &palettes[usize::from(attr & 7)];
             let offset = px % 8;
             let count = (8 - offset).min(span.end - x);
             let start = y * WIDTH + x;
-            let pixels = &mut self.framebuffer[start..start + count];
-            let attributes = &mut self.attributes[start..start + count];
-            let priority = (attr >> 6) & 2;
-            for ((pixel, flags), color) in pixels
-                .iter_mut()
-                .zip(attributes)
-                .zip(&colors[offset..offset + count])
-            {
-                *pixel = palette[usize::from(*color)];
-                *flags = u8::from(*color == 0) | priority;
+            let colors = bits.to_le_bytes();
+            if count == 8 {
+                self.attributes[start..start + 8].copy_from_slice(&flags.to_le_bytes());
+                for (pixel, &color) in self.framebuffer[start..start + 8].iter_mut().zip(&colors) {
+                    // Tile colors are two bits wide, so the mask changes
+                    // nothing. It lets the lookup go without a bounds check.
+                    *pixel = palette[usize::from(color & 3)];
+                }
+            } else {
+                let flags = flags.to_le_bytes();
+                self.attributes[start..start + count]
+                    .copy_from_slice(&flags[offset..offset + count]);
+                for (pixel, &color) in self.framebuffer[start..start + count]
+                    .iter_mut()
+                    .zip(&colors[offset..offset + count])
+                {
+                    *pixel = palette[usize::from(color & 3)];
+                }
             }
             x += count;
             px += count;
@@ -487,6 +503,312 @@ impl Lcd {
                 } else {
                     self.dmg_color(1, self.obp0, color)
                 };
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The drawing code as it was before the fixed-size tile stores, kept to
+    /// check that the new code draws the same pixels and attributes.
+    mod reference {
+        use super::super::*;
+
+        pub fn scanline(lcd: &mut Lcd) {
+            if lcd.disable_renderer {
+                return;
+            }
+            lcd.framebuffer_written = true;
+            let y = usize::from(lcd.ly);
+            if y == 0 {
+                lcd.ly_window = -1;
+            }
+            let wx = i64::from(lcd.wx) - 7;
+            let window = lcd.lcdc & 32 != 0 && lcd.wy <= lcd.ly && wx < 160;
+            if window {
+                lcd.ly_window += 1;
+            }
+            if !window && !lcd.color_renderer && lcd.lcdc & 1 == 0 {
+                let color = lcd.dmg_color(0, lcd.bgp, 0);
+                lcd.framebuffer[y * WIDTH..(y + 1) * WIDTH].fill(color);
+                lcd.attributes[y * WIDTH..(y + 1) * WIDTH].fill(0);
+            } else if lcd.color_renderer {
+                scanline_tiles::<true>(lcd, y, window, wx);
+            } else {
+                scanline_tiles::<false>(lcd, y, window, wx);
+            }
+            if y == 143 {
+                lcd.ly_window = -1;
+            }
+        }
+
+        fn scanline_tiles<const COLOR: bool>(lcd: &mut Lcd, y: usize, window: bool, wx: i64) {
+            let palettes: [[u32; 4]; 8] = std::array::from_fn(|palette| {
+                std::array::from_fn(|color| {
+                    if COLOR {
+                        lcd.bg_color.color(palette, color as u8)
+                    } else {
+                        lcd.dmg_color(0, lcd.bgp, color as u8)
+                    }
+                })
+            });
+            let background_end = if window { wx.max(0) as usize } else { WIDTH };
+            let (scx, scy) = (usize::from(lcd.scx), usize::from(lcd.scy));
+            let background_map = if lcd.lcdc & 8 != 0 { 0x1c00 } else { 0x1800 };
+            tile_span::<COLOR>(
+                lcd,
+                y,
+                0..background_end,
+                scx,
+                y + scy,
+                background_map,
+                &palettes,
+            );
+            if window {
+                let window_map = if lcd.lcdc & 64 != 0 { 0x1c00 } else { 0x1800 };
+                let line = lcd.ly_window as usize;
+                tile_span::<COLOR>(
+                    lcd,
+                    y,
+                    background_end..WIDTH,
+                    (background_end as i64 - wx) as usize,
+                    line,
+                    window_map,
+                    &palettes,
+                );
+            }
+        }
+
+        fn tile_span<const COLOR: bool>(
+            lcd: &mut Lcd,
+            y: usize,
+            span: std::ops::Range<usize>,
+            mut px: usize,
+            py: usize,
+            map: usize,
+            palettes: &[[u32; 4]; 8],
+        ) {
+            let map_row = map + (py / 8 * 32) % 0x400;
+            let mut x = span.start;
+            while x < span.end {
+                let address = map_row + (px / 8) % 32;
+                let mut tile = usize::from(lcd.vram[0][address]);
+                if lcd.lcdc & 16 == 0 {
+                    tile = (tile ^ 128) + 128;
+                }
+                let attr = if COLOR { lcd.vram[1][address] } else { 0 };
+                let bank = usize::from((attr >> 3) & 1);
+                let ty = if attr & 64 != 0 { 7 - py % 8 } else { py % 8 };
+                let mut colors = lcd.tile_row(bank, tile, ty);
+                if attr & 32 != 0 {
+                    colors.reverse();
+                }
+                let palette = &palettes[usize::from(attr & 7)];
+                let offset = px % 8;
+                let count = (8 - offset).min(span.end - x);
+                let start = y * WIDTH + x;
+                let pixels = &mut lcd.framebuffer[start..start + count];
+                let attributes = &mut lcd.attributes[start..start + count];
+                let priority = (attr >> 6) & 2;
+                for ((pixel, flags), color) in pixels
+                    .iter_mut()
+                    .zip(attributes)
+                    .zip(&colors[offset..offset + count])
+                {
+                    *pixel = palette[usize::from(*color)];
+                    *flags = u8::from(*color == 0) | priority;
+                }
+                x += count;
+                px += count;
+            }
+        }
+
+        pub fn scanline_sprites(lcd: &mut Lcd) {
+            if lcd.disable_renderer || lcd.lcdc & 2 == 0 {
+                return;
+            }
+            let height = if lcd.lcdc & 4 != 0 { 16 } else { 8 };
+            let ly = i64::from(lcd.ly);
+            let mut sprites = [0i64; 10];
+            let mut sprite_count = 0;
+            for n in (0..160).step_by(4) {
+                let y = i64::from(lcd.oam[n]) - 16;
+                let x = i64::from(lcd.oam[n + 1]) - 8;
+                if y <= ly && ly < y + height {
+                    sprites[sprite_count] = if lcd.color_renderer {
+                        n as i64
+                    } else {
+                        (x << 16) | n as i64
+                    };
+                    sprite_count += 1;
+                    if sprite_count == 10 {
+                        break;
+                    }
+                }
+            }
+            let sprites = &mut sprites[..sprite_count];
+            sprites.sort_unstable_by(|a, b| b.cmp(a));
+            for &sprite in sprites.iter() {
+                let n = (sprite & 255) as usize;
+                let y = i64::from(lcd.oam[n]) - 16;
+                let x = i64::from(lcd.oam[n + 1]) - 8;
+                let mut tile = usize::from(lcd.oam[n + 2]);
+                if height == 16 {
+                    tile &= !1;
+                }
+                let attr = lcd.oam[n + 3];
+                let row = if attr & 64 != 0 {
+                    height - (ly - y) - 1
+                } else {
+                    ly - y
+                } as usize;
+                let bank = if lcd.color_renderer {
+                    usize::from((attr >> 3) & 1)
+                } else {
+                    0
+                };
+                let mut colors = lcd.tile_row(bank, tile + row / 8, row % 8);
+                if attr & 32 != 0 {
+                    colors.reverse();
+                }
+                for (dx, color) in colors.into_iter().enumerate() {
+                    let dx = dx as i64;
+                    if !(0..160).contains(&(x + dx)) {
+                        continue;
+                    }
+                    if color == 0 {
+                        continue;
+                    }
+                    let pos = ly as usize * WIDTH + (x + dx) as usize;
+                    let behind = if lcd.color_renderer {
+                        lcd.lcdc & 1 != 0 && (lcd.attributes[pos] & 2 != 0 || attr & 128 != 0)
+                    } else {
+                        attr & 128 != 0
+                    };
+                    if behind && lcd.attributes[pos] & 1 == 0 {
+                        continue;
+                    }
+                    lcd.framebuffer[pos] = if lcd.color_renderer {
+                        lcd.obj_color.color(usize::from(attr & 7), color)
+                    } else if attr & 16 != 0 {
+                        lcd.dmg_color(2, lcd.obp1, color)
+                    } else {
+                        lcd.dmg_color(1, lcd.obp0, color)
+                    };
+                }
+            }
+        }
+    }
+
+    /// xorshift64*, enough to spread test inputs.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        }
+        fn byte(&mut self) -> u8 {
+            (self.next() >> 32) as u8
+        }
+        /// Mostly small or edge values for the scroll and window registers,
+        /// where the spans start and end inside tiles.
+        fn position(&mut self) -> u8 {
+            match self.next() % 4 {
+                0 => self.byte(),
+                1 => self.byte() % 16,
+                2 => 160u8.wrapping_add(self.byte() % 16).wrapping_sub(8),
+                _ => [0, 7, 8, 159, 166, 167, 255][(self.next() % 7) as usize],
+            }
+        }
+    }
+
+    fn random_lcd(rng: &mut Rng, cgb: bool, cartridge_cgb: bool) -> Lcd {
+        let mut lcd = Lcd::new(cgb, cartridge_cgb);
+        for bank in &mut lcd.vram {
+            bank.iter_mut().for_each(|byte| *byte = rng.byte());
+        }
+        lcd.oam.iter_mut().for_each(|byte| *byte = rng.byte());
+        // Put sprites on the screen often enough to overlap and clip.
+        for n in (0..160).step_by(4) {
+            if rng.next() % 2 == 0 {
+                lcd.oam[n] = 16 + rng.byte() % 150;
+                lcd.oam[n + 1] = rng.byte() % 176;
+            }
+        }
+        for color in lcd.bg_color.colors.iter_mut() {
+            *color = rng.next() as u16 & 0x7fff;
+        }
+        for color in lcd.obj_color.colors.iter_mut() {
+            *color = rng.next() as u16 & 0x7fff;
+        }
+        lcd.bgp = rng.byte();
+        lcd.obp0 = rng.byte();
+        lcd.obp1 = rng.byte();
+        lcd
+    }
+
+    /// Change the registers that drawing reads, as a game may between lines.
+    fn random_registers(rng: &mut Rng, lcd: &mut Lcd) {
+        lcd.lcdc = rng.byte() | 128;
+        lcd.scx = rng.position();
+        lcd.scy = rng.byte();
+        lcd.wx = rng.position();
+        lcd.wy = rng.position() % 150;
+        if rng.next() % 8 == 0 {
+            lcd.bgp = rng.byte();
+            lcd.obp0 = rng.byte();
+            lcd.obp1 = rng.byte();
+        }
+    }
+
+    #[test]
+    fn drawing_matches_the_reference_on_random_screens() {
+        let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+        for (cgb, cartridge_cgb) in [(false, false), (true, false), (true, true)] {
+            for frame in 0..200 {
+                let mut new = random_lcd(&mut rng, cgb, cartridge_cgb);
+                random_registers(&mut rng, &mut new);
+                let mut old = new.clone();
+                // Some frames keep one set of registers, the others change
+                // them on random lines.
+                let changes = frame % 2 == 1;
+                for ly in 0..HEIGHT as u8 {
+                    if changes && rng.next() % 4 == 0 {
+                        random_registers(&mut rng, &mut new);
+                        old.lcdc = new.lcdc;
+                        old.scx = new.scx;
+                        old.scy = new.scy;
+                        old.wx = new.wx;
+                        old.wy = new.wy;
+                        old.bgp = new.bgp;
+                        old.obp0 = new.obp0;
+                        old.obp1 = new.obp1;
+                    }
+                    new.ly = ly;
+                    old.ly = ly;
+                    new.scanline();
+                    new.scanline_sprites();
+                    reference::scanline(&mut old);
+                    reference::scanline_sprites(&mut old);
+                    assert_eq!(
+                        new.ly_window, old.ly_window,
+                        "cgb {cgb} {cartridge_cgb} frame {frame} line {ly}"
+                    );
+                }
+                assert!(
+                    new.framebuffer == old.framebuffer,
+                    "framebuffer differs: cgb {cgb} {cartridge_cgb} frame {frame}"
+                );
+                assert!(
+                    new.attributes == old.attributes,
+                    "attributes differ: cgb {cgb} {cartridge_cgb} frame {frame}"
+                );
             }
         }
     }
