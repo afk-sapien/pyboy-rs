@@ -398,7 +398,22 @@ is code placement, as for B1. In the PGO build 9
 functions differ, and 7 of them are among the 8 that a new profile alone
 changes.
 
-### B3. Deferred one-pass drawing
+### B3. Deferred one-pass drawing (declined)
+
+Declined after B1 and B2 were measured. The drawing that is left is
+per-pixel work, which B3 does not change. In a run that draws every frame,
+drawing is still 29% to 40% of the time in the sampler (default build, after
+B2) and 35% to 46% by timing on the PGO build, down from 40% to 53% before
+B1. `tile_span` alone is 19% to 26% of the run and `tile_bits` 3.6% to 5.5%.
+The per-line parts B3 could remove, `scanline` (0.3% to 0.5%) and
+`scanline_tiles` (0.4% to 1.2%) plus the call and setup around them, come to
+about 2% to 3% of the run. That is inside what a rebuild alone moves on this
+machine (up to 2.7%), and B3 would add the missed-input risk below across 13
+kinds of write. The samples, the script that splits them and every table are
+in `data/profiles/2026-11-18-loaded-ab/b3-draw/` on the measuring machine.
+`data/` is not in the repository.
+
+The design as proposed:
 
 Draw lines that are due but not drawn in one pass at the latest moment that
 still sees the same inputs. Drawing the whole frame at its end when no
@@ -435,10 +450,10 @@ a typical line does, and adds the same missed-input risk as B3.
 
 ### Recommendation
 
-Build B1 as the drawing PR, with the same proof as the cache plus identical
-framebuffers and attributes after every frame. Follow with B2 if B1 lands.
-Leave B3 until B1 and B2 have been measured, since it attacks the smaller,
-per-line part of the cost at the highest risk.
+B1 and B2 are built, each with the same proof as the cache plus identical
+framebuffers and attributes after every frame. B3 waited until both were
+measured and is declined: the per-line part of the cost it attacks is now
+inside build noise, and its risk is the highest. B4 is not built.
 
 ## Other candidates
 
@@ -504,14 +519,15 @@ Each of these needs its own measurement and proof before it is built.
    3.3% at the price of invalidating it on every register write that moves a
    deadline. Item 2 cuts the number of calls instead, with no new
    invalidation rule.
-4. Slice ends on ROM-area writes, 2.7 to 239 per frame. No, measured slower.
-   A bank switch sets no interrupt flag and moves no device deadline, and the
-   cache maps banks per instruction, so a slice can go on past such a write
-   when a check finds no device event, frame end, HDMA block or interrupt
-   due and the slice target unchanged. Built that way it gave identical runs
-   but was slower in every save: 3.7% to 4.0% in batch and 0.8% to 1.4% with
-   the picture on. The likely cause is the check itself: it runs after every
-   ROM-area write and recomputes the slice target, much as a slice end does.
+4. Slice ends on ROM-area writes, 2.7 to 239 per frame. Dropped, measured
+   slower. A bank switch sets no interrupt flag and moves no device
+   deadline, and the cache maps banks per instruction, so a slice can go on
+   past such a write when a check finds no device event, frame end, HDMA
+   block or interrupt due and the slice target unchanged. Built that way it
+   gave identical runs but was slower in every save: 3.7% to 4.0% in batch
+   and 0.8% to 1.4% with the picture on. The likely cause is the check
+   itself: it runs after every ROM-area write and recomputes the slice
+   target, much as a slice end does.
 5. Slice ends on sound and LCD register writes, about 10 per frame. No. Too
    few to matter.
 6. Profile-guided builds for local benchmarks. Yes, for measurement only.
@@ -520,3 +536,41 @@ Each of these needs its own measurement and proof before it is built.
 7. Function-pointer dispatch in place of the opcode match. No. The compiler
    already emits a jump table, and indirect calls would stop inlining of the
    small handlers.
+
+## Measured gains
+
+Harness frames per second on the PGO build as released, each change against
+the main it merged into, best of 9 rounds of 43,200 frames. Each round ran
+the parent, the change and the parent again, so every cell has an A/A
+control. The A/A spread was within 1.5% in every cell. As a control for build
+noise, the unchanged cache build, rebuilt from a newly recorded profile, read
+-0.9% to +1.5% in these cells and down to -2.7% in `benchmark.rs`. A gain
+under about 1.5% cannot be told apart from a rebuild.
+
+| Change | Picture | Red idle | Red input | Gold idle | Gold input | Crystal idle | Crystal input |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A, the cache (#30) | off | +9.9% | +7.0% | +3.1% | +6.1% | +6.8% | +7.0% |
+| | every frame | +7.8% | +5.1% | +3.4% | +4.8% | +4.2% | +5.0% |
+| B1 (#29) | off | -0.4% | +0.3% | +0.2% | +0.1% | +0.4% | -0.2% |
+| | every frame | +6.4% | +8.2% | +9.7% | +8.9% | +7.0% | +8.5% |
+| B2 (#32) | off | 0.0% | +0.5% | +2.2% | +0.1% | +0.5% | -1.1% |
+| | every frame | +2.6% | +3.5% | +4.3% | +4.2% | +3.1% | +4.0% |
+| Item 2 (#33) | off | +34.9% | +28.5% | +18.1% | +15.1% | +21.8% | +15.5% |
+| | every frame | -0.9% | -0.9% | -0.8% | +0.2% | +0.5% | -0.9% |
+| All four, end to end | off | +46.6% | +36.4% | +27.1% | +22.2% | +29.8% | +22.4% |
+| | every frame | +16.9% | +17.7% | +16.5% | +17.9% | +15.1% | +17.7% |
+
+The end-to-end rows run main before the cache (af89e51) and main after item
+2 (48cbb91) in the same rounds, so they are measured, not multiplied from the
+rows above. Multiplying the four rows comes within 2.4 points of them in
+every cell. With the picture drawn every 30th frame, end to end read +20.7%
+to +44.8%. The full set, with raw rounds and hashes, is in
+`data/profiles/2026-11-18-end-to-end/e2e.txt` (`data/` is not in the
+repository).
+
+B2's Crystal input reading with the picture off was rechecked and read +0.4%.
+Peak resident memory on the PGO build rose with the cache, from 6,472 to
+about 6,600 kB for Red and from 7,040 to 7,168 kB for Gold and Crystal, and
+did not change with B1, B2 or item 2. All 18 cells give the same state and
+frame hashes before and after each change in the default build, after B1, B2
+and item 2 in the PGO build, and end to end in the PGO build.
