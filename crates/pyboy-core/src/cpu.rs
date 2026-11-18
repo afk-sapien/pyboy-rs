@@ -67,6 +67,10 @@ pub struct Cpu {
     pub stopped: bool,
     pub bail: bool,
     pub cycles: i64,
+    /// When set, every interrupt taken as (cycles, program counter, flag),
+    /// for tests to check that interrupts land on the same instruction.
+    #[cfg(feature = "instruction-cache-switch")]
+    pub interrupt_log: Option<Vec<(i64, i64, i64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +85,10 @@ impl Cpu {
     }
 
     pub fn handle_interrupt<B: Bus>(&mut self, bus: &mut B, flag: i64, address: i64) {
+        #[cfg(feature = "instruction-cache-switch")]
+        if let Some(log) = &mut self.interrupt_log {
+            log.push((self.cycles, self.pc, flag));
+        }
         self.interrupts_flag_register ^= flag;
         bus.write((self.sp - 1) as u16, (self.pc >> 8) as u8, self);
         bus.write((self.sp - 2) as u16, self.pc as u8, self);

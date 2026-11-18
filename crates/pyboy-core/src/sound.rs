@@ -479,6 +479,17 @@ impl Sound {
             && (self.cycles + absolute_cycles - self.last_cycles) as f64 >= self.cycles_target_512hz
     }
 
+    /// The first cycle at which `frame_step_due` holds, in single speed, or
+    /// `i64::MAX` when the sound is not emulated.
+    #[inline]
+    pub fn frame_step_cycle(&self) -> i64 {
+        if !self.emulate {
+            return i64::MAX;
+        }
+        // For a whole number c, c as f64 >= x exactly when c >= x.ceil().
+        self.last_cycles - self.cycles + self.cycles_target_512hz.ceil() as i64
+    }
+
     /// PyBoy compares `cycles_to_interrupt`, a reading of the sound clock,
     /// with deadlines of the other devices that count from now. A tick in
     /// single speed sets it to the rounded up sample or frame sequencer

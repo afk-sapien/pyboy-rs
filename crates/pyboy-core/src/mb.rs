@@ -128,14 +128,30 @@ pub struct Motherboard {
     pub singlestep: bool,
     pub singlestep_latch: bool,
     pub serialbuffer: Vec<u8>,
-    /// Run code from ROM through instructions decoded once per ROM byte.
-    /// Off, every instruction is fetched and decoded through the bus. Both
+    /// Run code from ROM through instructions decoded once per ROM byte,
+    /// and with the picture off end slices only at the LCD mode changes
+    /// that set a flag or end the frame. Off, every instruction is fetched
+    /// and decoded through the bus and every mode change ends a slice. Both
     /// execute the same instructions with the same results. The switch is
     /// test machinery, so builds without the feature always use the cache.
     #[cfg(feature = "instruction-cache-switch")]
     pub instruction_cache: bool,
     map: MemoryMap,
     decoded: DecodedRom,
+    /// The cycle a lazy slice end must tick the LCD at or after. It is the
+    /// LCD's next mode change, or with the picture off the next one that
+    /// sets an interrupt flag or ends the frame, or comes before a sound
+    /// frame sequencer step.
+    lcd_deadline: i64,
+    /// `Lcd::next_flag_change` up to `lcd_flag_limit` as worked out since
+    /// the last write to LCDC, STAT or LYC, or i64::MIN when it must be
+    /// worked out again.
+    lcd_flag_change: i64,
+    lcd_flag_limit: i64,
+    /// How many LCD mode changes ran without a slice end of their own, for
+    /// tests to check that the skipping ran.
+    #[cfg(feature = "instruction-cache-switch")]
+    pub skipped_lcd_steps: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -249,6 +265,11 @@ impl Machine {
                 instruction_cache: true,
                 map: MemoryMap::default(),
                 decoded: DecodedRom::default(),
+                lcd_deadline: i64::MIN,
+                lcd_flag_change: i64::MIN,
+                lcd_flag_limit: i64::MIN,
+                #[cfg(feature = "instruction-cache-switch")]
+                skipped_lcd_steps: 0,
             }
             .remapped(),
         })
@@ -274,6 +295,9 @@ impl Machine {
     /// falls in between. So a slice end here ticks only the devices with an
     /// event due. The others catch up when the CPU reaches their registers
     /// and at the end of the frame, before anything outside can see them.
+    /// With the picture off, an LCD mode change that sets no flag and does
+    /// not end the frame is no event here either, away from a sound frame
+    /// sequencer step. The LCD takes it when it next ticks, at its own cycle.
     pub fn run_frame(&mut self) -> Result<bool, NoProgress> {
         // Whether every device was ticked at the last slice end, so that its
         // deadline fields hold what PyBoy sizes the next slice from.
@@ -318,7 +342,7 @@ impl Machine {
             }
             #[cfg(feature = "profile")]
             self.profile.mark(3);
-            if !lazy || self.mb.lcd.mode_change_due(now) {
+            if !lazy || now >= self.mb.lcd_deadline {
                 self.mb.tick_lcd(&mut self.cpu);
             }
             #[cfg(feature = "profile")]
@@ -465,8 +489,91 @@ impl Motherboard {
             cpu.set_interruptflag(8);
         }
     }
+    #[inline(always)]
     fn tick_lcd(&mut self, cpu: &mut Cpu) {
-        cpu.set_interruptflag(self.lcd.tick(cpu.cycles));
+        self.sync_lcd(cpu.cycles, cpu);
+    }
+
+    /// Tick the LCD to `cycles`, first taking the mode changes that slice
+    /// ends skipped, so it steps as it would with a tick at each of them.
+    #[inline(always)]
+    fn sync_lcd(&mut self, cycles: i64, cpu: &mut Cpu) {
+        // Slice ends skip mode changes only with the picture off. That
+        // changes only between frames, and run_frame leaves the LCD up to
+        // date whenever it returns.
+        if self.lcd.disable_renderer {
+            self.take_skipped_lcd_steps(cycles, cpu);
+        }
+        cpu.set_interruptflag(self.lcd.tick(cycles));
+        self.lcd_deadline = self.lcd.next_mode_change();
+    }
+
+    /// Take each LCD mode change before `cycles` at its own cycle, but for
+    /// the last, which a tick to `cycles` takes. A tick takes one mode
+    /// change, and they are at least 80 cycles apart, so any taken here was
+    /// skipped by a slice end. Those set no flag and do not end the frame.
+    /// A lagging LCD takes one mode change per tick, as in PyBoy. Kept out
+    /// of line, so the slice loop stays as small with the picture on.
+    #[inline(never)]
+    fn take_skipped_lcd_steps(&mut self, cycles: i64, cpu: &mut Cpu) {
+        while self.lcd.speed_shift == 0 {
+            let next = self.lcd.next_mode_change();
+            if next + 80 > cycles || next <= self.lcd.last_cycles {
+                break;
+            }
+            #[cfg(feature = "instruction-cache-switch")]
+            {
+                self.skipped_lcd_steps += 1;
+            }
+            let flag = self.lcd.tick(next);
+            debug_assert_eq!(flag, 0, "a skipped LCD mode change set a flag");
+            cpu.set_interruptflag(flag);
+        }
+    }
+
+    /// Forget the LCD deadlines worked out so far, after the LCD or the
+    /// clocks change other than by ticking.
+    pub(crate) fn reset_lcd_deadline(&mut self) {
+        self.lcd_deadline = self.lcd.next_mode_change();
+        self.lcd_flag_change = i64::MIN;
+    }
+
+    /// The cycle the next slice must end by for the LCD. With the picture
+    /// off, a mode change that sets no flag and does not end the frame
+    /// changes nothing the CPU can see before it reads or writes an LCD
+    /// register, and those take the skipped mode changes first. So such a
+    /// mode change needs no slice end. HDMA runs at the start of mode 0,
+    /// and a lagging LCD takes one mode change per tick, so with either
+    /// every mode change ends a slice.
+    ///
+    /// The sound sees slice ends too. A tick finds a frame sequencer step at
+    /// the first slice end at or past its cycle and lands it at the next,
+    /// so mode changes from the last one before that cycle on stay slice
+    /// ends until the step lands. And PyBoy counts the sound deadline from
+    /// the slice start, so no mode change is skipped while it could bind.
+    #[inline]
+    fn next_lcd_deadline(&mut self, now: i64) -> i64 {
+        let next = self.lcd.next_mode_change();
+        #[cfg(feature = "instruction-cache-switch")]
+        if !self.instruction_cache {
+            return next;
+        }
+        if !self.lcd.disable_renderer
+            || (self.cgb && self.hdma.active)
+            || self.lcd.clock >= self.lcd.clock_target
+        {
+            return next;
+        }
+        let limit = self.sound.frame_step_cycle();
+        if self.lcd_flag_change < next || self.lcd_flag_limit != limit {
+            self.lcd_flag_change = self.lcd.next_flag_change(limit);
+            self.lcd_flag_limit = limit;
+        }
+        let deadline = self.lcd_flag_change;
+        if (self.sound.cycles_to_interrupt as u64) < (deadline - now) as u64 {
+            return next;
+        }
+        deadline
     }
 
     /// Whether a slice end may skip the devices with no event due. Double
@@ -514,6 +621,7 @@ impl Motherboard {
     /// whenever a tick could change the minimum.
     #[inline]
     fn lazy_slice_target(&mut self, now: i64) -> i64 {
+        self.lcd_deadline = self.next_lcd_deadline(now);
         let lcd = &self.lcd;
         let lag = now - lcd.last_cycles;
         let mode0 = if !(self.cgb && self.hdma.active) {
@@ -530,7 +638,7 @@ impl Motherboard {
         };
         let others = [
             timer,
-            lcd.next_mode_change() - now,
+            self.lcd_deadline - now,
             FRAME_CYCLES - lcd.clock - lag,
             self.serial.next_target() - now,
             mode0,
@@ -559,7 +667,7 @@ impl Motherboard {
             cpu.set_interruptflag(4);
         }
         if self.lcd.last_cycles < cycles {
-            cpu.set_interruptflag(self.lcd.tick(cycles));
+            self.sync_lcd(cycles, cpu);
         }
     }
 }
@@ -646,8 +754,11 @@ impl Bus for Motherboard {
     fn switch_speed(&mut self, cpu: &mut Cpu) {
         if self.key1 & 1 != 0 {
             self.double_speed = !self.double_speed;
+            self.take_skipped_lcd_steps(cpu.cycles, cpu);
             self.lcd.tick(cpu.cycles);
             self.lcd.speed_shift = u8::from(self.double_speed);
+            // The cycles of later mode changes move with the speed.
+            self.reset_lcd_deadline();
             self.sound.tick(cpu.cycles);
             self.sound.speed_shift = u8::from(self.double_speed);
             self.key1 ^= 129;
@@ -1057,6 +1168,9 @@ impl Motherboard {
                             0xff4a => self.lcd.wy = value,
                             _ => self.lcd.wx = value,
                         }
+                        if matches!(address, 0xff40 | 0xff41 | 0xff45) {
+                            self.reset_lcd_deadline();
+                        }
                     }
                     _ => self.ram[usize::from(address)] = value,
                 }
@@ -1074,6 +1188,9 @@ impl Motherboard {
             0xff51..=0xff54 if self.cgb => self.hdma.regs[usize::from(address - 0xff51)] = value,
             0xff55 if self.cgb => {
                 self.hdma_start(value, cpu);
+                // HDMA runs in mode 0, so the slice end brings the LCD up
+                // to date whether or not a mode change is due.
+                self.lcd_deadline = i64::MIN;
                 cpu.bail = true;
             }
             0xff68 if self.cgb => self.lcd.bg_color.index = value,

@@ -233,6 +233,65 @@ impl Lcd {
         self.next_mode_change() <= cycles
     }
 
+    /// The cycle of the next mode change that sets an interrupt flag or ends
+    /// the frame, in single speed. It follows the mode changes `tick` would
+    /// take and reads only LCDC, the STAT sources and LYC besides the LCD's
+    /// own position, so it holds until one of those registers is written.
+    /// Where it cannot tell, it names an earlier mode change, never a later
+    /// one. It stops early at the last mode change before `limit`, or at the
+    /// next one when none comes before `limit`. Kept out of line, since it
+    /// runs about once per sound frame step and the slice loop is hot.
+    #[inline(never)]
+    pub fn next_flag_change(&self, limit: i64) -> i64 {
+        let mut at = self.next_mode_change();
+        if self.lcdc & 128 == 0 || self.reset || at >= limit {
+            return at;
+        }
+        let first = at;
+        let lyc = (self.stat & 64 != 0).then_some(self.lyc);
+        let mut ly = self.ly;
+        let mut mode = self.stat & 3;
+        let mut next = self.next_stat_mode;
+        // A frame has 442 mode changes.
+        for _ in 0..450 {
+            if ly == 153 {
+                return at;
+            }
+            if next > 3 {
+                return first;
+            }
+            // set_mode flags entry to modes 0, 1 and 2 when their STAT source is on.
+            let mut flag = next != mode && next != 3 && self.stat & (8 << next) != 0;
+            mode = next;
+            let length = match mode {
+                2 => {
+                    ly = ly.wrapping_add(1);
+                    next = 3;
+                    flag |= lyc == Some(ly);
+                    80
+                }
+                3 => {
+                    next = 0;
+                    170
+                }
+                0 => {
+                    next = if ly < 143 { 2 } else { 1 };
+                    206
+                }
+                _ => {
+                    ly = ly.wrapping_add(1);
+                    flag |= ly == 144 || lyc == Some(ly);
+                    456
+                }
+            };
+            if flag || at + length >= limit {
+                return at;
+            }
+            at += length;
+        }
+        first
+    }
+
     pub fn tick(&mut self, cycles: i64) -> u8 {
         let elapsed = cycles - self.last_cycles;
         if elapsed == 0 {

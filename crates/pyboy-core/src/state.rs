@@ -282,6 +282,7 @@ impl Machine {
         }
         candidate.validate_state()?;
         candidate.mb.remap();
+        candidate.mb.reset_lcd_deadline();
         candidate.mb.lcd.framebuffer_written = true;
         *self = candidate;
         Ok(())
@@ -335,6 +336,7 @@ impl Machine {
         sound.cycles_target -= delta as f64;
         sound.cycles_target_512hz -= delta as f64;
         sound.div_apu %= 8;
+        mb.reset_lcd_deadline();
     }
 
     fn codec(&mut self, c: &mut Codec, wall: f64) -> Result<(), &'static str> {
