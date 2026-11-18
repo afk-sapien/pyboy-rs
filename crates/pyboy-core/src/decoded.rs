@@ -10,9 +10,6 @@
 use crate::cartridge::Rom;
 use crate::opcodes::OPCODE_LENGTHS;
 
-/// ROM bytes per lazily allocated run of entries.
-const CHUNK: usize = 256;
-
 /// Set in every decoded entry, so a zero entry is one not decoded yet.
 const DECODED: u32 = 1 << 31;
 
@@ -31,16 +28,25 @@ pub(crate) fn decode([pc1, pc2, pc3]: [u8; 3]) -> (u16, u16) {
     (u16::from(pc1), value)
 }
 
-#[derive(Debug, Clone, Default)]
+/// One entry per ROM byte, so a lookup is a single load. The table is
+/// allocated zeroed, and the system backs a zeroed allocation with memory
+/// only for the pages written, which are the pages of ROM that code ran from.
+#[derive(Debug, Default)]
 pub(crate) struct DecodedRom {
     /// The ROM generation the entries were decoded from. Zero, which no ROM
     /// has, until the first `sync`.
     generation: u64,
-    /// For each `CHUNK` bytes of ROM, one more than the index of its run of
-    /// entries in `entries`, or zero while none of its bytes ran.
-    chunks: Vec<u32>,
-    /// `DECODED | opcode << 16 | value` per ROM byte of each chunk in use.
+    /// `DECODED | opcode << 16 | value` for each ROM byte an instruction
+    /// ran from, zero for the others.
     entries: Vec<u32>,
+}
+
+impl Clone for DecodedRom {
+    /// A copy starts empty and decodes again on first use, so copying a
+    /// machine does not copy, and back with memory, the whole table.
+    fn clone(&self) -> Self {
+        Self::default()
+    }
 }
 
 impl DecodedRom {
@@ -49,9 +55,9 @@ impl DecodedRom {
     pub fn sync(&mut self, rom: &Rom) {
         if self.generation != rom.generation() {
             self.generation = rom.generation();
-            self.chunks.clear();
-            self.chunks.resize(rom.len().div_ceil(CHUNK), 0);
-            self.entries.clear();
+            // A new zeroed table, since clearing the old one would write,
+            // and so back with memory, every page of it.
+            self.entries = vec![0; rom.len()];
         }
     }
 
@@ -60,36 +66,27 @@ impl DecodedRom {
     /// do not all lie in `rom`. `rom` is the ROM last passed to `sync`.
     #[inline(always)]
     pub fn get(&mut self, rom: &[u8], offset: usize) -> Option<(u16, u16)> {
-        let slot = *self.chunks.get(offset / CHUNK)? as usize;
-        if slot != 0 {
-            let entry = self.entries[(slot - 1) * CHUNK + offset % CHUNK];
-            if entry != 0 {
-                return Some(((entry >> 16) as u16 & 0x1ff, entry as u16));
-            }
+        let entry = *self.entries.get(offset)?;
+        if entry != 0 {
+            return Some(((entry >> 16) as u16 & 0x1ff, entry as u16));
         }
         self.fill(rom, offset)
     }
 
-    /// Decode and keep the instruction at `offset`, allocating the entries
-    /// of its chunk on first use.
+    /// Decode and keep the instruction at `offset`.
     #[cold]
     #[inline(never)]
     fn fill(&mut self, rom: &[u8], offset: usize) -> Option<(u16, u16)> {
         let bytes = rom.get(offset..offset.checked_add(3)?)?;
         let (opcode, value) = decode([bytes[0], bytes[1], bytes[2]]);
-        let slot = self.chunks.get_mut(offset / CHUNK)?;
-        if *slot == 0 {
-            self.entries.resize(self.entries.len() + CHUNK, 0);
-            *slot = u32::try_from(self.entries.len() / CHUNK).ok()?;
-        }
-        let index = (*slot as usize - 1) * CHUNK + offset % CHUNK;
-        self.entries[index] = DECODED | (u32::from(opcode) << 16) | u32::from(value);
+        *self.entries.get_mut(offset)? = DECODED | (u32::from(opcode) << 16) | u32::from(value);
         Some((opcode, value))
     }
 
-    /// Bytes allocated for the entries and the chunk table.
+    /// Bytes allocated for the table. Only the pages of it that hold decoded
+    /// entries take memory.
     pub fn heap_bytes(&self) -> usize {
-        (self.chunks.capacity() + self.entries.capacity()) * std::mem::size_of::<u32>()
+        self.entries.capacity() * std::mem::size_of::<u32>()
     }
 }
 
@@ -158,6 +155,22 @@ mod tests {
         assert_eq!(decoded.get(&first, 0x100), Some((0x00, 0)));
         decoded.sync(&second);
         assert_eq!(decoded.get(&second, 0x100), Some((0xc3, 0x0150)));
+    }
+
+    #[test]
+    fn a_copy_starts_empty_and_decodes_again() {
+        let mut bytes = vec![0; 32768];
+        bytes[0x200] = 0x21;
+        bytes[0x201] = 0x34;
+        bytes[0x202] = 0x12;
+        let rom = rom(bytes);
+        let mut decoded = DecodedRom::default();
+        decoded.sync(&rom);
+        assert_eq!(decoded.get(&rom, 0x200), Some((0x21, 0x1234)));
+        let mut copy = decoded.clone();
+        assert_eq!(copy.heap_bytes(), 0);
+        copy.sync(&rom);
+        assert_eq!(copy.get(&rom, 0x200), Some((0x21, 0x1234)));
     }
 
     #[test]
