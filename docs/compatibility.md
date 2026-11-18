@@ -95,6 +95,9 @@ CPU interrupt semantics. Deliberate differences:
   but `registers()["cycles"]` and the clocks in a save state are smaller than
   PyBoy's after about 388 emulated days. A state with more than 2^48 cycles is
   rebased the same way on load instead of being refused.
+- Input that a hook sends with no delay (`button_press`, or the press of
+  `button`) is applied at the start of the next frame. PyBoy 2.7.0 clears its
+  event list after every frame, so it drops that input.
 - Input validation is stricter, so the public API is not identical in every
   edge case.
 

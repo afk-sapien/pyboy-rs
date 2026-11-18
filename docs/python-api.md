@@ -61,6 +61,12 @@ Native frame execution releases the GIL. Hook callbacks run in Python between
 native execution segments, so a hook may tick another emulator. Recursively
 ticking the same emulator raises an error.
 
+`tick` runs its frames in native calls of up to 600 frames (ten emulated
+seconds) and checks for Ctrl+C between calls. A call ends early where Python is
+needed: at a hook, at the frame where queued input comes due, before the frame
+`tick_read` reads, and after every frame while recording. Only the last frame
+of a `tick` draws or samples sound, as before.
+
 An emulator is not thread-safe. Touching it from another thread (memory,
 `save_state` and so on) while `tick` is running raises
 `RuntimeError: Already borrowed` in that thread. The running frame is
