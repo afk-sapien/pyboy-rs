@@ -1,4 +1,6 @@
-// Generated from PyBoy 2.7.0 core/sound.py by tools/generate_channels.py.
+// First generated from PyBoy 2.7.0 core/sound.py. Edited by hand since the
+// first fix that PyBoy does not have, and the generator is retired (see
+// docs/compatibility.md).
 // SPDX-License-Identifier: LGPL-3.0-only
 #![allow(
     unused_parens,
@@ -668,8 +670,10 @@ impl WaveChannel {
     }
     pub fn getwavebyte(&mut self, offset: i64) -> i64 {
         if self.enable != 0 {
+            // On CGB the access goes to the byte holding the sample the
+            // channel is playing. There are 32 samples, two to a byte.
             if self.cgb != 0 {
-                return self.wavetable[(self.waveframe % 16) as usize];
+                return self.wavetable[(self.waveframe / 2) as usize];
             } else {
                 return 255;
             }
@@ -681,7 +685,7 @@ impl WaveChannel {
     pub fn setwavebyte(&mut self, offset: i64, value: i64) -> i64 {
         if self.enable != 0 {
             if self.cgb != 0 {
-                self.wavetable[(self.waveframe % 16) as usize] = value;
+                self.wavetable[(self.waveframe / 2) as usize] = value;
             } else {
             }
         } else {
@@ -986,5 +990,33 @@ impl NoiseChannel {
         codec.int(&mut self.lfsrfeed, 8)?;
         codec.int(&mut self.volume, 8)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cgb_wave_ram_access_while_playing_goes_to_the_current_sample() {
+        let mut wave = WaveChannel::new(1);
+        wave.wavetable = (0..16).collect();
+        wave.enable = 1;
+        for waveframe in 0..32 {
+            wave.waveframe = waveframe;
+            assert_eq!(wave.getwavebyte(3), waveframe / 2);
+        }
+        for waveframe in 0..32 {
+            wave.waveframe = waveframe;
+            wave.setwavebyte(3, 100 + waveframe);
+            assert_eq!(wave.wavetable[(waveframe / 2) as usize], 100 + waveframe);
+        }
+        // DMG reads 0xFF and drops writes while the channel plays.
+        let mut wave = WaveChannel::new(0);
+        wave.enable = 1;
+        wave.waveframe = 9;
+        wave.setwavebyte(3, 7);
+        assert_eq!(wave.getwavebyte(3), 255);
+        assert!(wave.wavetable.iter().all(|byte| *byte == 255));
     }
 }
