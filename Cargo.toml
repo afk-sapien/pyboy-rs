@@ -10,5 +10,5 @@ license = "LGPL-3.0-only"
 rust-version = "1.85"
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 codegen-units = 1
