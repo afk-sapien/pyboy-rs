@@ -504,13 +504,58 @@ every 30th frame (-3.5% against -0.9%). Placement moves the default build
 more than the PGO build here too. The raw rounds, hashes and scripts are in
 `data/profiles/2026-11-18-padded-line/` (`data/` is not in the repository).
 
+### B6. Sprite colors once per sprite, and on-screen columns only (dropped)
+
+Two changes to the sprite loop, built one on top of the other:
+
+1. B6a looks up a sprite's four colors and which background pixels hide it
+   once per sprite on each line, instead of once per pixel.
+2. B6b works out once which of a sprite's eight columns are on the screen
+   and draws only those, instead of checking each pixel against the edges.
+
+Both gave identical runs: all 18 long-run cells give the same state and
+frame hashes as their parent over 216,000 frames in the default build. Peak
+resident memory did not change. Neither leaves the code simpler: B6a adds 12
+lines to `lcd.rs` and B6b adds 5. So each had to win by more than the A/A
+spread of its own rounds, and neither did.
+
+Harness frames per second with the picture drawn every frame, best of 9
+rounds interleaved with the parent, PGO build as released. B6a is measured
+against B5 and B6b against B6a:
+
+| Save | Mode | B6a | A/A | B6b | A/A |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Red | idle | -1.4% | +0.3% | +1.3% | -0.1% |
+| Red | input | -3.1% | -0.1% | +0.7% | -0.1% |
+| Gold | idle | -1.9% | +0.6% | -0.2% | -0.1% |
+| Gold | input | +0.3% | +0.4% | +0.8% | -0.3% |
+| Crystal | idle | -1.0% | +0.3% | +0.6% | -0.5% |
+| Crystal | input | +0.7% | +0.1% | +1.3% | +0.3% |
+
+- B6a is slower than the A/A control in 15 of the 18 harness cells and 8 of
+  the 12 `benchmark.rs` modes. Render mode reads +1.7%, -2.7% and -1.1%.
+  With the picture off, where none of the changed code runs, it reads -0.3%
+  to -2.8%, so code placement moved the whole loop. The default release
+  build gains +0.5% to +1.9% drawn every frame and +0.2% to +2.4% in render
+  mode, which PGO does not keep.
+- B6b reads -2.1% to +1.3% across the harness and -0.3% to +1.4% in render
+  mode. The largest A/A reading in its rounds was 1.5% in the harness and
+  1.0% in `benchmark.rs`, so no cell gains more than build noise. It was
+  only measured on top of B6a, which is dropped with it.
+- Crystal's sound output in `benchmark.rs` audio mode differed between
+  rounds of B6b, and between the parent's own two rounds the same way. The
+  cartridge clock there starts from the wall clock.
+
+The one-minute load average was 1.5 to 2.2 during the PGO rounds. The raw
+rounds, hashes and scripts are in `data/profiles/2026-11-18-sprite-pick-clip/`.
+
 ### Recommendation
 
 B1, B2 and B5 are built, each with the same proof as the cache plus
 identical framebuffers and attributes after every frame. B3 waited until B1
 and B2 were measured and is declined: the per-line part of the cost it
 attacks is now inside build noise, and its risk is the highest. B4 is not
-built.
+built. B6 was built, measured inside build noise or slower, and dropped.
 
 ## C. One native call for many frames (built)
 
