@@ -448,12 +448,69 @@ No. Proving a line unchanged means tracking all of VRAM, OAM, the palettes
 and the registers since the last drawn frame, which costs about what drawing
 a typical line does, and adds the same missed-input risk as B3.
 
+### B5. Whole tiles into a padded line buffer (built)
+
+After B1 the first and last tile of each background or window span still
+took a separate partial copy, since the scroll offset puts the span edges
+inside a tile. B5 draws every tile whole into a line buffer of 176 pixels,
+the 160 on screen plus 8 of margin on each side, and copies the 160 screen
+pixels and their attributes into the framebuffer once per line:
+
+1. The first tile of a span starts up to 7 pixels left of the span and the
+   last ends up to 7 pixels right of it, in the margin.
+2. The window is drawn after the background, so it covers the background
+   tile that runs past its left edge.
+3. The partial-tile branch is gone. The loop has one body, of fixed length 8.
+
+- Identical framebuffers: each screen pixel gets the same color and
+  attributes from the same tile, row and palette. The pixels outside the
+  span land in the margin or under the window and are never copied out.
+- Proof: the random comparison against the old drawing code from B1 and B2
+  covers scroll offsets and window positions, including a window left of
+  the screen edge. All 18 long-run cells give the same state and frame
+  hashes as the parent over 216,000 frames, in the default and the PGO build.
+- Memory: the two buffers add 880 bytes per machine. Peak resident memory
+  rises by at most 4 kB (one page) in Red on the PGO build and 12 kB in the
+  default build, and does not change in Gold or Crystal.
+- Risk: low. The output is compared against the old code, and the buffers
+  are written before they are read on every line.
+
+Harness frames per second with the picture drawn every frame, best of 9
+rounds interleaved with the parent (main at dc0c24e, whose core is the same
+as after #38), PGO build as released:
+
+| Save | Mode | Parent | B5 | Gain | A/A |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Red | idle | 18,069 | 18,662 | +3.3% | -0.3% |
+| Red | input | 19,492 | 20,166 | +3.5% | +0.1% |
+| Gold | idle | 14,379 | 15,109 | +5.1% | 0.0% |
+| Gold | input | 16,194 | 16,777 | +3.6% | +0.3% |
+| Crystal | idle | 11,898 | 12,372 | +4.0% | 0.0% |
+| Crystal | input | 15,460 | 15,866 | +2.6% | +0.2% |
+
+The largest A/A reading in these rounds was 0.7% in the harness and 1.0% in
+`benchmark.rs`. In `benchmark.rs` the PGO build gains +2.7% to +4.7% in
+render mode and +1.4% to +2.7% in audio mode. Drawn every 30th frame the
+harness reads 0.0% to +2.1%.
+
+With the picture off none of the changed code runs, and `benchmark.rs` batch
+and frame modes never draw. On the PGO build those read -0.1% to +1.4% in
+the harness and +0.8% to +3.0% in `benchmark.rs`. That is code placement, as
+for B1, not a gain from B5. The default release build gains +0.8% to +3.1%
+in the harness cells drawn every frame, +1.9% to +4.5% in render mode and
++0.9% to +3.1% in audio mode. Its cells that draw rarely or never read -3.5%
+to +1.0%, slower than the A/A control in 7 of 18, most in Gold idle drawn
+every 30th frame (-3.5% against -0.9%). Placement moves the default build
+more than the PGO build here too. The raw rounds, hashes and scripts are in
+`data/profiles/2026-11-18-padded-line/` (`data/` is not in the repository).
+
 ### Recommendation
 
-B1 and B2 are built, each with the same proof as the cache plus identical
-framebuffers and attributes after every frame. B3 waited until both were
-measured and is declined: the per-line part of the cost it attacks is now
-inside build noise, and its risk is the highest. B4 is not built.
+B1, B2 and B5 are built, each with the same proof as the cache plus
+identical framebuffers and attributes after every frame. B3 waited until B1
+and B2 were measured and is declined: the per-line part of the cost it
+attacks is now inside build noise, and its risk is the highest. B4 is not
+built.
 
 ## C. One native call for many frames (built)
 
@@ -479,12 +536,16 @@ where either could matter on the one-frame path. So the frames run exactly as
 before. All 18 cells give the same state and frame hashes before and after
 over 216,000 frames, in the default and the PGO build.
 
-The gain is small because the wrapper was already cheap. With a stub machine
-that returns at once, the parent's `tick(12)` costs 2,258 ns per call, about
-190 ns per frame, and the change's 622 ns. That is 0.8% of a Red frame at
-42,000 fps and 0.4% of a Crystal frame at 21,000 fps. On the PGO build, best
-of 9 rounds of 86,400 frames, with tick lengths following the input schedule
-of the speed harness (7,174 calls):
+On one thread this is not a speed gain. Every one-thread difference in the
+table below sits inside the spread of the parent run again in the same
+rounds, up to 1.2%, so one thread is level. The change stays because a whole
+tick now runs with the GIL released and every output is identical. It could
+not gain much on one thread, because the wrapper was already cheap. With a
+stub machine that returns at once, the parent's `tick(12)` costs 2,258 ns per
+call, about 190 ns per frame, and the change's 622 ns. That is 0.8% of a Red
+frame at 42,000 fps and 0.4% of a Crystal frame at 21,000 fps. On the PGO
+build, best of 9 rounds of 86,400 frames, with tick lengths following the
+input schedule of the speed harness (7,174 calls):
 
 | Threads | Red idle | Red input | Gold idle | Gold input | Crystal idle | Crystal input | Mean | A/A mean |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -495,8 +556,9 @@ of the speed harness (7,174 calls):
 The thread rows are total frames per second over all threads, best of 5.
 Threads likely gain more because a frame no longer has to wait to take the
 GIL back from another thread. Crystal idle at one thread equals its A/A control
-(-0.6%). The default build gains +1.2% on the mean, with Gold idle and Crystal
-idle slower than their A/A controls by at most 1.7 points.
+(-0.6%). The default build reads +1.2% on the mean at one thread, also inside
+build noise, with Gold idle and Crystal idle slower than their A/A controls by
+at most 1.7 points.
 
 With the picture on, the harness makes one tick per drawn frame, so a run
 drawn every frame is all one-frame ticks. On the PGO build, best of 5, the six
@@ -528,7 +590,7 @@ change's library reads the same as the parent's, best of 5:
 | Schedule | Red idle | -0.4% | +1.7% | +0.1% |
 | Schedule | Crystal idle | -0.7% | -0.2% | -0.2% |
 
-So the loss and the gain both come from the new loop. Across three runs of
+So both readings come from the new loop. Across three runs of
 one-frame ticks (the first version, which kept the old native calls for a
 one-frame run, this version, and the split above), Red idle reads -1.7% to
 0.0% and Crystal idle -2.8% to -0.9%. Crystal idle trails its A/A control by
@@ -646,6 +708,12 @@ under about 1.5% cannot be told apart from a rebuild.
 | | every frame | -0.9% | -0.9% | -0.8% | +0.2% | +0.5% | -0.9% |
 | All four, end to end | off | +46.6% | +36.4% | +27.1% | +22.2% | +29.8% | +22.4% |
 | | every frame | +16.9% | +17.7% | +16.5% | +17.9% | +15.1% | +17.7% |
+| B5 (#39) | off | +1.3% | -0.1% | +1.0% | +1.4% | +1.2% | +0.8% |
+| | every frame | +3.3% | +3.5% | +5.1% | +3.6% | +4.0% | +2.6% |
+
+B5 came after the end-to-end run and is not in its rows. None of B5's code
+runs with the picture off, so its picture-off row is code placement. Its
+A/A spread was within 0.7% in every cell.
 
 The end-to-end rows run main before the cache (af89e51) and main after item
 2 (48cbb91) in the same rounds, so they are measured, not multiplied from the
@@ -658,6 +726,7 @@ repository).
 B2's Crystal input reading with the picture off was rechecked and read +0.4%.
 Peak resident memory on the PGO build rose with the cache, from 6,472 to
 about 6,600 kB for Red and from 7,040 to 7,168 kB for Gold and Crystal, and
-did not change with B1, B2 or item 2. All 18 cells give the same state and
-frame hashes before and after each change in the default build, after B1, B2
-and item 2 in the PGO build, and end to end in the PGO build.
+did not change with B1, B2 or item 2. B5 adds at most one 4 kB page in Red.
+All 18 cells give the same state and frame hashes before and after each
+change in the default build, after B1, B2, item 2 and B5 in the PGO build,
+and end to end in the PGO build.

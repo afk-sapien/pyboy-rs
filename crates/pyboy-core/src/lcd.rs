@@ -3,6 +3,10 @@
 pub const FRAME_CYCLES: i64 = 70224;
 pub const WIDTH: usize = 160;
 pub const HEIGHT: usize = 144;
+/// Pixels of margin on each side of the line being drawn, so that every
+/// background and window tile is stored whole.
+const MARGIN: usize = 8;
+const LINE: usize = WIDTH + 2 * MARGIN;
 
 // Expand one bitplane into eight byte lanes, ordered from left to right.
 // This immutable 2 KiB table is shared by every emulator instance.
@@ -114,6 +118,12 @@ pub struct Lcd {
     /// the screen out, and skips the copy while it stays clear. It is not
     /// part of a save state.
     pub framebuffer_written: bool,
+    /// The background and window of the line being drawn, at `MARGIN` plus
+    /// the screen column, then copied to the framebuffer and attributes.
+    /// Only drawing reads them, and each line writes them before reading.
+    /// They are not part of a save state.
+    line_colors: [u32; LINE],
+    line_flags: [u8; LINE],
 }
 
 impl Lcd {
@@ -163,6 +173,8 @@ impl Lcd {
             disable_renderer: false,
             ly_window: 0,
             framebuffer_written: true,
+            line_colors: [0; LINE],
+            line_flags: [0; LINE],
         }
     }
 
@@ -425,16 +437,16 @@ impl Lcd {
         };
         let background_end = if window { wx.max(0) as usize } else { WIDTH };
         self.tile_span::<COLOR>(
-            y,
             0..background_end,
             usize::from(self.scx),
             y + usize::from(self.scy),
             if self.lcdc & 8 != 0 { 0x1c00 } else { 0x1800 },
             &palettes,
         );
+        // The window is drawn second, so it covers the background tile that
+        // runs past its left edge.
         if window {
             self.tile_span::<COLOR>(
-                y,
                 background_end..WIDTH,
                 (background_end as i64 - wx) as usize,
                 self.ly_window as usize,
@@ -442,21 +454,28 @@ impl Lcd {
                 &palettes,
             );
         }
+        let row = y * WIDTH..(y + 1) * WIDTH;
+        self.framebuffer[row.clone()].copy_from_slice(&self.line_colors[MARGIN..MARGIN + WIDTH]);
+        self.attributes[row].copy_from_slice(&self.line_flags[MARGIN..MARGIN + WIDTH]);
     }
 
+    /// Draws the tiles that cover `span` of the line into the line buffer,
+    /// each one whole. The first tile starts up to seven pixels left of the
+    /// span and the last ends up to seven pixels right of it, in the margin
+    /// or under the window.
     fn tile_span<const COLOR: bool>(
         &mut self,
-        y: usize,
         span: std::ops::Range<usize>,
-        mut px: usize,
+        px: usize,
         py: usize,
         map: usize,
         palettes: &[[u32; 4]; 8],
     ) {
         let map_row = map + (py / 8 * 32) % 0x400;
-        let mut x = span.start;
-        while x < span.end {
-            let address = map_row + (px / 8) % 32;
+        let mut column = px / 8;
+        let mut x = MARGIN + span.start - px % 8;
+        while x < MARGIN + span.end {
+            let address = map_row + column % 32;
             let mut tile = usize::from(self.vram[0][address]);
             if self.lcdc & 16 == 0 {
                 tile = (tile ^ 128) + 128;
@@ -474,30 +493,15 @@ impl Lcd {
             const ONES: u64 = 0x0101_0101_0101_0101;
             let flags = (!(bits | (bits >> 1)) & ONES) | (u64::from((attr >> 6) & 2) * ONES);
             let palette = &palettes[usize::from(attr & 7)];
-            let offset = px % 8;
-            let count = (8 - offset).min(span.end - x);
-            let start = y * WIDTH + x;
-            let colors = bits.to_le_bytes();
-            if count == 8 {
-                self.attributes[start..start + 8].copy_from_slice(&flags.to_le_bytes());
-                for (pixel, &color) in self.framebuffer[start..start + 8].iter_mut().zip(&colors) {
-                    // Tile colors are two bits wide, so the mask changes
-                    // nothing. It lets the lookup go without a bounds check.
-                    *pixel = palette[usize::from(color & 3)];
-                }
-            } else {
-                let flags = flags.to_le_bytes();
-                self.attributes[start..start + count]
-                    .copy_from_slice(&flags[offset..offset + count]);
-                for (pixel, &color) in self.framebuffer[start..start + count]
-                    .iter_mut()
-                    .zip(&colors[offset..offset + count])
-                {
-                    *pixel = palette[usize::from(color & 3)];
-                }
+            let pixels: &mut [u32; 8] = (&mut self.line_colors[x..x + 8]).try_into().unwrap();
+            for (pixel, color) in pixels.iter_mut().zip(bits.to_le_bytes()) {
+                // Tile colors are two bits wide, so the mask changes
+                // nothing. It lets the lookup go without a bounds check.
+                *pixel = palette[usize::from(color & 3)];
             }
-            x += count;
-            px += count;
+            self.line_flags[x..x + 8].copy_from_slice(&flags.to_le_bytes());
+            x += 8;
+            column += 1;
         }
     }
 
