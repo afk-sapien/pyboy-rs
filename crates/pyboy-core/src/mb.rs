@@ -1035,12 +1035,14 @@ impl Motherboard {
             0xc000..=0xdfff => self.ram[self.wram_index(address)],
             0xe000..=0xfdff => self.read(address - 0x2000, cpu),
             0xfe00..=0xfe9f => self.lcd.oam[usize::from(address - 0xfe00)],
+            0xfea0..=0xfeff | 0xff00 | 0xff80..=0xfffe => self.ram[usize::from(address)],
             0xff01..=0xff02 => {
                 self.tick_serial(cpu);
                 if address == 0xff01 {
                     self.serial.sb
                 } else {
-                    self.serial.sc
+                    // Bit 1, the clock speed, exists only in CGB mode.
+                    self.serial.sc | if self.cgb_mode() { 0x7c } else { 0x7e }
                 }
             }
             0xff04..=0xff07 => {
@@ -1049,10 +1051,10 @@ impl Motherboard {
                     0xff04 => self.timer.div,
                     0xff05 => self.timer.tima,
                     0xff06 => self.timer.tma,
-                    _ => self.timer.tac,
+                    _ => self.timer.tac | 0xf8,
                 }
             }
-            0xff0f => cpu.interrupts_flag_register as u8,
+            0xff0f => cpu.interrupts_flag_register as u8 | 0xe0,
             0xff10..=0xff3f => {
                 self.sound.tick(cpu.cycles);
                 self.sound.get((address - 0xff10) as u8)
@@ -1061,12 +1063,12 @@ impl Motherboard {
                 self.tick_lcd(cpu);
                 match address {
                     0xff40 => self.lcd.lcdc,
-                    0xff41 => self.lcd.stat,
+                    0xff41 => self.lcd.stat | 0x80,
                     0xff42 => self.lcd.scy,
                     0xff43 => self.lcd.scx,
                     0xff44 => self.lcd.ly,
                     0xff45 => self.lcd.lyc,
-                    0xff46 => 0,
+                    0xff46 => self.ram[0xff46],
                     0xff47 => self.lcd.bgp,
                     0xff48 => self.lcd.obp0,
                     0xff49 => self.lcd.obp1,
@@ -1074,14 +1076,21 @@ impl Motherboard {
                     _ => self.lcd.wx,
                 }
             }
-            0xff4d if self.cgb => self.key1,
+            // Bit 7 is the current speed and bit 0 the switch request.
+            0xff4d if self.cgb_mode() => self.key1 | 0x7e,
             0xff4f if self.cgb => self.lcd.vbank | 254,
-            0xff51..=0xff54 if self.cgb => 0,
-            0xff55 if self.cgb => self.hdma.regs[4],
+            0xff50 => 0xfe | u8::from(!self.bootrom_enabled),
+            0xff55 if self.cgb_mode() => self.hdma.regs[4],
+            0xff56 if self.cgb_mode() => self.ram[0xff56],
             0xff68 if self.cgb => self.lcd.bg_color.index | 64,
-            0xff69 if self.cgb => self.lcd.bg_color.read(),
+            0xff69 if self.cgb_mode() => self.lcd.bg_color.read(),
             0xff6a if self.cgb => self.lcd.obj_color.index | 64,
-            0xff6b if self.cgb => self.lcd.obj_color.read(),
+            0xff6b if self.cgb_mode() => self.lcd.obj_color.read(),
+            0xff6c if self.cgb_mode() => self.ram[0xff6c] | 0xfe,
+            0xff70 if self.cgb_mode() => self.ram[0xff70],
+            0xff72 | 0xff73 if self.cgb => self.ram[usize::from(address)],
+            0xff74 if self.cgb_mode() => self.ram[0xff74],
+            0xff75 if self.cgb => self.ram[0xff75] | 0x8f,
             0xff76 if self.cgb => {
                 self.sound.tick(cpu.cycles);
                 self.sound.pcm12()
@@ -1091,8 +1100,17 @@ impl Motherboard {
                 self.sound.pcm34()
             }
             0xffff => cpu.interrupts_enabled_register as u8,
-            _ => self.ram[usize::from(address)],
+            // Unmapped IO, the HDMA source and destination, and the CGB
+            // registers on DMG hardware or in DMG mode.
+            _ => 0xff,
         }
+    }
+
+    /// CGB hardware running a CGB cartridge or a CGB boot ROM. A DMG
+    /// cartridge on CGB hardware runs in DMG mode, where the CGB-only
+    /// registers read 0xFF and ignore writes.
+    fn cgb_mode(&self) -> bool {
+        self.lcd.color_renderer
     }
 
     #[inline(never)]
@@ -1157,6 +1175,8 @@ impl Motherboard {
                             0xff44 => return,
                             0xff45 => self.lcd.lyc = value,
                             0xff46 => {
+                                // Kept in the saved IO page for reads.
+                                self.ram[0xff46] = value;
                                 for i in 0..160 {
                                     let byte = self.read((u16::from(value) << 8) + i, cpu);
                                     self.lcd.oam[usize::from(i)] = byte;
@@ -1181,11 +1201,17 @@ impl Motherboard {
                 cpu.bail = true;
             }
             0xff4d if self.cgb => {
-                self.key1 = value;
+                // Software can set only the switch request. Bit 7 follows
+                // the speed, and DMG mode has no speed switch.
+                if self.cgb_mode() {
+                    self.key1 = (self.key1 & 0x80) | (value & 1);
+                }
                 cpu.bail = true;
             }
             0xff4f if self.cgb => self.lcd.vbank = value & 1,
             0xff51..=0xff54 if self.cgb => self.hdma.regs[usize::from(address - 0xff51)] = value,
+            // DMG mode has no HDMA and only the first WRAM bank.
+            0xff55 | 0xff70 if self.cgb && !self.cgb_mode() => {}
             0xff55 if self.cgb => {
                 self.hdma_start(value, cpu);
                 // HDMA runs in mode 0, so the slice end brings the LCD up
@@ -1464,6 +1490,69 @@ mod tests {
         check(&mut m);
         assert_eq!(m.read(0xd123), m.mb.ram[0x1123]);
         assert_eq!(m.read(0x8123), m.mb.lcd.vram[0][0x123]);
+    }
+
+    #[test]
+    fn io_registers_read_back_as_on_hardware() {
+        // DMG. The boot ROM switch reads 0xFE until the boot ROM is off.
+        let mut m = machine(0x1b, false);
+        assert_eq!(m.read(0xff50), 0xfe);
+        m.write(0xff50, 1);
+        for address in [0xff02, 0xff07, 0xff0f] {
+            m.write(address, 0);
+        }
+        assert_eq!(
+            [0xff02, 0xff07, 0xff0f].map(|address| m.read(address)),
+            [0x7e, 0xf8, 0xe0]
+        );
+        assert_eq!(m.read(0xff41) & 0x80, 0x80);
+        m.write(0xff46, 0xc0);
+        assert_eq!(m.read(0xff46), 0xc0);
+        let unmapped = [
+            0xff03, 0xff08, 0xff0e, 0xff4c, 0xff4d, 0xff4f, 0xff50, 0xff51, 0xff55, 0xff56, 0xff68,
+            0xff6c, 0xff70, 0xff72, 0xff75, 0xff76, 0xff7f,
+        ];
+        for address in unmapped {
+            m.write(address, 0);
+            assert_eq!(m.read(address), 0xff, "{address:#06x}");
+        }
+
+        // A DMG cartridge on CGB hardware runs in DMG mode.
+        let mut m = Machine::new(rom(0x1b, false), None, Some(true), false, 48000).unwrap();
+        assert!(m.mb.cgb && !m.mb.cgb_mode());
+        m.write(0xff50, 1);
+        for address in [0xff4d, 0xff55, 0xff70] {
+            m.write(address, 1);
+        }
+        assert_eq!((m.mb.key1, m.mb.hdma.regs[4]), (0, 0xff));
+        assert_eq!(m.read(0xd123), m.mb.ram[0x1123]);
+        for address in [
+            0xff4d, 0xff55, 0xff56, 0xff69, 0xff6b, 0xff6c, 0xff70, 0xff74,
+        ] {
+            assert_eq!(m.read(address), 0xff, "{address:#06x}");
+        }
+        m.write(0xff72, 0x5a);
+        m.write(0xff75, 0);
+        m.write(0xff02, 0);
+        assert_eq!(
+            [0xff72, 0xff75, 0xff02].map(|a| m.read(a)),
+            [0x5a, 0x8f, 0x7e]
+        );
+
+        // CGB mode. Software sets only the speed switch request.
+        let mut m = machine(0x1b, true);
+        assert!(m.mb.cgb_mode());
+        m.write(0xff4d, 0xff);
+        assert_eq!(m.read(0xff4d), 0x7f);
+        m.mb.key1 = 0x80;
+        m.write(0xff4d, 0);
+        assert_eq!(m.read(0xff4d), 0xfe);
+        m.write(0xff02, 0);
+        m.write(0xff6c, 0);
+        assert_eq!(
+            [0xff02, 0xff6c, 0xff51].map(|a| m.read(a)),
+            [0x7c, 0xfe, 0xff]
+        );
     }
 
     #[test]

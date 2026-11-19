@@ -14,10 +14,9 @@ PyBoy parity was a requirement because PokeSim was built on PyBoy. On
 
 The target is now real Game Boy behaviour. The core may diverge from PyBoy
 2.7.0 wherever that is the better choice, and every such change is listed
-under [Divergences](#divergences). Until the owner picks specific accuracy
-fixes, emulated behaviour stays as it is: the same save states and pictures
-as before. [conformance.md](conformance.md) scores the core against the
-public test ROM suites, which measure the distance to real hardware.
+under [Divergences](#divergences). Accuracy fixes are made one at a time, each
+picked from [conformance.md](conformance.md), which scores the core against
+the public test ROM suites and so measures the distance to real hardware.
 
 ## Scope
 
@@ -52,19 +51,23 @@ components. pyboy-rs targets 2.7.0 and rejects format 17.
 | Component state methods | `state.rs` | PyBoy state format 15, exact tested byte layout |
 | `pyboy.py` headless API | PyO3 extension and `python/pyboy_rs/pyboy.py` | Headless subset, see [python-api.md](python-api.md) |
 
-The opcode and audio-channel implementations are mechanically translated from
-the pinned Python AST. The generators reject unrecognized constructs and verify
-source hashes. Generated Rust is checked in, so building the core does not need
-Python. Regenerate with:
+The opcode implementations are mechanically translated from the pinned Python
+AST. The generator rejects unrecognized constructs and verifies source hashes.
+Generated Rust is checked in, so building the core does not need Python.
+Regenerate with:
 
 ```sh
 python tools/generate_opcodes.py
-python tools/generate_channels.py
 ```
 
-The sound loop does not call the generated channel `tick` loops directly.
+`channels.rs` was generated the same way from `core/sound.py`. It is edited by
+hand since its first fix that PyBoy does not have, the wave RAM index below,
+and its generator is retired. Sound fixes now go straight into `channels.rs`
+and `sound.rs`, with tests in Rust, so there is no generator to keep in step.
+
+The sound loop does not call the channel `tick` loops directly.
 `channel_clock.rs` reaches the same period timer, waveform position and noise
-register in closed form, and tests check it against the generated loops.
+register in closed form, and tests check it against the `tick` loops.
 
 ## Divergences
 
@@ -100,6 +103,15 @@ CPU interrupt semantics. Deliberate differences:
   event list after every frame, so it drops that input.
 - Input validation is stricter, so the public API is not identical in every
   edge case.
+- IO registers read back as on hardware. The unused bits of SC, TAC, IF and
+  STAT read 1. The OAM DMA register reads the last value written. Unmapped IO
+  addresses, and the HDMA source and destination registers, read 0xFF. A DMG
+  cartridge on CGB hardware runs in DMG mode, where KEY1, HDMA5, RP, BCPD,
+  OCPD, OPRI, SVBK and FF74 read 0xFF, and KEY1, HDMA5 and SVBK writes are
+  ignored. KEY1 writes set only the speed switch request. PyBoy 2.7.0 returns
+  the stored byte for most of these, and 0 for DMA and HDMA1 to HDMA4.
+- On CGB, wave RAM accessed while channel 3 plays goes to the byte holding the
+  current sample. PyBoy indexes it with the sample position modulo 16.
 
 Save states depend on hardware mode and sample rate. Like PyBoy's, they do not
 identify the ROM. Load them only against the matching ROM.

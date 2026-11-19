@@ -100,4 +100,9 @@ def test_vram_palettes_window_sprites_dma_and_speed(cgb, dma_mode):
             ref.tick()
             native.tick()
             assert bytes(native.screen.raw_buffer) == bytes(ref.screen.raw_buffer)
-            assert state(native) == state(ref)
+            # pyboy-rs keeps the OAM DMA source in the saved IO page so that it
+            # reads back, and PyBoy 2.7.0 does not (docs/compatibility.md).
+            ours, theirs = state(native), state(ref)
+            differ = [i for i in range(len(ours)) if ours[i] != theirs[i]]
+            assert len(ours) == len(theirs) and len(differ) == 1, differ
+            assert (ours[differ[0]], theirs[differ[0]]) == (0xc0, 0)
