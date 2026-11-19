@@ -455,6 +455,93 @@ framebuffers and attributes after every frame. B3 waited until both were
 measured and is declined: the per-line part of the cost it attacks is now
 inside build noise, and its risk is the highest. B4 is not built.
 
+## C. One native call for many frames (built)
+
+`PyBoy.tick(count)` made two native calls per frame, `begin_frame` and
+`run_frame`, and took the GIL back after every frame to apply input and check
+for a pause. `run_frames(count, render, sound)` runs up to 600 frames with one
+release of the GIL, calls `begin_frame` and `Machine::run_frame` in the same
+order with the same arguments, and draws or samples sound only on the last
+frame of the tick, as the loop did. `tick` uses it whenever no Python has to
+run between frames:
+
+- A recording records every frame, so it keeps the one-frame path.
+- `tick_read` reads after its last frame, so that frame keeps the one-frame
+  path.
+- A run ends at the frame where queued input comes due.
+- A hook stops the run inside a frame. The hook runs, that frame finishes from
+  Python as before, and the next run starts after it.
+
+The cap of 600 frames is ten emulated seconds, well under a second of real
+time, so Ctrl+C still lands between calls. Python between frames only applied
+input and checked the pause flag, and the run limits above keep every frame
+where either could matter on the one-frame path. So the frames run exactly as
+before. All 18 cells give the same state and frame hashes before and after
+over 216,000 frames, in the default and the PGO build.
+
+The gain is small because the wrapper was already cheap. With a stub machine
+that returns at once, the parent's `tick(12)` costs 2,258 ns per call, about
+190 ns per frame, and the change's 622 ns. That is 0.8% of a Red frame at
+42,000 fps and 0.4% of a Crystal frame at 21,000 fps. On the PGO build, best
+of 9 rounds of 86,400 frames, with tick lengths following the input schedule
+of the speed harness (7,174 calls):
+
+| Threads | Red idle | Red input | Gold idle | Gold input | Crystal idle | Crystal input | Mean | A/A mean |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | +1.5% | +1.7% | +1.1% | +1.2% | -0.5% | +1.8% | +1.1% | -0.1% |
+| 2 | +2.6% | +3.7% | +1.2% | +2.7% | +0.6% | +2.5% | +2.2% | -0.3% |
+| 4 | +5.3% | +5.4% | +1.8% | +4.5% | +1.4% | +2.7% | +3.5% | 0.0% |
+
+The thread rows are total frames per second over all threads, best of 5.
+Threads likely gain more because a frame no longer has to wait to take the
+GIL back from another thread. Crystal idle at one thread equals its A/A control
+(-0.6%). The default build gains +1.2% on the mean, with Gold idle and Crystal
+idle slower than their A/A controls by at most 1.7 points.
+
+With the picture on, the harness makes one tick per drawn frame, so a run
+drawn every frame is all one-frame ticks. On the PGO build, best of 5, the six
+cells drawn every frame read -0.9% to +1.0%, mean 0.0%. Crystal idle loses
+0.9% against an A/A control of +0.1%, and Crystal input 0.6% against -0.2%.
+Drawn every 30th frame they read -0.6% to +1.4%, mean +0.6%. Peak resident
+memory does not rise: Red falls from about 37,200 to 35,400 kB, and the other
+cells match to within a page.
+
+One-frame ticks lose. Ticks capped at N frames, Red idle and Crystal idle,
+best of 5:
+
+| Frames per tick | 1 | 4 | 12 | 60 | 600 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Red idle | -0.7% | +2.2% | +2.2% | +2.3% | +2.1% |
+| Crystal idle | -2.8% | -0.9% | 0.0% | -1.3% | +1.1% |
+| A/A, both cells | -0.4%, -0.6% | +1.1%, -0.3% | -0.4%, +0.1% | -0.1%, -0.4% | -0.5%, +0.4% |
+
+A one-frame tick still makes one native call per frame, so it cannot gain,
+and it pays for the longer loop in `tick`. With a stub machine `tick(1)` costs
+612 ns against the parent's 506 ns, 0.4% of a Red frame and 0.2% of a Crystal
+frame. The native library is not the cause. Run under the parent's Python, the
+change's library reads the same as the parent's, best of 5:
+
+| Frames per tick | Cell | Parent Python, new library | Change | A/A |
+| --- | --- | ---: | ---: | ---: |
+| 1 | Red idle | +0.7% | -0.0% | +0.3% |
+| 1 | Crystal idle | 0.0% | -0.9% | +1.1% |
+| Schedule | Red idle | -0.4% | +1.7% | +0.1% |
+| Schedule | Crystal idle | -0.7% | -0.2% | -0.2% |
+
+So the loss and the gain both come from the new loop. Across three runs of
+one-frame ticks (the first version, which kept the old native calls for a
+one-frame run, this version, and the split above), Red idle reads -1.7% to
+0.0% and Crystal idle -2.8% to -0.9%. Crystal idle trails its A/A control by
+1.3 to 2.2 points in all three, more than the wrapper's 106 ns explains.
+`perf` is not available on this machine to look further. A separate path for
+`tick(1)` could remove the loss at the cost of a second copy of the loop. It
+is not built. Outside the link cable and the compatibility checks, PokeSim
+ticks several frames at a time. The link cable ticks one frame at a time with
+the picture drawn, and runs drawn every frame read 0.0% on the mean.
+
+The raw rounds, hashes and scripts are in
+`data/profiles/2026-11-18-multi-tick/` (`data/` is not in the repository).
+
 ## Other candidates
 
 Each of these needs its own measurement and proof before it is built.

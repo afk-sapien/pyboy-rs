@@ -308,8 +308,8 @@ class PyBoy(Execution):
                     else:
                         self._machine.button(BUTTONS[(event - 1) % 8], event <= 8)
                 self._events.clear()
-                frames = 1 if self.paused else self._native_run(count - index, _read_range)
-                if frames > 1:
+                frames = 0 if self.paused else self._native_run(count - index, _read_range)
+                if frames:
                     last = index + frames == count
                     done = self._machine.run_frames(frames, bool(render and last), bool(sound and last))
                     if done < frames:
@@ -321,6 +321,7 @@ class PyBoy(Execution):
                             self._handle_hook()
                         frames = done + 1
                 elif not self.paused:
+                    frames = 1
                     last = index == count - 1
                     self._machine.begin_frame(bool(render and last), bool(sound and last))
                     if last and _read_range is not None:
@@ -333,6 +334,8 @@ class PyBoy(Execution):
                             self._handle_hook()
                     if self._recording is not None:
                         self._record_frame(recorded_events, bool(render and last), bool(sound and last))
+                else:
+                    frames = 1
                 index += frames
                 while self._queued_input and self._queued_input[0][0] == self.frame_count:
                     self._events.append(heapq.heappop(self._queued_input)[1])
@@ -352,11 +355,12 @@ class PyBoy(Execution):
         return not self._quitting
 
     def _native_run(self, remaining, read_range):
-        """How many of the next frames run in one native call. They must need no
-        Python between them: a recording records every frame, a read collects
-        from its last frame, and queued input is applied when its frame comes."""
+        """How many of the next frames run in one native call, or 0 when the next
+        frame runs from Python. Frames in one call need no Python between them: a
+        recording records every frame, a read collects from its last frame, and
+        queued input is applied when its frame comes."""
         if self._recording is not None:
-            return 1
+            return 0
         frames = min(remaining - (read_range is not None), NATIVE_RUN)
         if self._queued_input:
             # Input due at or before the current frame count is never applied
@@ -364,7 +368,7 @@ class PyBoy(Execution):
             due = self._queued_input[0][0] - self.frame_count
             if due > 0:
                 frames = min(frames, due)
-        return max(frames, 1)
+        return frames
 
     def tick_read(self, count, start, stop, *, render=True, sound=True):
         """Advance with normal input and hook semantics, then collect detached bytes."""

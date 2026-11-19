@@ -2,7 +2,7 @@
 
 These tests check the edges of those runs (queued input, hooks, pausing, reads
 and the run limit) against PyBoy 2.7.0, and against the one-frame path that
-tick took before.
+tick took before and still takes for recordings and the last frame of a read.
 """
 
 import io
@@ -163,7 +163,7 @@ def scenario():
 
 def test_runs_match_the_one_frame_path(monkeypatch):
     runs = scenario()
-    monkeypatch.setattr(module, "NATIVE_RUN", 1)
+    monkeypatch.setattr(module.PyBoy, "_native_run", lambda self, remaining, read_range: 0)
     one = scenario()
     # The hook paused inside the first run, and the second loop ran after.
     assert one[1] < 80
@@ -180,7 +180,7 @@ def test_runs_split_only_where_python_is_needed():
             runs.clear()
             assert emulator.tick(count, False, False)
             assert emulator.frame_count == before + count
-            assert sum(runs) + (count == NATIVE_RUN + 1) == count
+            assert sum(runs) == count
             assert max(runs) <= NATIVE_RUN
 
         runs.clear()
@@ -189,7 +189,13 @@ def test_runs_split_only_where_python_is_needed():
         assert runs == [10, 40]
 
         runs.clear()
+        emulator.tick(1)
+        emulator.tick(2)
+        assert runs == [1, 2]
+
+        runs.clear()
         emulator.tick_read(45, 0xc000, 0xc100)
+        emulator.tick_read(1, 0xc000, 0xc100)
         assert runs == [44]
 
         runs.clear()
