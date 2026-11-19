@@ -332,7 +332,7 @@ fn only_a_halted_clock_writes_runtime_version_two() {
     machine.load_execution(&state, &runtime, 3).unwrap();
     assert_eq!(machine.save_execution_runtime().unwrap(), runtime);
     let mut future = runtime.clone();
-    future[0] = 3;
+    future[0] = 4;
     assert!(machine.load_execution(&state, &future, 3).is_err());
 
     machine.rtc_mut().unwrap().set_halt(true, 1_000.0);

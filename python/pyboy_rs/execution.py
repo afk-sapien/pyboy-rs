@@ -19,10 +19,12 @@ from .diagnostics import ReplayDivergence, compare, snapshot, validate_checkpoin
 # other-platform wheel with the same layouts restores it. The build identity is
 # still recorded for provenance but is no longer a condition.
 STATE_FORMAT = 'pyboy-format-15'
-# Runtime format 2 adds a halted clock's frozen reading. The native layer
-# writes it only while a clock is halted and writes format 1, the layout of
-# 0.1.1, otherwise, so a checkpoint records the format its runtime bytes use.
-RUNTIME_FORMAT = 2
+# Runtime format 2 adds a halted clock's frozen reading, and format 3 a VRAM
+# transfer's copy in progress. The native layer writes format 3 only while a
+# copy is in progress or a halted CPU has a transfer active, format 2 only
+# while a clock is halted, and format 1, the layout of 0.1.1, otherwise. So a
+# checkpoint records the format its runtime bytes use.
+RUNTIME_FORMAT = 3
 COMPAT = {'state_format': STATE_FORMAT, 'runtime_format': RUNTIME_FORMAT}
 READABLE_COMPAT = tuple({'state_format': STATE_FORMAT, 'runtime_format': version}
                         for version in range(1, RUNTIME_FORMAT + 1))

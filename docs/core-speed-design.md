@@ -681,7 +681,8 @@ Each of these needs its own measurement and proof before it is built.
    limits. A sound tick finds a 512 Hz frame step at the first slice end at
    or past it, so skipping stops at the last mode change before the next
    frame step, and it never goes past the sound deadline. Skipping is also
-   off while CGB HDMA runs. The lockstep test runs a ROM that enables STAT
+   off while CGB HDMA runs, since an HBlank transfer copies a block at each
+   entry to mode 0. The lockstep test runs a ROM that enables STAT
    sources from a table, polls LY and STAT, halts, switches the LCD off and,
    on CGB, runs HDMA and switches speed. With the picture on every fifth
    frame and notes playing, it matches the interrupt log, state, sound and

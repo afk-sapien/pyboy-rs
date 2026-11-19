@@ -220,16 +220,6 @@ impl Lcd {
         0
     }
 
-    pub fn cycles_to_mode0(&self) -> i64 {
-        let remainder = self.clock_target - self.clock;
-        match self.stat & 3 {
-            2 => remainder + 170,
-            3 => remainder,
-            0 => 0,
-            _ => remainder + 456 * (153 - i64::from(self.ly)) + 250,
-        }
-    }
-
     /// The cycle of the next mode change in single speed. A tick that ends
     /// before it only advances the clock, so the scheduler can merge such
     /// ticks.
