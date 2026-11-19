@@ -12,3 +12,5 @@ rust-version = "1.85"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+# Keep panic = "unwind" so a core panic reaches Python as an exception
+# (docs/core-speed-design.md, Other candidates, item 8).
