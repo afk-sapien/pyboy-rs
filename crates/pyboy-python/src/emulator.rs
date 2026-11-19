@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 use pyboy_core::{
     cartridge,
+    cpu::NoProgress,
     mb::{Machine, now},
     sound,
 };
@@ -23,6 +24,13 @@ fn thread_cpu_ns() -> std::io::Result<u64> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(time.tv_sec as u64 * 1_000_000_000 + time.tv_nsec as u64)
+}
+
+fn no_progress(error: NoProgress) -> PyErr {
+    PyRuntimeError::new_err(format!(
+        "CPU made no progress at {:#06x}, opcode {:#04x}",
+        error.pc, error.opcode
+    ))
 }
 
 #[cfg(not(feature = "profile"))]
@@ -81,12 +89,42 @@ impl Emulator {
             }
             return Ok(complete);
         }
-        py.detach(|| self.inner.run_frame()).map_err(|e| {
-            PyRuntimeError::new_err(format!(
-                "CPU made no progress at {:#06x}, opcode {:#04x}",
-                e.pc, e.opcode
-            ))
+        py.detach(|| self.inner.run_frame()).map_err(no_progress)
+    }
+    /// Runs `count` frames the way begin_frame and run_frame do one at a
+    /// time, with one release of the GIL. Only the last frame draws or
+    /// samples sound, and only if asked. A breakpoint stops the run inside
+    /// a frame. Returns the frames completed, so a result below `count`
+    /// leaves the next frame in progress for run_frame to finish.
+    fn run_frames(
+        &mut self,
+        py: Python<'_>,
+        count: u64,
+        render: bool,
+        sound: bool,
+    ) -> PyResult<u64> {
+        #[cfg(all(feature = "profile", target_os = "linux"))]
+        if self.frame_timing.is_some() {
+            for done in 0..count {
+                let last = done + 1 == count;
+                self.begin_frame(render && last, sound && last);
+                if !self.run_frame(py)? {
+                    return Ok(done);
+                }
+            }
+            return Ok(count);
+        }
+        py.detach(|| {
+            for done in 0..count {
+                let last = done + 1 == count;
+                self.begin_frame(render && last, sound && last);
+                if !self.inner.run_frame()? {
+                    return Ok(done);
+                }
+            }
+            Ok(count)
         })
+        .map_err(no_progress)
     }
     #[cfg(all(feature = "profile", target_os = "linux"))]
     fn enable_frame_timing(&mut self) {
@@ -112,12 +150,7 @@ impl Emulator {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         result
             .map(|complete| (complete, cpu, wall))
-            .map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "CPU made no progress at {:#06x}, opcode {:#04x}",
-                    error.pc, error.opcode
-                ))
-            })
+            .map_err(no_progress)
     }
     fn run_frame_read<'py>(
         &mut self,
@@ -139,12 +172,7 @@ impl Emulator {
                     (complete, bytes)
                 })
             })
-            .map_err(|error| {
-                PyRuntimeError::new_err(format!(
-                    "CPU made no progress at {:#06x}, opcode {:#04x}",
-                    error.pc, error.opcode
-                ))
-            })?;
+            .map_err(no_progress)?;
         Ok((complete, bytes.map(|bytes| PyBytes::new(py, &bytes))))
     }
     fn read(&mut self, address: u16) -> u8 {
