@@ -311,6 +311,10 @@ impl Machine {
     /// With the picture off, an LCD mode change that sets no flag and does
     /// not end the frame is no event here either, away from a sound frame
     /// sequencer step. The LCD takes it when it next ticks, at its own cycle.
+    // Kept out of line. Once this loop is small enough, a PGO build inlines
+    // it into a caller with one call site, and there it ran 1% to 4% slower
+    // on every speed cell (#42).
+    #[inline(never)]
     pub fn run_frame(&mut self) -> Result<bool, NoProgress> {
         // Whether every device was ticked at the last slice end, so that its
         // deadline fields hold what PyBoy sizes the next slice from.
