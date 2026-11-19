@@ -730,6 +730,40 @@ Each of these needs its own measurement and proof before it is built.
 7. Function-pointer dispatch in place of the opcode match. No. The compiler
    already emits a jump table, and indirect calls would stop inlining of the
    small handlers.
+8. Full LTO (`lto = "fat"`) in place of thin LTO for release builds. Built.
+   On the PGO build, best of 9 rounds interleaved with the parent (#41), the
+   harness gains 0.0% to 2.9% in all 18 cells, none slower than its A/A
+   control (within 1.2%), and `benchmark.rs` gains 0.9% to 5.0% in every
+   mode. Six harness cells gain more than the 1.5% a rebuild alone can move:
+   Gold idle with the picture off and every 30th frame, all three Crystal
+   idle cells and Crystal input with the picture off. All 18 long runs give
+   the same state and frame hashes as the parent. Peak resident memory is 128
+   to 140 kB lower, and the native module shrinks from 984,216 to 913,616
+   bytes.
+
+   Only the Linux x86_64 wheel builds with PGO. The other four wheels build
+   as the default release build does, and there the gain is less even. The
+   harness reads -0.8% to +4.1%, with Gold idle, picture off, the one cell
+   slower than its A/A control (-0.2% against -0.1%). `benchmark.rs` loses 4.7% to
+   5.4% in Red batch and frame modes and 1.2% to 1.6% in Gold batch and frame
+   modes, beyond A/A, and reads -2.0% to +3.4% in the others. These numbers
+   come from x86_64, so they stand in for the other targets but do not
+   measure them.
+
+   `panic = "abort"` was measured with fat LTO and rejected. Do not retry it.
+   On the PGO build it gave +0.0% to +2.7% on the harness, 128 to 268 kB less
+   memory and a module 124 kB smaller, but Red batch and render in
+   `benchmark.rs` read 1.7% and 1.6% slower, beyond A/A. Speed is not the
+   reason it stays out. With unwinding, PyO3 turns a panic in the core into a
+   Python exception. With abort, the panic kills the process with no cleanup.
+   PokeSim runs adventures for thousands of hours, and its `BaseException`
+   handlers (`pokecore/emulator.py` and `runtime/restart.py` in PokeSim) are
+   how a core bug becomes a clean stop with a readable error and a restart.
+   A percent or two is not worth losing that.
+
+   The raw rounds and hashes are in `data/profiles/2026-11-18-fat-lto/` and,
+   for `panic = "abort"`, `data/profiles/2026-11-18-lto-abort/` (`data/` is
+   not in the repository).
 
 ## Measured gains
 
@@ -755,10 +789,13 @@ under about 1.5% cannot be told apart from a rebuild.
 | | every frame | +16.9% | +17.7% | +16.5% | +17.9% | +15.1% | +17.7% |
 | B5 (#39) | off | +1.3% | -0.1% | +1.0% | +1.4% | +1.2% | +0.8% |
 | | every frame | +3.3% | +3.5% | +5.1% | +3.6% | +4.0% | +2.6% |
+| Fat LTO (#43) | off | +0.3% | +1.4% | +1.7% | +0.9% | +2.6% | +1.9% |
+| | every frame | 0.0% | +0.7% | +0.7% | +1.4% | +2.9% | +0.6% |
 
-B5 came after the end-to-end run and is not in its rows. None of B5's code
-runs with the picture off, so its picture-off row is code placement. Its
-A/A spread was within 0.7% in every cell.
+B5 and fat LTO came after the end-to-end run and are not in its rows. None
+of B5's code runs with the picture off, so its picture-off row is code
+placement. Its A/A spread was within 0.7% in every cell, and fat LTO's within
+1.2% (see [Other candidates](#other-candidates), item 8).
 
 The end-to-end rows run main before the cache (af89e51) and main after item
 2 (48cbb91) in the same rounds, so they are measured, not multiplied from the
