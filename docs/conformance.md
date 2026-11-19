@@ -8,40 +8,57 @@ starting point for picking accuracy fixes.
 
 ## Scores
 
-Run on 2026-11-18 against main at 96211ba, through the published 0.1.8 Linux
-x86_64 wheel. Each cell is passed tests out of tests run on that model.
+Run on 2026-11-18 with the IO register fixes of
+[#41](https://github.com/afk-sapien/pyboy-rs/pull/41), through a local
+release build of the wheel. Each cell is passed tests out of tests run on that
+model.
 
 | Suite | DMG | CGB |
 | --- | --- | --- |
-| Mooneye (automatic tests) | 45 of 94 | 42 of 86 |
+| Mooneye (automatic tests) | 48 of 94 | 45 of 86 |
 | SameSuite | not run on DMG | 7 of 69 |
 | Blargg, the ROM's own report | 24 of 39 | 25 of 32 |
-| Blargg, c-sp screenshots | 5 of 8 | 4 of 8 |
+| Blargg, c-sp screenshots | 5 of 8 | 5 of 8 |
 | dmg-acid2 | 1 of 1 | 1 of 1 |
 | cgb-acid2 | not a DMG test | 1 of 1 |
 | rtc3test | 0 of 3 | 0 of 3 |
-| All | 75 of 145 | 80 of 200 |
+| All | 78 of 145 | 84 of 200 |
 
 No test timed out or raised an error. Tests made for other models or
 revisions are left out of the counts (see [Method](#method)).
+
+### Changes
+
+| Run | Core | DMG | CGB |
+| --- | --- | --- | --- |
+| First run | main at 96211ba, the published 0.1.8 wheel | 75 of 145 | 80 of 200 |
+| IO register reads | [#41](https://github.com/afk-sapien/pyboy-rs/pull/41) | 78 of 145 | 84 of 200 |
+
+The IO register fixes make three more tests pass on DMG and four more on
+CGB: Mooneye `acceptance/if_ie_registers` and `acceptance/oam_dma/reg_read` on
+both, `acceptance/bits/unused_hwio-GS` on DMG, `misc/bits/unused_hwio-C` on
+CGB, and the CGB `cpu_instrs` screenshot. No other test changed from pass to fail or
+back. Two failing reports changed: `halt_bug` now shows the unused IF bits in
+the values it prints, and `cgb_sound` test 09 prints other wave bytes.
 
 ### Mooneye
 
 | Area | DMG | CGB |
 | --- | --- | --- |
-| Instruction, interrupt and OAM DMA timing (top-level `acceptance`) | 7 of 29 | 5 of 27 |
+| Instruction, interrupt and OAM DMA timing (top-level `acceptance`) | 8 of 29 | 6 of 27 |
 | Timer (`acceptance/timer`) | 5 of 13 | 5 of 13 |
 | PPU (`acceptance/ppu`, `misc/ppu`) | 2 of 12 | 1 of 8 |
-| OAM DMA (`acceptance/oam_dma`) | 1 of 3 | 1 of 2 |
-| Register bits, DAA, IE push (`acceptance/bits`, `instr`, `interrupts`, `misc/bits`) | 3 of 5 | 3 of 5 |
+| OAM DMA (`acceptance/oam_dma`) | 2 of 3 | 2 of 2 |
+| Register bits, DAA, IE push (`acceptance/bits`, `instr`, `interrupts`, `misc/bits`) | 4 of 5 | 4 of 5 |
 | State after boot (`boot_*`, `serial/boot_sclk_align`) | 0 of 4 | 0 of 3 |
 | Cartridges (`emulator-only/mbc1`, `mbc2`, `mbc5`) | 27 of 28 | 27 of 28 |
 
 The timing tests check the cycle on which each memory access or interrupt
 lands inside an instruction (`call`, `ret`, `jp`, `push`, `pop`, `rst`, `ei`,
 `reti`). The passes are `div_timing`, `intr_timing`, `halt_ime0_ei`,
-`halt_ime0_nointr_timing` and `halt_ime1_timing` on both models, with
-`di_timing-GS` and `halt_ime1_timing2-GS` on DMG. The boot tests check the
+`halt_ime0_nointr_timing`, `halt_ime1_timing` and `if_ie_registers` on both
+models, with `di_timing-GS` and `halt_ime1_timing2-GS` on DMG. The failure in
+the register bits area is `interrupts/ie_push`. The boot tests check the
 registers and I/O state that the real boot ROM leaves behind. The core runs
 PyBoy's replacement boot ROMs, which leave a different state. The one
 cartridge failure is `mbc1/multicart_rom_8Mb`.
@@ -85,11 +102,15 @@ and 8.
 The screenshot check runs each group's combined ROM for the time c-sp gives
 and compares the final picture with c-sp's picture from real hardware.
 `cpu_instrs`, `instr_timing`, `interrupt_time`, `mem_timing` and
-`mem_timing-2` pass on DMG. The same set less `cpu_instrs` passes on CGB. On
-CGB the combined `cpu_instrs` ROM, which runs in double speed there, passes
-every test but finishes 37.2 emulated seconds after the boot ROM hands over.
-c-sp checks the picture at 31 seconds. The picture matches at 38 seconds. On
-DMG the same ROM finishes at 53.5 seconds, inside c-sp's 55.
+`mem_timing-2` pass on both models. On CGB the combined `cpu_instrs` ROM runs
+in double speed and finishes 29.8 emulated seconds after the boot ROM hands
+over, inside c-sp's 31. On DMG it finishes at 53.5 seconds, inside c-sp's 55.
+
+Before #41 the CGB run finished at 37.2 seconds. A write to KEY1 stored bit 7,
+the current speed, so from subtest 03 on KEY1 reported double speed while the
+CPU ran at single speed, and subtests 04, 06, 08 and 10 ran at single speed.
+KEY1 writes now set only the switch request, and every subtest runs in double
+speed after about 19 frames at single speed.
 
 ### Acid2
 
@@ -187,5 +208,7 @@ The whole set takes a few seconds with 8 jobs once the downloads (about 4 MB)
 are cached. `--only` runs some suites. The output folder gets
 `summary.txt` (the counts), `results.txt` and `results.json` (one line per test
 and model, with the frames run and the reason for each verdict) and the
-compared pictures. The 2026-11-18 run is kept in `data/conformance/2026-11-18`
-in the maintainer checkout. `data/` is not part of the repository.
+compared pictures. The first run is kept in `data/conformance/2026-11-18` in
+the maintainer checkout, and the runs before and after #41 in
+`data/conformance/2026-11-18-f020652` and `2026-11-18-io-reads`. `data/` is
+not part of the repository.
