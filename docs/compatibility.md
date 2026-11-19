@@ -124,9 +124,17 @@ CPU interrupt semantics. Deliberate differences:
   transfer, and HDMA5 then reads bit 7 set. PyBoy 2.7.0 takes no CPU time,
   resets the counters and copies only from the HBlank interrupt. Unlike
   SameBoy, a block is copied at the end of the slice that enters mode 0,
-  not at the exact cycle, and STOP does not pause a transfer. The cycles the
-  CPU still owes for a copy are kept in execution runtime format 3, not in a
-  PyBoy-format save state, so loading a save state alone drops them.
+  not at the exact cycle, and STOP does not pause a transfer.
+- The format 15 save state has no field for two pieces of transfer state:
+  the cycles the CPU still owes for a copy, and the LCD mode an HBlank
+  transfer last saw on a halted CPU. Execution runtime format 3 keeps both.
+  A save state taken while the CPU still owes cycles drops them on load, so
+  the CPU runs on at once, up to 4,100 cycles ahead of an uninterrupted run
+  (a 2048-byte general transfer in single speed). A save state taken while a
+  halted CPU has an HBlank transfer active loads with the mode set from STAT,
+  so the CPU can copy one block more or one fewer when it wakes. On the Gold
+  and Crystal speed fixtures, idle and input, 216,000 frames each, none of
+  the 864,000 frame ends fell in either case.
 
 Save states depend on hardware mode and sample rate. Like PyBoy's, they do not
 identify the ROM. Load them only against the matching ROM.
