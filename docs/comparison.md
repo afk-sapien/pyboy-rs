@@ -100,6 +100,12 @@ model and judges it by a screenshot taken after a set run time. Its scripts
 fetch the latest SameBoy and Gambatte-speedrun releases, the latest mGBA
 development build, and the latest PyBoy from pip, and give the emulators the
 original Nintendo boot ROMs where they take one. The page names no versions.
+On 2026-06-04 the latest PyBoy on PyPI was 2.7.1 (uploaded 2026-05-05, with
+2.8.0 next on 2026-10-07), so the PyBoy column is most likely 2.7.1. The
+[2.8.0 release notes](https://github.com/Baekalfen/PyBoy/releases/tag/v2.8.0)
+say it passes all Mooneye and SameSuite tests except CGB revision checks, and
+all Blargg tests except `oam_bug`. Those versions are not in the shootout and
+were not checked here.
 
 The shootout does not include pyboy-rs. The pyboy-rs column comes from
 [tools/conformance.py](conformance.md#method) run on the published 0.1.9 wheel.
@@ -197,7 +203,21 @@ The pyboy-rs and PyBoy rows run through Python, so they include the cost of
 the Python calls. The other rows are small C and C++ programs around each
 library. PyBoy's `fast_mode` is described in its own docstring as "faster,
 less accurate emulation without sound or serial, with simplified LCD timing
-and frame-end rendering".
+and frame-end rendering". It swaps the LCD for a `FastLCD` subclass and turns
+sound and serial off (`pyboy/core/mb.py` in the 2.9.0 wheel).
+
+[benchmarks.md](benchmarks.md) measured PyBoy 2.7.0 close to pyboy-rs in
+October 2026, with sound on. PyBoy's default has since become much slower:
+2.8.0 changed its OAM, DMA, LCD, sound, interrupt and CPU timing to pass the
+Mooneye, SameSuite and Blargg suites
+([notes](https://github.com/Baekalfen/PyBoy/releases/tag/v2.8.0)), and 2.9.0
+added a "dot-based PPU renderer with cycle-accurate mid-scanline behavior" and
+made the faster path opt-in as `fast_mode=True`
+([notes](https://github.com/Baekalfen/PyBoy/releases/tag/v2.9.0)). The 2.7.0
+`pyboy/core/lcd.py` has no dot renderer. Here `fast_mode` runs 5.0 to 13.4
+times as fast as the 2.9.0 default. It is the like-for-like row against the
+October benchmarks, except that it turns sound off. 2.8.0 and 2.8.1 were not
+measured, so this does not split the cost between the two releases.
 
 ### Machine and builds
 

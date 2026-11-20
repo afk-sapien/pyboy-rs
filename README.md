@@ -12,11 +12,12 @@ with many emulators in one process. It is the emulator backend for
 [PokeSim](https://github.com/afk-sapien/PokeSim) through PokeSim Core.
 
 pyboy-rs is a port of PyBoy, not a fork, and implements the headless part of
-PyBoy's API ([what is covered](docs/python-api.md)). Against PyBoy 2.7.0 in
-October 2026, it ran 44% to 64% more frames per second with picture and sound,
-1.5% slower to 12.7% faster with neither, and used about 35 MiB less memory per
-process
-([benchmarks](docs/benchmarks.md)). It is not meant for
+PyBoy's API ([what is covered](docs/python-api.md)). On 2026-11-19, from
+Python on one core, 0.1.9 ran 4.9 to 21 times as many frames per second as
+PyBoy 2.9.0 in its default mode, and 7% to 77% more than PyBoy's faster
+`fast_mode=True` with sound off in both ([speed](#speed)). In the October
+2026 measure against PyBoy 2.7.0 it used about 35 MiB less memory per process
+([benchmarks](docs/benchmarks.md#memory)). It is not meant for
 playing games, for debugging them, or for work that needs emulation close to
 real hardware. The [comparison](#comparison) shows which emulators fit those
 uses better.
@@ -99,8 +100,9 @@ cargo run --release -p pyboy-core --example headless -- game.gb 120
   the ROM. Load them only against the matching ROM.
 - The core runs PyBoy's replacement boot ROMs, so the state just after boot
   differs from real hardware.
-- Accuracy on the public test ROMs is well behind SameBoy, Gambatte and mGBA.
-  See [accuracy](#accuracy).
+- Accuracy on the public test ROMs is well behind SameBoy, Gambatte and mGBA,
+  and by PyBoy's release notes behind PyBoy 2.8.0 and later. See
+  [accuracy](#accuracy).
 
 ## Comparison
 
@@ -205,14 +207,20 @@ run.
 
 The shootout names no versions. Its scripts fetch the latest SameBoy and
 Gambatte-speedrun releases (for Gambatte-speedrun that is r717), the latest
-mGBA development build and the latest PyBoy from pip. It has no SameSuite
+mGBA development build and the latest PyBoy from pip. On 2026-06-04 the
+latest PyBoy on PyPI was 2.7.1, so the PyBoy column is most likely 2.7.1, not
+the 2.9.0 of the speed table. By its
+[release notes](https://github.com/Baekalfen/PyBoy/releases/tag/v2.8.0),
+PyBoy 2.8.0 and later pass all Mooneye and SameSuite tests except CGB
+revision checks, and all Blargg tests except `oam_bug`. It has no SameSuite
 result for Gambatte-speedrun on 57 of the 66 ROMs. The pyboy-rs tool does not
 run one Mooneye ROM that a person has to judge. Per-ROM verdicts are in
 [data/profiles/2026-11-19-emulator-accuracy](data/profiles/2026-11-19-emulator-accuracy).
 
 pyboy-rs is well behind SameBoy, which passes every ROM here, and behind
-Gambatte-speedrun and mGBA on Mooneye and Blargg. It is level with PyBoy, the
-emulator it was ported from. On the tool's full ROM list, 0.1.9 passes 75 of 145
+Gambatte-speedrun and mGBA on Mooneye and Blargg. It is level with the PyBoy
+in the shootout, close to the 2.7.0 it was ported from, and by PyBoy's own
+notes well behind PyBoy 2.8.0 and later. On the tool's full ROM list, 0.1.9 passes 75 of 145
 tests on DMG and 80 of 200 on CGB ([per suite](docs/conformance.md)).
 
 What the project is doing about it: the target is now real hardware, not
@@ -250,10 +258,21 @@ and C++ programs around each library ([method](docs/comparison.md#speed)).
   picture. PyBoy's `fast_mode` turns sound off, and gambatte-core runs with
   its `NO_SOUND` flag. pyboy-rs with `sound_emulated=False` is faster than
   both in every cell.
-- PyBoy 2.9.0 in its default mode is 5 to 22 times slower than pyboy-rs. Its
-  `fast_mode` is "faster, less accurate emulation without sound or serial,
-  with simplified LCD timing". pyboy-rs with sound off is 7% to 77% faster
-  than it.
+- PyBoy 2.9.0 in its default mode is 4.9 to 22 times slower than pyboy-rs.
+  [docs/benchmarks.md](docs/benchmarks.md) found PyBoy 2.7.0 close to
+  pyboy-rs in October because PyBoy's default has since moved to closer
+  hardware timing: 2.8.0 changed its OAM, DMA, LCD, sound, interrupt and CPU
+  timing to pass the Mooneye, SameSuite and Blargg suites
+  ([2.8.0 notes](https://github.com/Baekalfen/PyBoy/releases/tag/v2.8.0)),
+  and 2.9.0 added a dot-based LCD renderer and made the faster path opt-in as
+  `fast_mode=True`
+  ([2.9.0 notes](https://github.com/Baekalfen/PyBoy/releases/tag/v2.9.0)).
+  Its docstring calls that mode "faster, less accurate emulation without sound
+  or serial, with simplified LCD timing", and here it runs 5.0 to 13.4 times
+  as fast as the default. Against the October benchmarks, the `fast_mode` row
+  is the like-for-like one, with one difference: it turns sound off, and the
+  October runs kept PyBoy's sound on. pyboy-rs with sound off is 7% to 77%
+  faster than it.
 - With a picture, gambatte-core is level with pyboy-rs. Without one, pyboy-rs
   is about twice as fast.
 - mGBA is 2.7 to 5.2 times slower than pyboy-rs and SameBoy 15 to 46 times
