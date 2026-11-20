@@ -1,0 +1,26 @@
+pyboy-rs conformance scoreboard (report only)
+date        2026-11-19 23:30:30 PST
+label       v0.1.9 release wheel
+pyboy-rs    0.1.9, native module sha256 1d5f1e5c6666352e
+python      3.12.12 x86_64 Linux
+run         8 s wall, 1 jobs
+frames      counted from the boot ROM hand-over to the cartridge
+sources
+  mooneye    18aa29462dfe1fcd32a2cb3621733abdc72410074918b9245aa99a6920f7d3f2  https://gekkio.fi/files/mooneye-test-suite/mts-20260714-0944-31510e1/mts-20260714-0944-31510e1.zip
+  c-sp       b9a9d7a1075aa35a3d07c07c34974048672d8520dca9e07a50178f5860c3832c  https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip
+  dmg-acid2  464e14b7d42e7feea0b7ede42be7071dc88913f75b9ffa444299424b63d1dff1  https://github.com/mattcurrie/dmg-acid2/releases/download/v1.0/dmg-acid2.gb
+  cgb-acid2  197fb0bcec544f0400527fc707e0a94f55435974986e6986b424ace5de81720e  https://github.com/mattcurrie/cgb-acid2/releases/download/v1.1/cgb-acid2.gbc
+  rtc3test   a271013fb37ea1d927b854798401320b220d57abb3ca77f3d318ceb8a9def30d  https://github.com/aaaaaa123456789/rtc3test/releases/download/v004/rtc3test.gb
+
+suite          model  pass   run  fail timeout error   n/a not run
+mooneye        dmg      45    94    49       0     0    17       4
+mooneye        cgb      42    86    44       0     0    25       4
+samesuite      cgb       7    69    62       0     0     9       0
+blargg         dmg      24    39    15       0     0    13       0
+blargg         cgb      25    32     7       0     0    20       0
+blargg-screen  dmg       5     8     3       0     0     1       0
+blargg-screen  cgb       4     8     4       0     0     1       0
+acid2          dmg       1     1     0       0     0     1       0
+acid2          cgb       2     2     0       0     0     0       0
+rtc3test       dmg       0     3     3       0     0     0       0
+rtc3test       cgb       0     3     3       0     0     0       0
