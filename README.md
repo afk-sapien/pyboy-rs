@@ -226,7 +226,38 @@ A fix to how the tool sets the clock for rtc3test comes next.
 
 ### Speed
 
-SPEED-TABLE
+Frames per second on one core of an Intel Core i7-10700K, measured on
+2026-11-19: 36,000 frames from power-on of Pokemon Red on a DMG and Pokemon
+Crystal on a CGB, with no input. Each cell is the median of 9 trials, with the
+best in brackets. "Picture" draws every frame. No emulator hands out sound
+samples. The pyboy-rs and PyBoy rows run from Python. The others are small C
+and C++ programs around each library ([method](docs/comparison.md#speed)).
+
+| Emulator | Red, no picture | Red, picture | Crystal, no picture | Crystal, picture |
+| --- | ---: | ---: | ---: | ---: |
+| pyboy-rs 0.1.9 | 48,968 (49,323) | 18,145 (18,379) | 36,907 (37,459) | 14,746 (14,916) |
+| pyboy-rs 0.1.9, `sound_emulated=False` | 58,663 (59,395) | 19,560 (19,681) | 42,376 (42,866) | 15,720 (15,798) |
+| PyBoy 2.9.0 | 4,491 (4,611) | 3,673 (3,685) | 1,791 (1,792) | 1,773 (1,781) |
+| PyBoy 2.9.0, `sound_emulated=False` | 4,959 (5,007) | 3,948 (3,979) | 1,901 (1,912) | 1,882 (1,895) |
+| PyBoy 2.9.0, `fast_mode=True` | 37,269 (37,781) | 18,307 (18,462) | 23,955 (24,150) | 12,052 (12,243) |
+| SameBoy 1.0.5 | 1,066 (1,078) | 997 (1,004) | 1,054 (1,065) | 969 (975) |
+| mGBA 0.10.5 | 9,458 (9,539) | 6,689 (6,768) | 7,481 (7,551) | 5,552 (5,593) |
+| gambatte-core 5a41a68 | 23,567 (24,079) | 17,915 (18,082) | 18,312 (18,430) | 14,862 (15,030) |
+
+- Two rivals are faster than pyboy-rs in one cell each, both by about 1% at
+  the median, less than the spread between trials: PyBoy 2.9.0 with
+  `fast_mode=True` on Red with a picture, and gambatte-core on Crystal with a
+  picture. PyBoy's `fast_mode` turns sound off, and gambatte-core runs with
+  its `NO_SOUND` flag. pyboy-rs with `sound_emulated=False` is faster than
+  both in every cell.
+- PyBoy 2.9.0 in its default mode is 5 to 22 times slower than pyboy-rs. Its
+  `fast_mode` is "faster, less accurate emulation without sound or serial,
+  with simplified LCD timing". pyboy-rs with sound off is 7% to 77% faster
+  than it.
+- With a picture, gambatte-core is level with pyboy-rs. Without one, pyboy-rs
+  is about twice as fast.
+- mGBA is 2.7 to 5.2 times slower than pyboy-rs and SameBoy 15 to 46 times
+  slower. Both pass far more test ROMs ([accuracy](#accuracy)).
 
 ### Other projects
 

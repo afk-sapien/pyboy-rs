@@ -1,0 +1,288 @@
+0 pyboy-rs red none load=1.33 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.735168 fps=48968.4
+0 pyboy-rs red picture load=1.33 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.958743 fps=18379.1
+0 pyboy-rs crystal none load=1.30 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.967310 fps=37216.6
+0 pyboy-rs crystal picture load=1.30 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.458249 fps=14644.6
+0 pyboy-rs-nosound red none load=1.30 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.611643 fps=58857.9
+0 pyboy-rs-nosound red picture load=1.30 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.875294 fps=19197.0
+0 pyboy-rs-nosound crystal none load=1.36 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.841188 fps=42796.6
+0 pyboy-rs-nosound crystal picture load=1.36 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.278736 fps=15798.2
+0 pyboy red none load=1.36 pyboy 2.9.0 mode=sound frames=36000 seconds=8.166279 fps=4408.4
+0 pyboy red picture load=0.34 pyboy 2.9.0 mode=sound frames=36000 seconds=9.770030 fps=3684.7
+0 pyboy crystal none load=0.53 pyboy 2.9.0 mode=sound frames=36000 seconds=21.247533 fps=1694.3
+0 pyboy crystal picture load=0.80 pyboy 2.9.0 mode=sound frames=36000 seconds=20.282094 fps=1775.0
+0 pyboy-nosound red none load=0.94 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.208346 fps=4994.2
+0 pyboy-nosound red picture load=0.94 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.163477 fps=3928.6
+0 pyboy-nosound crystal none load=0.95 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.965783 fps=1898.2
+0 pyboy-nosound crystal picture load=1.45 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.258655 fps=1869.3
+0 pyboy-fast red none load=1.61 pyboy 2.9.0 mode=fast frames=36000 seconds=0.957401 fps=37601.8
+0 pyboy-fast red picture load=1.61 pyboy 2.9.0 mode=fast frames=36000 seconds=1.966470 fps=18306.9
+0 pyboy-fast crystal none load=1.56 pyboy 2.9.0 mode=fast frames=36000 seconds=1.502819 fps=23955.0
+0 pyboy-fast crystal picture load=1.56 pyboy 2.9.0 mode=fast frames=36000 seconds=2.958553 fps=12168.1
+0 sameboy red none load=1.51 sameboy frames=36000 vblanks=36002 seconds=33.772854 fps=1065.9
+0 sameboy red picture load=0.76 sameboy frames=36000 vblanks=36002 seconds=36.123462 fps=996.6
+0 sameboy crystal none load=1.26 sameboy frames=36000 vblanks=36001 seconds=33.951389 fps=1060.3
+0 sameboy crystal picture load=1.48 sameboy frames=36000 vblanks=36001 seconds=37.141144 fps=969.3
+0 mgba red none load=1.29 DMG-,36000,3850119,none
+0 mgba red picture load=1.27 DMG-,36000,5382265,software
+0 mgba crystal none load=1.25 CGB-BYTE,36000,4863281,none
+0 mgba crystal picture load=1.23 CGB-BYTE,36000,6525403,software
+0 gambatte red none load=1.21 gambatte frames=36000 drawn=35998 seconds=1.502335 fps=23962.7
+0 gambatte red picture load=1.21 gambatte frames=36000 drawn=35998 seconds=2.134248 fps=16867.8
+0 gambatte crystal none load=1.19 gambatte frames=36000 drawn=36000 seconds=1.977547 fps=18204.4
+0 gambatte crystal picture load=1.19 gambatte frames=36000 drawn=36000 seconds=2.423750 fps=14853.0
+1 pyboy-rs red picture load=1.18 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.995416 fps=18041.4
+1 pyboy-rs crystal none load=1.18 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.975430 fps=36906.8
+1 pyboy-rs crystal picture load=1.18 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.433280 fps=14794.8
+1 pyboy-rs-nosound red none load=1.16 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.616204 fps=58422.2
+1 pyboy-rs-nosound red picture load=1.16 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.829184 fps=19680.9
+1 pyboy-rs-nosound crystal none load=1.16 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.839832 fps=42865.7
+1 pyboy-rs-nosound crystal picture load=1.16 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.321609 fps=15506.5
+1 pyboy red none load=1.31 pyboy 2.9.0 mode=sound frames=36000 seconds=8.055569 fps=4469.0
+1 pyboy red picture load=1.42 pyboy 2.9.0 mode=sound frames=36000 seconds=9.831754 fps=3661.6
+1 pyboy crystal none load=1.51 pyboy 2.9.0 mode=sound frames=36000 seconds=20.094797 fps=1791.5
+1 pyboy crystal picture load=2.05 pyboy 2.9.0 mode=sound frames=36000 seconds=20.224105 fps=1780.1
+1 pyboy-nosound red none load=1.82 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.259424 fps=4959.1
+1 pyboy-nosound red picture load=1.75 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.105612 fps=3953.6
+1 pyboy-nosound crystal none load=1.64 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.933626 fps=1901.4
+1 pyboy-nosound crystal picture load=1.45 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.032120 fps=1891.5
+1 pyboy-fast red none load=1.49 pyboy 2.9.0 mode=fast frames=36000 seconds=0.964731 fps=37316.1
+1 pyboy-fast red picture load=1.49 pyboy 2.9.0 mode=fast frames=36000 seconds=1.987199 fps=18116.0
+1 pyboy-fast crystal none load=1.53 pyboy 2.9.0 mode=fast frames=36000 seconds=1.494326 fps=24091.1
+1 pyboy-fast crystal picture load=1.53 pyboy 2.9.0 mode=fast frames=36000 seconds=2.985216 fps=12059.4
+1 sameboy red none load=1.48 sameboy frames=36000 vblanks=36002 seconds=33.397156 fps=1077.9
+1 sameboy red picture load=1.49 sameboy frames=36000 vblanks=36002 seconds=36.338777 fps=990.7
+1 sameboy crystal none load=1.25 sameboy frames=36000 vblanks=36001 seconds=33.812360 fps=1064.7
+1 sameboy crystal picture load=1.35 sameboy frames=36000 vblanks=36001 seconds=37.521144 fps=959.5
+1 mgba red none load=0.97 DMG-,36000,3837297,none
+1 mgba red picture load=0.97 DMG-,36000,5441309,software
+1 mgba crystal none load=1.13 CGB-BYTE,36000,4811679,none
+1 mgba crystal picture load=1.12 CGB-BYTE,36000,6576894,software
+1 gambatte red none load=1.11 gambatte frames=36000 drawn=35998 seconds=1.615891 fps=22278.7
+1 gambatte red picture load=1.11 gambatte frames=36000 drawn=35998 seconds=2.010510 fps=17905.9
+1 gambatte crystal none load=1.18 gambatte frames=36000 drawn=36000 seconds=1.965328 fps=18317.5
+1 gambatte crystal picture load=1.18 gambatte frames=36000 drawn=36000 seconds=2.422261 fps=14862.1
+1 pyboy-rs red none load=1.25 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.733161 fps=49102.4
+2 pyboy-rs crystal none load=1.25 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.017573 fps=35378.3
+2 pyboy-rs crystal picture load=1.25 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.462237 fps=14620.9
+2 pyboy-rs-nosound red none load=1.31 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.606112 fps=59394.9
+2 pyboy-rs-nosound red picture load=1.31 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.912042 fps=18828.0
+2 pyboy-rs-nosound crystal none load=1.31 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.857537 fps=41980.7
+2 pyboy-rs-nosound crystal picture load=1.31 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.342855 fps=15365.9
+2 pyboy red none load=1.28 pyboy 2.9.0 mode=sound frames=36000 seconds=8.016290 fps=4490.9
+2 pyboy red picture load=1.26 pyboy 2.9.0 mode=sound frames=36000 seconds=9.789327 fps=3677.5
+2 pyboy crystal none load=1.29 pyboy 2.9.0 mode=sound frames=36000 seconds=20.338744 fps=1770.0
+2 pyboy crystal picture load=1.59 pyboy 2.9.0 mode=sound frames=36000 seconds=20.299628 fps=1773.4
+2 pyboy-nosound red none load=1.49 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.244456 fps=4969.3
+2 pyboy-nosound red picture load=1.45 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.192464 fps=3916.3
+2 pyboy-nosound crystal none load=1.53 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.041265 fps=1890.6
+2 pyboy-nosound crystal picture load=1.45 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.137971 fps=1881.1
+2 pyboy-fast red none load=1.47 pyboy 2.9.0 mode=fast frames=36000 seconds=0.991718 fps=36300.6
+2 pyboy-fast red picture load=1.47 pyboy 2.9.0 mode=fast frames=36000 seconds=1.949985 fps=18461.7
+2 pyboy-fast crystal none load=1.51 pyboy 2.9.0 mode=fast frames=36000 seconds=1.495934 fps=24065.2
+2 pyboy-fast crystal picture load=1.51 pyboy 2.9.0 mode=fast frames=36000 seconds=2.940573 fps=12242.5
+2 sameboy red none load=1.47 sameboy frames=36000 vblanks=36002 seconds=33.674581 fps=1069.1
+2 sameboy red picture load=1.60 sameboy frames=36000 vblanks=36002 seconds=36.148199 fps=995.9
+2 sameboy crystal none load=1.68 sameboy frames=36000 vblanks=36001 seconds=34.576510 fps=1041.2
+2 sameboy crystal picture load=2.00 sameboy frames=36000 vblanks=36001 seconds=37.200580 fps=967.7
+2 mgba red none load=1.63 DMG-,36000,3782952,none
+2 mgba red picture load=1.74 DMG-,36000,5396638,software
+2 mgba crystal none load=1.76 CGB-BYTE,36000,4930649,none
+2 mgba crystal picture load=1.70 CGB-BYTE,36000,6616593,software
+2 gambatte red none load=1.97 gambatte frames=36000 drawn=35998 seconds=1.575824 fps=22845.2
+2 gambatte red picture load=1.97 gambatte frames=36000 drawn=35998 seconds=2.009538 fps=17914.6
+2 gambatte crystal none load=1.97 gambatte frames=36000 drawn=36000 seconds=2.002637 fps=17976.3
+2 gambatte crystal picture load=1.97 gambatte frames=36000 drawn=36000 seconds=2.455800 fps=14659.2
+2 pyboy-rs red none load=1.97 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.747843 fps=48138.4
+2 pyboy-rs red picture load=1.97 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.995366 fps=18041.8
+3 pyboy-rs crystal picture load=1.97 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.463886 fps=14611.1
+3 pyboy-rs-nosound red none load=2.05 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.613522 fps=58677.6
+3 pyboy-rs-nosound red picture load=2.05 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.834758 fps=19621.1
+3 pyboy-rs-nosound crystal none load=2.05 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.850695 fps=42318.3
+3 pyboy-rs-nosound crystal picture load=2.05 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.284912 fps=15755.5
+3 pyboy red none load=2.05 pyboy 2.9.0 mode=sound frames=36000 seconds=7.904335 fps=4554.5
+3 pyboy red picture load=1.96 pyboy 2.9.0 mode=sound frames=36000 seconds=9.804942 fps=3671.6
+3 pyboy crystal none load=1.81 pyboy 2.9.0 mode=sound frames=36000 seconds=20.191023 fps=1783.0
+3 pyboy crystal picture load=1.81 pyboy 2.9.0 mode=sound frames=36000 seconds=20.431687 fps=1762.0
+3 pyboy-nosound red none load=1.78 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.278254 fps=4946.2
+3 pyboy-nosound red picture load=1.72 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.047869 fps=3978.8
+3 pyboy-nosound crystal none load=1.61 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.235232 fps=1871.6
+3 pyboy-nosound crystal picture load=0.33 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.400976 fps=1855.6
+3 pyboy-fast red none load=0.73 pyboy 2.9.0 mode=fast frames=36000 seconds=0.976802 fps=36855.0
+3 pyboy-fast red picture load=0.73 pyboy 2.9.0 mode=fast frames=36000 seconds=1.962545 fps=18343.5
+3 pyboy-fast crystal none load=0.91 pyboy 2.9.0 mode=fast frames=36000 seconds=1.496154 fps=24061.7
+3 pyboy-fast crystal picture load=0.91 pyboy 2.9.0 mode=fast frames=36000 seconds=2.989206 fps=12043.3
+3 sameboy red none load=0.92 sameboy frames=36000 vblanks=36002 seconds=33.580089 fps=1072.1
+3 sameboy red picture load=1.18 sameboy frames=36000 vblanks=36002 seconds=35.846488 fps=1004.3
+3 sameboy crystal none load=1.44 sameboy frames=36000 vblanks=36001 seconds=34.471787 fps=1044.3
+3 sameboy crystal picture load=1.46 sameboy frames=36000 vblanks=36001 seconds=37.599499 fps=957.5
+3 mgba red none load=1.66 DMG-,36000,3805775,none
+3 mgba red picture load=1.69 DMG-,36000,5356259,software
+3 mgba crystal none load=1.63 CGB-BYTE,36000,4812223,none
+3 mgba crystal picture load=1.58 CGB-BYTE,36000,6474211,software
+3 gambatte red none load=1.53 gambatte frames=36000 drawn=35998 seconds=1.527553 fps=23567.1
+3 gambatte red picture load=1.65 gambatte frames=36000 drawn=35998 seconds=2.008713 fps=17921.9
+3 gambatte crystal none load=1.65 gambatte frames=36000 drawn=36000 seconds=1.961033 fps=18357.7
+3 gambatte crystal picture load=1.65 gambatte frames=36000 drawn=36000 seconds=2.431149 fps=14807.8
+3 pyboy-rs red none load=1.60 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.737907 fps=48786.6
+3 pyboy-rs red picture load=1.60 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.984070 fps=18144.5
+3 pyboy-rs crystal none load=1.60 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.981975 fps=36660.8
+4 pyboy-rs-nosound red none load=1.55 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.613675 fps=58662.9
+4 pyboy-rs-nosound red picture load=1.55 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.838857 fps=19577.4
+4 pyboy-rs-nosound crystal none load=1.55 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.846038 fps=42551.3
+4 pyboy-rs-nosound crystal picture load=0.68 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.294207 fps=15691.7
+4 pyboy red none load=0.68 pyboy 2.9.0 mode=sound frames=36000 seconds=7.888786 fps=4563.4
+4 pyboy red picture load=0.80 pyboy 2.9.0 mode=sound frames=36000 seconds=9.858463 fps=3651.7
+4 pyboy crystal none load=0.83 pyboy 2.9.0 mode=sound frames=36000 seconds=20.086084 fps=1792.3
+4 pyboy crystal picture load=1.09 pyboy 2.9.0 mode=sound frames=36000 seconds=20.330886 fps=1770.7
+4 pyboy-nosound red none load=1.26 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.345270 fps=4901.1
+4 pyboy-nosound red picture load=1.30 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.844364 fps=3656.9
+4 pyboy-nosound crystal none load=0.58 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.899539 fps=1904.8
+4 pyboy-nosound crystal picture load=0.77 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.129203 fps=1881.9
+4 pyboy-fast red none load=1.05 pyboy 2.9.0 mode=fast frames=36000 seconds=0.972497 fps=37018.1
+4 pyboy-fast red picture load=1.05 pyboy 2.9.0 mode=fast frames=36000 seconds=1.970871 fps=18266.0
+4 pyboy-fast crystal none load=1.05 pyboy 2.9.0 mode=fast frames=36000 seconds=1.520762 fps=23672.3
+4 pyboy-fast crystal picture load=1.05 pyboy 2.9.0 mode=fast frames=36000 seconds=3.113829 fps=11561.3
+4 sameboy red none load=1.05 sameboy frames=36000 vblanks=36002 seconds=34.020094 fps=1058.2
+4 sameboy red picture load=1.39 sameboy frames=36000 vblanks=36002 seconds=36.643594 fps=982.4
+4 sameboy crystal none load=0.74 sameboy frames=36000 vblanks=36001 seconds=34.623111 fps=1039.8
+4 sameboy crystal picture load=1.13 sameboy frames=36000 vblanks=36001 seconds=37.772246 fps=953.1
+4 mgba red none load=1.19 DMG-,36000,3826410,none
+4 mgba red picture load=1.17 DMG-,36000,5382790,software
+4 mgba crystal none load=1.48 CGB-BYTE,36000,4875700,none
+4 mgba crystal picture load=1.44 CGB-BYTE,36000,6465321,software
+4 gambatte red none load=1.65 gambatte frames=36000 drawn=35998 seconds=1.558351 fps=23101.3
+4 gambatte red picture load=1.60 gambatte frames=36000 drawn=35998 seconds=2.016870 fps=17849.4
+4 gambatte crystal none load=1.60 gambatte frames=36000 drawn=36000 seconds=1.971399 fps=18261.1
+4 gambatte crystal picture load=1.60 gambatte frames=36000 drawn=36000 seconds=2.395137 fps=15030.5
+4 pyboy-rs red none load=1.71 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.741136 fps=48574.1
+4 pyboy-rs red picture load=1.71 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.972429 fps=18251.6
+4 pyboy-rs crystal none load=1.71 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.976822 fps=36854.2
+4 pyboy-rs crystal picture load=1.65 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.455409 fps=14661.5
+5 pyboy-rs-nosound red picture load=1.65 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.890607 fps=19041.5
+5 pyboy-rs-nosound crystal none load=1.60 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.845826 fps=42562.0
+5 pyboy-rs-nosound crystal picture load=1.60 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.287814 fps=15735.5
+5 pyboy red none load=1.60 pyboy 2.9.0 mode=sound frames=36000 seconds=8.086989 fps=4451.6
+5 pyboy red picture load=1.67 pyboy 2.9.0 mode=sound frames=36000 seconds=10.021909 fps=3592.1
+5 pyboy crystal none load=1.64 pyboy 2.9.0 mode=sound frames=36000 seconds=20.102814 fps=1790.8
+5 pyboy crystal picture load=1.59 pyboy 2.9.0 mode=sound frames=36000 seconds=20.211621 fps=1781.2
+5 pyboy-nosound red none load=1.55 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.225114 fps=4982.6
+5 pyboy-nosound red picture load=1.55 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.114630 fps=3949.7
+5 pyboy-nosound crystal none load=1.59 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.836404 fps=1911.2
+5 pyboy-nosound crystal picture load=1.62 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.998751 fps=1894.9
+5 pyboy-fast red none load=1.90 pyboy 2.9.0 mode=fast frames=36000 seconds=0.965952 fps=37268.9
+5 pyboy-fast red picture load=1.90 pyboy 2.9.0 mode=fast frames=36000 seconds=1.988385 fps=18105.1
+5 pyboy-fast crystal none load=1.83 pyboy 2.9.0 mode=fast frames=36000 seconds=1.577319 fps=22823.5
+5 pyboy-fast crystal picture load=1.83 pyboy 2.9.0 mode=fast frames=36000 seconds=2.955302 fps=12181.5
+5 sameboy red none load=1.76 sameboy frames=36000 vblanks=36002 seconds=33.889515 fps=1062.3
+5 sameboy red picture load=1.90 sameboy frames=36000 vblanks=36002 seconds=35.966086 fps=1000.9
+5 sameboy crystal none load=1.87 sameboy frames=36000 vblanks=36001 seconds=34.171652 fps=1053.5
+5 sameboy crystal picture load=1.79 sameboy frames=36000 vblanks=36001 seconds=37.158668 fps=968.8
+5 mgba red none load=1.76 DMG-,36000,3849230,none
+5 mgba red picture load=1.70 DMG-,36000,5463821,software
+5 mgba crystal none load=1.81 CGB-BYTE,36000,4937741,none
+5 mgba crystal picture load=1.74 CGB-BYTE,36000,6652932,software
+5 gambatte red none load=1.76 gambatte frames=36000 drawn=35998 seconds=1.539399 fps=23385.7
+5 gambatte red picture load=1.70 gambatte frames=36000 drawn=35998 seconds=2.015294 fps=17863.4
+5 gambatte crystal none load=1.70 gambatte frames=36000 drawn=36000 seconds=1.957198 fps=18393.6
+5 gambatte crystal picture load=1.70 gambatte frames=36000 drawn=36000 seconds=2.409764 fps=14939.2
+5 pyboy-rs red none load=1.80 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.733638 fps=49070.5
+5 pyboy-rs red picture load=1.80 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.988378 fps=18105.2
+5 pyboy-rs crystal none load=1.80 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.985365 fps=36534.7
+5 pyboy-rs crystal picture load=1.74 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.437048 fps=14772.0
+5 pyboy-rs-nosound red none load=1.74 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.615015 fps=58535.2
+6 pyboy-rs-nosound crystal none load=1.74 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.849538 fps=42376.0
+6 pyboy-rs-nosound crystal picture load=1.76 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.299919 fps=15652.7
+6 pyboy red none load=1.76 pyboy 2.9.0 mode=sound frames=36000 seconds=7.807305 fps=4611.1
+6 pyboy red picture load=1.72 pyboy 2.9.0 mode=sound frames=36000 seconds=9.794942 fps=3675.4
+6 pyboy crystal none load=1.61 pyboy 2.9.0 mode=sound frames=36000 seconds=20.104830 fps=1790.6
+6 pyboy crystal picture load=1.51 pyboy 2.9.0 mode=sound frames=36000 seconds=20.458501 fps=1759.7
+6 pyboy-nosound red none load=1.62 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.367765 fps=4886.1
+6 pyboy-nosound red picture load=1.57 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.188395 fps=3918.0
+6 pyboy-nosound crystal none load=1.56 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.214835 fps=1873.6
+6 pyboy-nosound crystal picture load=1.40 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.117685 fps=1883.1
+6 pyboy-fast red none load=1.29 pyboy 2.9.0 mode=fast frames=36000 seconds=0.952850 fps=37781.4
+6 pyboy-fast red picture load=1.29 pyboy 2.9.0 mode=fast frames=36000 seconds=1.970735 fps=18267.3
+6 pyboy-fast crystal none load=1.34 pyboy 2.9.0 mode=fast frames=36000 seconds=1.490712 fps=24149.5
+6 pyboy-fast crystal picture load=1.34 pyboy 2.9.0 mode=fast frames=36000 seconds=3.016821 fps=11933.1
+6 sameboy red none load=1.32 sameboy frames=36000 vblanks=36002 seconds=36.974339 fps=973.6
+6 sameboy red picture load=0.99 sameboy frames=36000 vblanks=36002 seconds=36.089049 fps=997.5
+6 sameboy crystal none load=1.46 sameboy frames=36000 vblanks=36001 seconds=34.046943 fps=1057.4
+6 sameboy crystal picture load=1.74 sameboy frames=36000 vblanks=36001 seconds=36.922770 fps=975.0
+6 mgba red none load=1.74 DMG-,36000,3782903,none
+6 mgba red picture load=1.68 DMG-,36000,5357775,software
+6 mgba crystal none load=1.62 CGB-BYTE,36000,4780443,none
+6 mgba crystal picture load=1.57 CGB-BYTE,36000,6450128,software
+6 gambatte red none load=1.69 gambatte frames=36000 drawn=35998 seconds=1.497002 fps=24048.1
+6 gambatte red picture load=1.69 gambatte frames=36000 drawn=35998 seconds=2.002448 fps=17978.0
+6 gambatte crystal none load=1.63 gambatte frames=36000 drawn=36000 seconds=1.971239 fps=18262.6
+6 gambatte crystal picture load=1.63 gambatte frames=36000 drawn=36000 seconds=2.406918 fps=14956.9
+6 pyboy-rs red none load=1.58 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.741312 fps=48562.6
+6 pyboy-rs red picture load=1.58 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.962713 fps=18342.0
+6 pyboy-rs crystal none load=1.58 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.972801 fps=37006.5
+6 pyboy-rs crystal picture load=1.58 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.423103 fps=14857.0
+6 pyboy-rs-nosound red none load=1.54 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.623429 fps=57745.1
+6 pyboy-rs-nosound red picture load=1.54 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.836953 fps=19597.7
+7 pyboy-rs-nosound crystal picture load=1.54 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.286355 fps=15745.6
+7 pyboy red none load=1.49 pyboy 2.9.0 mode=sound frames=36000 seconds=7.856472 fps=4582.2
+7 pyboy red picture load=1.45 pyboy 2.9.0 mode=sound frames=36000 seconds=9.793745 fps=3675.8
+7 pyboy crystal none load=1.46 pyboy 2.9.0 mode=sound frames=36000 seconds=20.093021 fps=1791.7
+7 pyboy crystal picture load=1.45 pyboy 2.9.0 mode=sound frames=36000 seconds=20.307417 fps=1772.8
+7 pyboy-nosound red none load=1.32 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.284341 fps=4942.1
+7 pyboy-nosound red picture load=1.29 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.062478 fps=3972.4
+7 pyboy-nosound crystal none load=1.25 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.889009 fps=1905.9
+7 pyboy-nosound crystal picture load=1.41 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.054607 fps=1889.3
+7 pyboy-fast red none load=1.29 pyboy 2.9.0 mode=fast frames=36000 seconds=0.983073 fps=36619.9
+7 pyboy-fast red picture load=1.29 pyboy 2.9.0 mode=fast frames=36000 seconds=1.954595 fps=18418.1
+7 pyboy-fast crystal none load=1.29 pyboy 2.9.0 mode=fast frames=36000 seconds=1.505830 fps=23907.1
+7 pyboy-fast crystal picture load=1.27 pyboy 2.9.0 mode=fast frames=36000 seconds=2.987094 fps=12051.8
+7 sameboy red none load=1.27 sameboy frames=36000 vblanks=36002 seconds=33.984953 fps=1059.3
+7 sameboy red picture load=1.39 sameboy frames=36000 vblanks=36002 seconds=36.171044 fps=995.3
+7 sameboy crystal none load=1.38 sameboy frames=36000 vblanks=36001 seconds=34.000742 fps=1058.8
+7 sameboy crystal picture load=1.39 sameboy frames=36000 vblanks=36001 seconds=36.983834 fps=973.4
+7 mgba red none load=1.26 DMG-,36000,3774090,none
+7 mgba red picture load=1.26 DMG-,36000,5376664,software
+7 mgba crystal none load=1.24 CGB-BYTE,36000,4783359,none
+7 mgba crystal picture load=1.30 CGB-BYTE,36000,6436781,software
+7 gambatte red none load=1.25 gambatte frames=36000 drawn=35998 seconds=1.495081 fps=24079.0
+7 gambatte red picture load=1.25 gambatte frames=36000 drawn=35998 seconds=1.990959 fps=18081.7
+7 gambatte crystal none load=1.25 gambatte frames=36000 drawn=36000 seconds=1.953293 fps=18430.4
+7 gambatte crystal picture load=1.23 gambatte frames=36000 drawn=36000 seconds=2.411983 fps=14925.5
+7 pyboy-rs red none load=1.23 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.732258 fps=49163.0
+7 pyboy-rs red picture load=1.23 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=1.969760 fps=18276.3
+7 pyboy-rs crystal none load=1.21 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.975435 fps=36906.6
+7 pyboy-rs crystal picture load=1.21 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.413446 fps=14916.4
+7 pyboy-rs-nosound red none load=1.20 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.612080 fps=58815.8
+7 pyboy-rs-nosound red picture load=1.20 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.840531 fps=19559.6
+7 pyboy-rs-nosound crystal none load=1.20 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.853864 fps=42161.3
+8 pyboy red none load=1.20 pyboy 2.9.0 mode=sound frames=36000 seconds=8.056267 fps=4468.6
+8 pyboy red picture load=1.16 pyboy 2.9.0 mode=sound frames=36000 seconds=9.801555 fps=3672.9
+8 pyboy crystal none load=1.30 pyboy 2.9.0 mode=sound frames=36000 seconds=20.140094 fps=1787.5
+8 pyboy crystal picture load=1.28 pyboy 2.9.0 mode=sound frames=36000 seconds=20.447723 fps=1760.6
+8 pyboy-nosound red none load=1.35 pyboy 2.9.0 mode=nosound frames=36000 seconds=7.189943 fps=5007.0
+8 pyboy-nosound red picture load=1.29 pyboy 2.9.0 mode=nosound frames=36000 seconds=9.119031 fps=3947.8
+8 pyboy-nosound crystal none load=1.32 pyboy 2.9.0 mode=nosound frames=36000 seconds=18.823623 fps=1912.5
+8 pyboy-nosound crystal picture load=1.40 pyboy 2.9.0 mode=nosound frames=36000 seconds=19.393929 fps=1856.3
+8 pyboy-fast red none load=1.29 pyboy 2.9.0 mode=fast frames=36000 seconds=0.960247 fps=37490.4
+8 pyboy-fast red picture load=1.26 pyboy 2.9.0 mode=fast frames=36000 seconds=1.955497 fps=18409.6
+8 pyboy-fast crystal none load=1.26 pyboy 2.9.0 mode=fast frames=36000 seconds=1.525127 fps=23604.6
+8 pyboy-fast crystal picture load=1.26 pyboy 2.9.0 mode=fast frames=36000 seconds=2.996725 fps=12013.1
+8 sameboy red none load=1.24 sameboy frames=36000 vblanks=36002 seconds=33.597371 fps=1071.5
+8 sameboy red picture load=1.26 sameboy frames=36000 vblanks=36002 seconds=35.977859 fps=1000.6
+8 sameboy crystal none load=1.34 sameboy frames=36000 vblanks=36001 seconds=34.567360 fps=1041.4
+8 sameboy crystal picture load=1.57 sameboy frames=36000 vblanks=36001 seconds=37.004581 fps=972.9
+8 mgba red none load=1.32 DMG-,36000,3806226,none
+8 mgba red picture load=0.44 DMG-,36000,5318939,software
+8 mgba crystal none load=0.48 CGB-BYTE,36000,4767580,none
+8 mgba crystal picture load=0.69 CGB-BYTE,36000,6484278,software
+8 gambatte red none load=0.73 gambatte frames=36000 drawn=35998 seconds=1.510511 fps=23833.0
+8 gambatte red picture load=0.73 gambatte frames=36000 drawn=35998 seconds=1.995180 fps=18043.5
+8 gambatte crystal none load=0.73 gambatte frames=36000 drawn=36000 seconds=1.965882 fps=18312.4
+8 gambatte crystal picture load=0.76 gambatte frames=36000 drawn=36000 seconds=2.457905 fps=14646.6
+8 pyboy-rs red none load=0.76 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.729886 fps=49322.8
+8 pyboy-rs red picture load=0.78 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.091188 fps=17215.1
+8 pyboy-rs crystal none load=0.78 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=0.961051 fps=37459.0
+8 pyboy-rs crystal picture load=0.78 pyboy-rs 0.1.9 mode=sound frames=36000 seconds=2.441290 fps=14746.3
+8 pyboy-rs-nosound red none load=0.87 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.615045 fps=58532.3
+8 pyboy-rs-nosound red picture load=0.87 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=1.844560 fps=19516.9
+8 pyboy-rs-nosound crystal none load=0.87 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=0.857618 fps=41976.7
+8 pyboy-rs-nosound crystal picture load=0.87 pyboy-rs 0.1.9 mode=nosound frames=36000 seconds=2.290055 fps=15720.1
