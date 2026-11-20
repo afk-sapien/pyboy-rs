@@ -681,7 +681,8 @@ Each of these needs its own measurement and proof before it is built.
    limits. A sound tick finds a 512 Hz frame step at the first slice end at
    or past it, so skipping stops at the last mode change before the next
    frame step, and it never goes past the sound deadline. Skipping is also
-   off while CGB HDMA runs. The lockstep test runs a ROM that enables STAT
+   off while CGB HDMA runs, since an HBlank transfer copies a block at each
+   entry to mode 0. The lockstep test runs a ROM that enables STAT
    sources from a table, polls LY and STAT, halts, switches the LCD off and,
    on CGB, runs HDMA and switches speed. With the picture on every fifth
    frame and notes playing, it matches the interrupt log, state, sound and
@@ -764,6 +765,84 @@ Each of these needs its own measurement and proof before it is built.
    The raw rounds and hashes are in `data/profiles/2026-11-18-fat-lto/` and,
    for `panic = "abort"`, `data/profiles/2026-11-18-lto-abort/` (`data/` is
    not in the repository).
+9. `run_frame` inlined into its one caller. Rejected, measured slower. Once
+   the CGB transfer rewrite (#42) made the frame loop smaller, the PGO build
+   inlined `Machine::run_frame` into its caller and read 1.0% to 3.8% slower
+   than its A/A control in all 18 harness cells, so #42 marks it
+   `#[inline(never)]`. With the busy flag in (a slice checks one flag while
+   no transfer runs), the attribute was tried out once more, against main at
+   5ac0ed6, on the PGO build with 9 rounds interleaved with the parent.
+   Without it, 17 of 18 harness cells and 3 of 12 `benchmark.rs` modes read
+   slower than A/A. With it, 2 and 2 do. Keep the attribute.
+
+   Percent speed change against main at 5ac0ed6, PGO build. Each entry is
+   the best of 9 rounds with the A/A control in brackets, then the median of
+   the same rounds with its A/A control.
+
+   | Harness cell | With, best (A/A) | With, median (A/A) | Without, best (A/A) | Without, median (A/A) |
+   | --- | ---: | ---: | ---: | ---: |
+   | Red idle, off | -0.1% (+0.1%) | +0.2% (-0.8%) | -1.9% (-0.6%), slower | -0.5% (+0.3%) |
+   | Red idle, every frame | +0.8% (-0.9%) | +1.2% (+0.2%) | -1.0% (-0.2%), slower | -1.0% (+0.1%) |
+   | Red idle, every 30th | -0.7% (-0.3%), slower | +0.1% (-0.8%) | -2.4% (-0.8%), slower | -1.8% (-0.1%) |
+   | Red input, off | +0.1% (+0.2%) | -0.8% (+0.1%) | -2.3% (-0.2%), slower | -3.0% (-0.2%) |
+   | Red input, every frame | +0.6% (-0.4%) | +1.4% (-0.1%) | -0.8% (+0.7%), slower | -1.1% (+0.3%) |
+   | Red input, every 30th | -0.2% (+0.5%) | +0.0% (+0.3%) | -2.7% (-0.5%), slower | -3.5% (-0.8%) |
+   | Gold idle, off | +0.3% (-0.5%) | +0.2% (-0.7%) | -3.1% (-0.4%), slower | -3.6% (-0.5%) |
+   | Gold idle, every frame | +2.8% (+0.3%) | +2.9% (-0.2%) | +0.1% (+0.2%) | -0.8% (-0.2%) |
+   | Gold idle, every 30th | -0.2% (-0.1%), slower | +0.8% (+0.8%) | -3.4% (-0.8%), slower | -3.2% (-0.7%) |
+   | Gold input, off | +1.7% (+0.5%) | +0.9% (-0.4%) | -2.0% (+1.2%), slower | -1.9% (+1.0%) |
+   | Gold input, every frame | +2.6% (-0.0%) | +2.9% (+0.7%) | -0.2% (+0.0%), slower | +0.3% (+0.1%) |
+   | Gold input, every 30th | +1.3% (+0.4%) | +1.8% (+0.9%) | -1.5% (-0.2%), slower | -2.2% (-0.1%) |
+   | Crystal idle, off | +1.4% (+0.0%) | +0.9% (+0.5%) | -1.3% (+0.1%), slower | -2.0% (+0.4%) |
+   | Crystal idle, every frame | +2.3% (+0.2%) | +2.3% (-0.2%) | -1.2% (+0.1%), slower | -1.2% (-0.2%) |
+   | Crystal idle, every 30th | +0.9% (+0.1%) | +1.2% (+0.3%) | -1.8% (+0.2%), slower | -2.3% (-0.3%) |
+   | Crystal input, off | +1.0% (+0.6%) | +0.4% (-0.1%) | -2.3% (-0.5%), slower | -2.6% (-0.1%) |
+   | Crystal input, every frame | +2.0% (-0.5%) | +2.2% (-0.1%) | -0.3% (+0.2%), slower | +0.1% (+0.6%) |
+   | Crystal input, every 30th | +0.4% (-0.6%) | +0.2% (-0.0%) | -1.5% (-0.0%), slower | -2.3% (+0.1%) |
+
+   | `benchmark.rs` | With, best (A/A) | With, median (A/A) | Without, best (A/A) | Without, median (A/A) |
+   | --- | ---: | ---: | ---: | ---: |
+   | Red batch | +0.8% (-0.0%) | +0.2% (+0.1%) | -0.5% (-0.8%) | +0.4% (-0.5%) |
+   | Red frame | -0.7% (-0.2%), slower | -0.7% (-0.6%) | -0.1% (-0.3%) | +0.0% (-0.9%) |
+   | Red audio | +2.3% (+0.5%) | +3.2% (+0.8%) | +0.7% (+0.0%) | +1.1% (+0.2%) |
+   | Red render | -1.0% (+0.3%), slower | -0.7% (-0.1%) | +2.8% (+1.7%) | +2.1% (+1.2%) |
+   | Gold batch | +1.5% (-0.8%) | +1.2% (-0.2%) | -1.0% (+0.1%), slower | +0.0% (+0.2%) |
+   | Gold frame | +1.3% (+0.4%) | +1.7% (+0.9%) | -0.4% (-0.1%), slower | +0.0% (+0.2%) |
+   | Gold audio | +2.4% (-0.6%) | +3.4% (-0.8%) | +0.1% (-0.1%) | +0.6% (+0.2%) |
+   | Gold render | +2.2% (-1.4%) | +3.5% (+0.2%) | +1.1% (-0.1%) | +1.0% (+0.4%) |
+   | Crystal batch | +1.1% (-0.3%) | +1.4% (-0.0%) | +1.0% (+0.3%) | +0.4% (+0.1%) |
+   | Crystal frame | +1.8% (+0.7%) | +1.7% (+0.4%) | -0.6% (+0.5%), slower | -0.7% (-0.1%) |
+   | Crystal audio | +3.6% (-0.4%) | +2.2% (+0.2%) | -0.4% (-1.4%) | +0.6% (-0.4%) |
+   | Crystal render | +1.7% (-1.3%) | +2.8% (-0.2%) | -0.4% (-0.6%) | +0.7% (-0.9%) |
+
+   With the attribute, the 4 slower cells read 0.2% to 1.0% slower at best,
+   and their medians (-0.7% to +0.8%) sit within the A/A medians seen in
+   other cells, which reach -0.8%. `benchmark.rs` outputs are the same in
+   every mode. Peak resident memory with the attribute is unchanged except
+   Red idle, every 30th frame, one 4 kB page more (6,468 to 6,472 kB).
+   Without it every Red cell reads one or two pages more, up to 6,476 kB.
+   The raw rounds are in `data/profiles/2026-11-20-hdma-busy/`, which is not
+   in the repository.
+
+## Open items
+
+1. The default build after #42. The Linux x86_64 wheel is the only release
+   file built with the profile. The other four wheels and any install from
+   the sdist build as the default release build does (item 8). Against main
+   at 5ac0ed6, #42 at 7df8f59 reads slower than A/A in this build in 19 of
+   30 cells, best of 5 rounds interleaved with the parent:
+   - Harness: 16 of 18 cells, by 1.0% to 4.2%, with medians of -0.7% to
+     -4.5%. Red is among them (-1.0% to -4.0% in 5 of 6 cells), and Red
+     never runs a CGB transfer.
+   - `benchmark.rs`: Red audio -1.2%, Crystal frame -3.1% and Crystal audio
+     -0.7%.
+
+   Without `#[inline(never)]` on `run_frame` (item 9) the same build reads
+   slower in 17 of 18 harness cells. On the PGO build the same commit is
+   within A/A or faster in 26 of 30 cells. Since Red runs none of the transfer
+   code, this is a code layout or inlining effect, not the transfer itself.
+   It is to be settled before the next emulator release, together with the
+   default-build numbers for full LTO in item 8.
 
 ## Measured gains
 

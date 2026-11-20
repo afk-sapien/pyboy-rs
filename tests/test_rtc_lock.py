@@ -209,7 +209,7 @@ def test_checkpoints_restore_across_builds_but_not_across_formats():
     second.restore_execution(other_build)
     assert second.execution_checkpoint()["state"] == checkpoint["state"]
     for compat in ({"state_format": "pyboy-format-16", "runtime_format": 1},
-                   {"state_format": "pyboy-format-15", "runtime_format": 3}):
+                   {"state_format": "pyboy-format-15", "runtime_format": 4}):
         bad = deepcopy(checkpoint)
         bad["compat"] = compat
         with pytest.raises(ValueError, match="incompatible"):

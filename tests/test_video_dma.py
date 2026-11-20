@@ -100,6 +100,19 @@ def test_vram_palettes_window_sprites_dma_and_speed(cgb, dma_mode):
             ref.tick()
             native.tick()
             assert bytes(native.screen.raw_buffer) == bytes(ref.screen.raw_buffer)
+            if cgb:
+                # The VRAM transfer follows SameBoy, which holds the CPU for
+                # the copy and keeps the counters where they stopped, so the
+                # CPU clock and the saved HDMA registers differ from PyBoy
+                # 2.7.0 (docs/compatibility.md). What it copies does not.
+                for emulator in (ref, native):
+                    emulator.memory[0xff4f] = 1
+                assert native.memory[0x8000:0xa000] == ref.memory[0x8000:0xa000]
+                for emulator in (ref, native):
+                    emulator.memory[0xff4f] = 0
+                assert native.memory[0x8000:0xa000] == ref.memory[0x8000:0xa000]
+                assert native.memory[0xff55] == ref.memory[0xff55]
+                continue
             # pyboy-rs keeps the OAM DMA source in the saved IO page so that it
             # reads back, and PyBoy 2.7.0 does not (docs/compatibility.md).
             ours, theirs = state(native), state(ref)

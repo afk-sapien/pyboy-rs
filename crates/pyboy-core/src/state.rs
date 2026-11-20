@@ -7,9 +7,13 @@ use crate::{
 };
 
 /// Newest execution runtime layout. Version 2 adds the halted clock's frozen
-/// reading. It is written only while a clock is halted, so every other runtime
-/// keeps the version 1 bytes of 0.1.1 and old recordings still replay.
-pub const RUNTIME_FORMAT: u8 = 2;
+/// reading. Version 3 adds the cycles a VRAM transfer still holds the CPU for
+/// and the LCD mode it last saw. Each is written only when its fields hold
+/// something a load could not rebuild, a halted clock for version 2 and a
+/// copy in progress or a halted CPU with a transfer active for version 3. So
+/// every other runtime keeps the version 1 bytes of 0.1.1 and old recordings
+/// still replay.
+pub const RUNTIME_FORMAT: u8 = 3;
 
 /// The highest CPU clock a state may hold, about 777 emulated days. Releases
 /// before 0.1.6 refuse any state above it, and a long run there kept saving
@@ -178,6 +182,8 @@ impl Machine {
         if codec.position != runtime.len() {
             return Err("Trailing execution runtime data");
         }
+        let hdma = &mut candidate.mb.hdma;
+        hdma.busy = hdma.active || hdma.stall != 0;
         candidate.frame_count = frame;
         candidate.validate_state()?;
         // The runtime record restores the low ROM bank.
@@ -188,7 +194,15 @@ impl Machine {
 
     fn execution_runtime_codec(&mut self, c: &mut Codec) -> Result<(), &'static str> {
         let halted = self.mb.cartridge.rtc.as_ref().is_some_and(Rtc::halted);
-        let mut version = if halted { RUNTIME_FORMAT } else { 1 };
+        let hdma = &self.mb.hdma;
+        let copying = hdma.stall != 0 || (hdma.active && hdma.mode != self.mb.lcd.stat & 3);
+        let mut version = if copying {
+            3
+        } else if halted {
+            2
+        } else {
+            1
+        };
         c.byte(&mut version)?;
         if !(1..=RUNTIME_FORMAT).contains(&version) {
             return Err("Unsupported execution runtime format");
@@ -246,6 +260,14 @@ impl Machine {
                 }
             }
         }
+        if version >= 3 {
+            let hdma = &mut mb.hdma;
+            c.int(&mut hdma.stall, 8)?;
+            c.byte(&mut hdma.mode)?;
+            if !(0..=1 << 16).contains(&hdma.stall) || hdma.mode > 3 {
+                return Err("Invalid VRAM transfer state");
+            }
+        }
         Ok(())
     }
 
@@ -284,6 +306,11 @@ impl Machine {
         candidate.mb.remap();
         candidate.mb.reset_lcd_deadline();
         candidate.mb.lcd.framebuffer_written = true;
+        // The format holds no copy in progress. An execution runtime record
+        // may restore one.
+        candidate.mb.hdma.stall = 0;
+        candidate.mb.hdma.mode = candidate.mb.lcd.stat & 3;
+        candidate.mb.hdma.busy = candidate.mb.hdma.active;
         *self = candidate;
         Ok(())
     }
@@ -358,10 +385,29 @@ impl Machine {
             return Err("Save state hardware mode differs from this machine");
         }
         if cgb {
-            c.bytes(&mut mb.hdma.regs)?;
-            c.boolean(&mut mb.hdma.active)?;
-            c.word(&mut mb.hdma.src)?;
-            c.word(&mut mb.hdma.dst)?;
+            // PyBoy keeps HDMA1 to HDMA4 at the next block to copy, as the
+            // counters here are, and HDMA5 as it reads.
+            let hdma = &mut mb.hdma;
+            let mut regs = [
+                (hdma.src >> 8) as u8,
+                hdma.src as u8,
+                (hdma.dst >> 8) as u8,
+                hdma.dst as u8,
+                hdma.status,
+            ];
+            c.bytes(&mut regs)?;
+            c.boolean(&mut hdma.active)?;
+            hdma.status = regs[4];
+            // PyBoy's own copies of the counters, which the registers match
+            // whenever a transfer could use them.
+            let (mut src, mut dst) = (hdma.src, hdma.dst);
+            c.word(&mut src)?;
+            c.word(&mut dst)?;
+            if c.reading {
+                for (address, value) in (0xff51..).zip(&regs[..4]) {
+                    mb.hdma_address(address, *value);
+                }
+            }
         }
         let cpu = &mut self.cpu;
         for reg in [

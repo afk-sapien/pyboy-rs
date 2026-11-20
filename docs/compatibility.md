@@ -112,6 +112,29 @@ CPU interrupt semantics. Deliberate differences:
   the stored byte for most of these, and 0 for DMA and HDMA1 to HDMA4.
 - On CGB, wave RAM accessed while channel 3 plays goes to the byte holding the
   current sample. PyBoy indexes it with the sample position modulo 16.
+- CGB VRAM transfers (HDMA) follow SameBoy. A general transfer copies at once
+  and holds the CPU for 2 cycles a byte in single speed and 4 in double speed,
+  and 4 more. An HBlank transfer copies one 16-byte block as each line enters
+  mode 0, and its first block at once when started in mode 0 or with the LCD
+  off. A halted CPU takes no block, unless it wakes in mode 0. The source and
+  destination counters keep their place, so a new transfer continues where
+  the last one stopped. Address writes clear the low four bits, a source from
+  0xE000 up moves to 0xF000 up, and the destination keeps 13 bits. A source in
+  VRAM or from 0xE000 up reads 0xFF. HDMA5 with bit 7 clear stops an HBlank
+  transfer, and HDMA5 then reads bit 7 set. PyBoy 2.7.0 takes no CPU time,
+  resets the counters and copies only from the HBlank interrupt. Unlike
+  SameBoy, a block is copied at the end of the slice that enters mode 0,
+  not at the exact cycle, and STOP does not pause a transfer.
+- The format 15 save state has no field for two pieces of transfer state:
+  the cycles the CPU still owes for a copy, and the LCD mode an HBlank
+  transfer last saw on a halted CPU. Execution runtime format 3 keeps both.
+  A save state taken while the CPU still owes cycles drops them on load, so
+  the CPU runs on at once, up to 4,100 cycles ahead of an uninterrupted run
+  (a 2048-byte general transfer in single speed). A save state taken while a
+  halted CPU has an HBlank transfer active loads with the mode set from STAT,
+  so the CPU can copy one block more or one fewer when it wakes. On the Gold
+  and Crystal speed fixtures, idle and input, 216,000 frames each, none of
+  the 864,000 frame ends fell in either case.
 
 Save states depend on hardware mode and sample rate. Like PyBoy's, they do not
 identify the ROM. Load them only against the matching ROM.

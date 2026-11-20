@@ -22,12 +22,29 @@ pub fn now() -> f64 {
         .as_secs_f64()
 }
 
+/// The CGB VRAM transfer, as SameBoy runs it.
 #[derive(Debug, Default, Clone)]
 pub struct Hdma {
-    pub regs: [u8; 5],
-    pub active: bool,
+    /// The source and destination counters. HDMA1 to HDMA4 write them and
+    /// each copied byte advances both, so a new transfer that leaves them
+    /// alone continues where the last one stopped.
     pub src: u16,
     pub dst: u16,
+    /// What HDMA5 reads: bit 7 clear while a transfer is under way, and the
+    /// blocks left less one below it.
+    pub status: u8,
+    /// An HBlank transfer has blocks left. It copies one as the LCD enters
+    /// mode 0 or turns off, and none while the CPU is halted.
+    pub active: bool,
+    /// CPU cycles the copies made so far still hold the CPU for.
+    pub stall: i64,
+    /// The LCD mode at the last slice end. While the CPU is halted it stays
+    /// the mode of the HALT until an interrupt is due to wake the CPU.
+    pub mode: u8,
+    /// A transfer or its stall may be pending. Set by whatever starts one,
+    /// and cleared by the first slice that finds neither. While it is clear,
+    /// a slice makes no other transfer check.
+    pub busy: bool,
 }
 
 /// Where a 4 KiB page outside work RAM reads or writes on the bus fast path.
@@ -255,7 +272,7 @@ impl Machine {
                 key1: 0,
                 double_speed: false,
                 hdma: Hdma {
-                    regs: [0, 0, 0, 0, 255],
+                    status: 255,
                     ..Default::default()
                 },
                 singlestep: false,
@@ -298,30 +315,31 @@ impl Machine {
     /// With the picture off, an LCD mode change that sets no flag and does
     /// not end the frame is no event here either, away from a sound frame
     /// sequencer step. The LCD takes it when it next ticks, at its own cycle.
+    // Kept out of line. Once this loop is small enough, a PGO build inlines
+    // it into a caller with one call site, and there it ran 1% to 4% slower
+    // on every speed cell (#42).
+    #[inline(never)]
     pub fn run_frame(&mut self) -> Result<bool, NoProgress> {
         // Whether every device was ticked at the last slice end, so that its
         // deadline fields hold what PyBoy sizes the next slice from.
         let mut current = true;
+        // Whether no slice of this call has ended yet.
+        let mut first = true;
         while !self.mb.lcd.frame_done {
             #[cfg(feature = "profile")]
             self.profile.begin();
             let start = self.cpu.cycles;
-            if self.mb.cgb && self.mb.hdma.active && self.mb.lcd.stat & 3 == 0 {
-                self.mb.hdma_tick(&mut self.cpu);
-                self.cpu.cycles += 206;
+            // The only transfer check of a slice without one.
+            let result = if self.mb.hdma.busy {
+                self.transfer_slice(start, current, first)
             } else {
-                let target = if self.mb.singlestep {
-                    4
-                } else if current {
-                    self.mb.slice_target()
-                } else {
-                    self.mb.lazy_slice_target(start)
-                };
-                if let Err(error) = self.cpu.tick(&mut self.mb, target) {
-                    // PyBoy leaves every device at the last slice end.
-                    self.mb.catch_up(start, &mut self.cpu);
-                    return Err(error);
-                }
+                let target = self.next_target(start, current);
+                self.cpu.tick(&mut self.mb, target)
+            };
+            if let Err(error) = result {
+                // PyBoy leaves every device at the last slice end.
+                self.mb.catch_up(start, &mut self.cpu);
+                return Err(error);
             }
             #[cfg(feature = "profile")]
             self.profile.mark(0);
@@ -349,8 +367,13 @@ impl Machine {
             self.profile.mark(4);
             current = !lazy;
             if self.mb.singlestep {
+                self.follow_transfer();
                 return Ok(false);
             }
+            first = false;
+        }
+        if !first {
+            self.follow_transfer();
         }
         if !current {
             self.mb.catch_up(self.cpu.cycles, &mut self.cpu);
@@ -361,6 +384,48 @@ impl Machine {
             self.rebase_clocks();
         }
         Ok(true)
+    }
+
+    /// The cycles the next slice runs for.
+    #[inline(always)]
+    fn next_target(&mut self, start: i64, current: bool) -> i64 {
+        if self.mb.singlestep {
+            4
+        } else if current {
+            self.mb.slice_target()
+        } else {
+            self.mb.lazy_slice_target(start)
+        }
+    }
+
+    /// Take the transfer step of the last slice end, as the LCD enters
+    /// mode 0 or turns off.
+    #[inline]
+    fn follow_transfer(&mut self) {
+        if self.mb.hdma.active {
+            self.mb.hdma_follow(&mut self.cpu);
+        }
+    }
+
+    /// One slice while a transfer or its stall may be pending. It takes the
+    /// transfer step of the slice end before it first, unless this call ran
+    /// no slice before it. Nothing between two slices can change that step,
+    /// and the copy it may make moves no clock.
+    #[cold]
+    #[inline(never)]
+    fn transfer_slice(&mut self, start: i64, current: bool, first: bool) -> Result<(), NoProgress> {
+        if !first {
+            self.follow_transfer();
+        }
+        let target = self.next_target(start, current);
+        if self.mb.hdma.stall != 0 {
+            self.mb.hdma_stall(&mut self.cpu, target);
+            return Ok(());
+        }
+        if !self.mb.hdma.active {
+            self.mb.hdma.busy = false;
+        }
+        self.cpu.tick(&mut self.mb, target)
     }
 
     pub fn read(&mut self, address: u16) -> u8 {
@@ -442,59 +507,112 @@ impl Motherboard {
         usize::from(address - 0xc000) + offset
     }
 
-    fn hdma_start(&mut self, value: u8, cpu: &mut Cpu) {
-        if self.hdma.active {
-            if value & 128 == 0 {
-                self.hdma.active = false;
-                self.hdma.regs[4] |= 128;
-            } else {
-                self.hdma.regs[4] = value & 127;
+    /// An HDMA1 to HDMA4 write, which sets part of a counter as in SameBoy.
+    /// The low four bits of both are always clear here, and a source from
+    /// 0xe000 up moves to 0xf000 up, which reads nothing.
+    pub(crate) fn hdma_address(&mut self, address: u16, value: u8) {
+        let value = u16::from(value);
+        let hdma = &mut self.hdma;
+        match address {
+            0xff51 => {
+                hdma.src = (hdma.src & 0xf0) | (value << 8);
+                if hdma.src >= 0xe000 {
+                    hdma.src |= 0xf000;
+                }
             }
-            return;
-        }
-        self.hdma.regs[4] = value;
-        let src = (u16::from(self.hdma.regs[0]) << 8) | u16::from(self.hdma.regs[1] & 0xf0);
-        let dst =
-            0x8000 | (u16::from(self.hdma.regs[2] & 31) << 8) | u16::from(self.hdma.regs[3] & 0xf0);
-        if value & 128 == 0 {
-            for i in 0..(u16::from(value & 127) + 1) * 16 {
-                let byte = self.read(src.wrapping_add(i), cpu);
-                self.write(dst.wrapping_add(i), byte, cpu);
-            }
-            self.hdma.regs.fill(255);
-        } else {
-            self.hdma.regs[4] &= 127;
-            self.hdma.active = true;
-            self.hdma.src = src;
-            self.hdma.dst = dst;
+            0xff52 => hdma.src = (hdma.src & 0xff00) | (value & 0xf0),
+            0xff53 => hdma.dst = (hdma.dst & 0xf0) | (value << 8),
+            _ => hdma.dst = (hdma.dst & 0xff00) | (value & 0xf0),
         }
     }
 
-    fn hdma_tick(&mut self, cpu: &mut Cpu) {
-        let src = self.hdma.src & 0xfff0;
-        let dst = (self.hdma.dst & 0x1ff0) | 0x8000;
-        for i in 0..16 {
-            let byte = self.read(src.wrapping_add(i), cpu);
-            self.write(dst + i, byte, cpu);
-        }
-        self.hdma.src = self.hdma.src.wrapping_add(16);
-        self.hdma.dst = self.hdma.dst.wrapping_add(16);
-        if self.hdma.src == 0x8000 {
-            self.hdma.src = 0xa000;
-        }
-        if self.hdma.dst == 0xa000 {
-            self.hdma.dst = 0x8000;
-        }
-        self.hdma.regs[0] = (self.hdma.src >> 8) as u8;
-        self.hdma.regs[1] = self.hdma.src as u8;
-        self.hdma.regs[2] = (self.hdma.dst >> 8) as u8;
-        self.hdma.regs[3] = self.hdma.dst as u8;
-        if self.hdma.regs[4] == 0 {
+    /// An HDMA5 write, as SameBoy takes it. With bit 7 clear it pauses an
+    /// HBlank transfer, or else starts a general transfer, which copies
+    /// everything at once. With bit 7 set it starts an HBlank transfer,
+    /// which copies its first block at once in mode 0 or with the LCD off.
+    fn hdma_start(&mut self, value: u8, cpu: &mut Cpu) {
+        if value & 128 == 0 && self.hdma.active {
             self.hdma.active = false;
-            self.hdma.regs[4] = 255;
-        } else {
-            self.hdma.regs[4] -= 1;
+            self.hdma.status = value | 128;
+            return;
         }
+        self.tick_lcd(cpu);
+        self.hdma.status = value & 127;
+        self.hdma.active = value & 128 != 0;
+        self.hdma.mode = self.lcd.stat & 3;
+        self.hdma.busy = true;
+        if !self.hdma.active || self.hdma.mode == 0 {
+            self.hdma_copy(cpu, self.hdma.active);
+        }
+    }
+
+    /// Copy as SameBoy's GB_hdma_run does, one block of an HBlank transfer
+    /// or all that is left of a general one, and hold the CPU for as long
+    /// as SameBoy's copy takes: 2 cycles a byte in single speed and 4 in
+    /// double speed, and 4 more.
+    #[inline(never)]
+    fn hdma_copy(&mut self, cpu: &mut Cpu, hblank: bool) {
+        let per_byte = if self.double_speed { 4 } else { 2 };
+        let mut cycles = 4;
+        let mut blocks = (self.hdma.status & 127) + 1;
+        loop {
+            let src = self.hdma.src;
+            // VRAM and the top 8 KiB read the data bus, taken here as 0xff.
+            let byte = if src < 0x8000 || matches!(src & 0xe000, 0xa000 | 0xc000) {
+                self.read(src, cpu)
+            } else {
+                0xff
+            };
+            self.hdma.src = src.wrapping_add(1);
+            self.write(0x8000 | (self.hdma.dst & 0x1fff), byte, cpu);
+            self.hdma.dst = self.hdma.dst.wrapping_add(1);
+            cycles += per_byte;
+            if self.hdma.dst & 15 == 0 {
+                blocks -= 1;
+                // The transfer also ends where the destination wraps.
+                if blocks == 0 || self.hdma.dst == 0 {
+                    self.hdma.active = false;
+                    self.hdma.status = 128 | (blocks.wrapping_sub(1) & 127);
+                    break;
+                }
+                if hblank {
+                    self.hdma.status = blocks - 1;
+                    break;
+                }
+            }
+        }
+        self.hdma.stall += cycles;
+        self.hdma.busy = true;
+    }
+
+    /// Copy a block of an HBlank transfer where SameBoy does, as the LCD
+    /// enters mode 0 or turns off. Every LCD mode change ends a slice while
+    /// a transfer is active, so this sees each one. A halted CPU copies
+    /// nothing, but one that halted outside mode 0 and wakes in mode 0
+    /// copies a block before it runs on.
+    #[cold]
+    #[inline(never)]
+    fn hdma_follow(&mut self, cpu: &mut Cpu) {
+        if cpu.halted && cpu.interrupts_flag_register & cpu.interrupts_enabled_register & 0x1f == 0
+        {
+            return;
+        }
+        let mode = self.lcd.stat & 3;
+        let entered = mode == 0 && self.hdma.mode != 0;
+        self.hdma.mode = mode;
+        if entered {
+            self.hdma_copy(cpu, true);
+        }
+    }
+
+    /// Hold the CPU for what is left of its copy cycles, up to `target`, while
+    /// the devices run on.
+    #[cold]
+    #[inline(never)]
+    fn hdma_stall(&mut self, cpu: &mut Cpu, target: i64) {
+        let step = self.hdma.stall.min(target);
+        cpu.cycles += step;
+        self.hdma.stall -= step;
     }
 
     fn tick_timer(&mut self, cpu: &mut Cpu) {
@@ -560,9 +678,10 @@ impl Motherboard {
     /// off, a mode change that sets no flag and does not end the frame
     /// changes nothing the CPU can see before it reads or writes an LCD
     /// register, and those take the skipped mode changes first. So such a
-    /// mode change needs no slice end. HDMA runs at the start of mode 0,
-    /// and a lagging LCD takes one mode change per tick, so with either
-    /// every mode change ends a slice.
+    /// mode change needs no slice end. An HBlank transfer copies a block at
+    /// the slice end where the LCD enters mode 0, and a lagging LCD takes
+    /// one mode change per tick, so with either every mode change ends a
+    /// slice.
     ///
     /// The sound sees slice ends too. A tick finds a frame sequencer step at
     /// the first slice end at or past its cycle and lands it at the next,
@@ -609,18 +728,12 @@ impl Motherboard {
     /// tick. Valid when every device was ticked at the last slice end.
     #[inline]
     fn slice_target(&self) -> i64 {
-        let mode0 = if self.cgb && self.hdma.active {
-            self.lcd.cycles_to_mode0()
-        } else {
-            MAX_CYCLES
-        };
         [
             self.timer.cycles_to_interrupt,
             self.lcd.cycles_to_interrupt,
             self.lcd.cycles_to_frame,
             self.sound.cycles_to_interrupt,
             self.serial.cycles_to_interrupt,
-            mode0,
         ]
         .into_iter()
         // Cython promotes this minimum to uint64 because the sound deadline
@@ -642,13 +755,6 @@ impl Motherboard {
         self.lcd_deadline = self.next_lcd_deadline(now);
         let lcd = &self.lcd;
         let lag = now - lcd.last_cycles;
-        let mode0 = if !(self.cgb && self.hdma.active) {
-            MAX_CYCLES
-        } else if lcd.stat & 3 == 0 {
-            0
-        } else {
-            lcd.cycles_to_mode0() - lag
-        };
         let timer = if self.timer.tac & 4 != 0 {
             self.timer.next_overflow() - now
         } else {
@@ -659,7 +765,6 @@ impl Motherboard {
             self.lcd_deadline - now,
             FRAME_CYCLES - lcd.clock - lag,
             self.serial.next_target() - now,
-            mode0,
         ]
         .into_iter()
         .map(|deadline| deadline as u64)
@@ -1100,7 +1205,7 @@ impl Motherboard {
             0xff4d if self.cgb_mode() => self.key1 | 0x7e,
             0xff4f if self.cgb => self.lcd.vbank | 254,
             0xff50 => 0xfe | u8::from(!self.bootrom_enabled),
-            0xff55 if self.cgb_mode() => self.hdma.regs[4],
+            0xff55 if self.cgb_mode() => self.hdma.status,
             0xff56 if self.cgb_mode() => self.ram[0xff56],
             0xff68 if self.cgb => self.lcd.bg_color.index | 64,
             0xff69 if self.cgb_mode() => self.lcd.bg_color.read(),
@@ -1229,13 +1334,19 @@ impl Motherboard {
                 cpu.bail = true;
             }
             0xff4f if self.cgb => self.lcd.vbank = value & 1,
-            0xff51..=0xff54 if self.cgb => self.hdma.regs[usize::from(address - 0xff51)] = value,
+            0xff51..=0xff54 if self.cgb => {
+                if self.cgb_mode() {
+                    self.hdma_address(address, value);
+                }
+            }
             // DMG mode has no HDMA and only the first WRAM bank.
             0xff55 | 0xff70 if self.cgb && !self.cgb_mode() => {}
             0xff55 if self.cgb => {
                 self.hdma_start(value, cpu);
-                // HDMA runs in mode 0, so the slice end brings the LCD up
-                // to date whether or not a mode change is due.
+                // The CPU waits out the copy from the next slice on, and an
+                // HBlank transfer needs every mode change to end a slice, so
+                // the slice end brings the LCD up to date and sizes the next
+                // slice afresh.
                 self.lcd_deadline = i64::MIN;
                 cpu.bail = true;
             }
@@ -1544,7 +1655,7 @@ mod tests {
         for address in [0xff4d, 0xff55, 0xff70] {
             m.write(address, 1);
         }
-        assert_eq!((m.mb.key1, m.mb.hdma.regs[4]), (0, 0xff));
+        assert_eq!((m.mb.key1, m.mb.hdma.status), (0, 0xff));
         assert_eq!(m.read(0xd123), m.mb.ram[0x1123]);
         for address in [
             0xff4d, 0xff55, 0xff56, 0xff69, 0xff6b, 0xff6c, 0xff70, 0xff74,
@@ -1619,5 +1730,226 @@ mod tests {
         loaded.load_execution(&state, &runtime, 7).unwrap();
         assert!(loaded.mb.map == saved.mb.map);
         check(&mut loaded);
+    }
+
+    /// A CGB machine past the boot ROM with the LCD on. It spins at 0x0100
+    /// until 0xd000 holds a nonzero byte, then halts once and clears it.
+    /// Work RAM from 0xc000 holds its own low address bytes and VRAM from
+    /// 0x8800 holds 0xaa.
+    fn hdma_machine() -> Machine {
+        let mut rom = rom(0x1b, true);
+        #[rustfmt::skip]
+        let code = [
+            0xfa, 0x00, 0xd0, // ld a, (0xd000)
+            0xb7,             // or a
+            0x28, 0xfa,       // jr z, 0x0100
+            0x76,             // halt
+            0x00,             // nop
+            0xaf,             // xor a
+            0xea, 0x00, 0xd0, // ld (0xd000), a
+            0x18, 0xf2,       // jr 0x0100
+        ];
+        rom[0x100..0x100 + code.len()].copy_from_slice(&code);
+        let mut m = Machine::new(rom, None, None, false, 48000).unwrap();
+        m.write(0xff50, 1);
+        m.cpu.pc = 0x100;
+        m.write(0xd000, 0);
+        for i in 0..0x100 {
+            m.write(0xc000 + i, i as u8);
+            m.write(0x8800 + i, 0xaa);
+        }
+        m.write(0xff40, 0x91);
+        m
+    }
+
+    fn hdma_addresses(m: &mut Machine, src: u16, dst: u16) {
+        for (address, value) in (0xff51..).zip([src >> 8, src, dst >> 8, dst]) {
+            m.write(address, value as u8);
+        }
+    }
+
+    fn vram(m: &mut Machine, start: u16, len: u16) -> Vec<u8> {
+        (start..start + len)
+            .map(|address| m.read(address))
+            .collect()
+    }
+
+    /// `len` bytes counting up from `start`, and then `last`.
+    fn counting(start: u8, len: u8, last: u8) -> Vec<u8> {
+        (start..start + len).chain([last]).collect()
+    }
+
+    /// Run one slice of at least 4 cycles.
+    fn slice(m: &mut Machine) {
+        m.mb.singlestep = true;
+        if m.mb.lcd.frame_done {
+            m.begin_frame(false, false);
+        }
+        assert!(!m.run_frame().unwrap());
+    }
+
+    /// Run slices until the LCD enters `mode` on line `ly`.
+    fn slice_to(m: &mut Machine, ly: u8, mode: u8) {
+        while m.mb.lcd.ly == ly && m.mb.lcd.stat & 3 == mode {
+            slice(m);
+        }
+        while m.mb.lcd.ly != ly || m.mb.lcd.stat & 3 != mode {
+            slice(m);
+        }
+    }
+
+    /// SameSuite gbc_dma_cont: a general transfer copies at once, and the
+    /// next one continues from where it stopped.
+    #[test]
+    fn general_dma_copies_at_once_and_continues_from_its_counters() {
+        let mut m = hdma_machine();
+        hdma_addresses(&mut m, 0xc000, 0x8800);
+        m.write(0xff55, 0);
+        m.write(0xff55, 0);
+        assert_eq!(vram(&mut m, 0x8800, 33), counting(0, 32, 0xaa));
+        assert_eq!(m.read(0xff55), 0xff);
+        assert!(!m.mb.hdma.active);
+        // 16 bytes at 2 cycles each in single speed, and 4 more, per transfer.
+        assert_eq!(m.mb.hdma.stall, 2 * 36);
+
+        // The cycles still owed go in a version 3 runtime record only.
+        let state = m.save_state().unwrap();
+        let runtime = m.save_execution_runtime().unwrap();
+        assert_eq!(runtime[0], 3);
+        let mut loaded = hdma_machine();
+        loaded.load_execution(&state, &runtime, 0).unwrap();
+        let hdma = &loaded.mb.hdma;
+        assert_eq!((hdma.src, hdma.dst, hdma.stall), (0xc020, 0x8820, 72));
+        assert!(hdma.busy);
+        assert_eq!(loaded.save_execution_runtime().unwrap(), runtime);
+        loaded.load_state(&state).unwrap();
+        assert_eq!(loaded.mb.hdma.stall, 0);
+        assert!(!loaded.mb.hdma.busy);
+        assert_eq!(loaded.save_execution_runtime().unwrap()[0], 1);
+
+        // The CPU waits the copy out while the devices run on.
+        let pc = m.cpu.pc;
+        let start = m.cpu.cycles;
+        while m.mb.hdma.stall != 0 {
+            slice(&mut m);
+            assert_eq!(m.cpu.pc, pc);
+        }
+        assert_eq!(m.cpu.cycles - start, 72);
+        assert!(m.mb.hdma.busy);
+        slice(&mut m);
+        assert_ne!(m.cpu.pc, pc);
+        // The first slice to find no transfer clears the flag.
+        assert!(!m.mb.hdma.busy);
+    }
+
+    /// SameSuite gdma_addr_mask and hdma_lcd_off: the low four address bits
+    /// are dropped and the destination keeps 13 bits. With the LCD off an
+    /// HBlank transfer copies its first block at once and no more, and a
+    /// write with bit 7 clear pauses it.
+    #[test]
+    fn hdma_masks_its_addresses_and_copies_one_block_with_the_lcd_off() {
+        let mut m = hdma_machine();
+        m.write(0xff40, 0x11);
+        for (address, value) in [
+            (0xff51, 0xc0),
+            (0xff52, 0x1f),
+            (0xff53, 0x68),
+            (0xff54, 0x0f),
+        ] {
+            m.write(address, value);
+        }
+        m.write(0xff55, 0x83);
+        assert_eq!(vram(&mut m, 0x8800, 17), counting(16, 16, 0xaa));
+        assert_eq!(m.read(0xff55), 0x02);
+        m.begin_frame(false, false);
+        m.mb.singlestep = false;
+        assert!(m.run_frame().unwrap());
+        assert_eq!(m.read(0xff55), 0x02);
+        assert_eq!(vram(&mut m, 0x8810, 1), [0xaa]);
+        m.write(0xff55, 0);
+        assert_eq!(m.read(0xff55), 0x80);
+        assert_eq!((m.mb.hdma.src, m.mb.hdma.dst), (0xc020, 0x6810));
+        // A source from 0xe000 up moves to 0xf000 up, which reads 0xff.
+        hdma_addresses(&mut m, 0xe000, 0x8800);
+        assert_eq!(m.mb.hdma.src, 0xf000);
+        m.write(0xff55, 0);
+        assert_eq!(vram(&mut m, 0x8800, 16), [0xff; 16]);
+        assert_eq!(vram(&mut m, 0x8810, 1), [0xaa]);
+    }
+
+    /// SameSuite hdma_mode0: a transfer started in mode 0 copies its first
+    /// block at once. After that it copies one block as each line enters
+    /// mode 0.
+    #[test]
+    fn hblank_dma_copies_a_block_as_each_line_enters_mode_0() {
+        let mut m = hdma_machine();
+        hdma_addresses(&mut m, 0xc000, 0x8800);
+        slice_to(&mut m, 10, 0);
+        m.write(0xff55, 0x83);
+        assert_eq!(m.read(0xff55), 0x02);
+        assert_eq!(vram(&mut m, 0x8800, 17), counting(0, 16, 0xaa));
+        let mut copies = vec![];
+        while m.mb.hdma.active {
+            let status = m.mb.hdma.status;
+            slice(&mut m);
+            if m.mb.hdma.status != status {
+                copies.push((m.mb.lcd.ly, m.mb.lcd.stat & 3, m.mb.hdma.status));
+            }
+        }
+        assert_eq!(copies, [(11, 0, 1), (12, 0, 0), (13, 0, 0xff)]);
+        assert_eq!(vram(&mut m, 0x8800, 65), counting(0, 64, 0xaa));
+
+        // Started outside mode 0, it waits for the next.
+        hdma_addresses(&mut m, 0xc080, 0x8800);
+        slice_to(&mut m, 20, 2);
+        m.write(0xff55, 0x80);
+        assert_eq!(m.read(0xff55), 0x00);
+        while m.mb.hdma.active {
+            assert_eq!(vram(&mut m, 0x8800, 1), [0]);
+            slice(&mut m);
+        }
+        assert_eq!((m.mb.lcd.ly, m.mb.lcd.stat & 3), (20, 0));
+        assert_eq!(vram(&mut m, 0x8800, 17), counting(0x80, 16, 16));
+    }
+
+    /// A halted CPU takes no block, but one that halted outside mode 0 and
+    /// wakes in mode 0 takes one before it runs on, as in SameBoy.
+    #[test]
+    fn a_halted_cpu_takes_a_block_only_as_it_wakes_in_mode_0() {
+        let mut m = hdma_machine();
+        hdma_addresses(&mut m, 0xc000, 0x8800);
+        slice_to(&mut m, 30, 2);
+        m.write(0xff55, 0x83);
+        m.write(0xd000, 1);
+        while !m.cpu.halted {
+            slice(&mut m);
+        }
+        assert_ne!(m.mb.lcd.stat & 3, 0);
+        m.mb.singlestep = false;
+        for _ in 0..2 {
+            m.begin_frame(false, false);
+            assert!(m.run_frame().unwrap());
+        }
+        assert!(m.cpu.halted);
+        assert_eq!(m.read(0xff55), 0x03);
+
+        // A mode 0 STAT interrupt wakes it.
+        m.write(0xff0f, 0);
+        m.write(0xff41, 0x08);
+        m.write(0xffff, 0x02);
+        while m.mb.hdma.status == 3 {
+            slice(&mut m);
+        }
+        assert_eq!(m.mb.lcd.stat & 3, 0);
+        assert!(m.cpu.halted);
+        assert_eq!(m.read(0xff55), 0x02);
+        let ly = m.mb.lcd.ly;
+        while m.cpu.halted {
+            slice(&mut m);
+        }
+        assert_eq!(
+            (m.mb.lcd.ly, m.mb.lcd.stat & 3, m.mb.hdma.status),
+            (ly, 0, 2)
+        );
     }
 }

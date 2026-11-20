@@ -8,21 +8,21 @@ starting point for picking accuracy fixes.
 
 ## Scores
 
-Run on 2026-11-18 with the IO register fixes of
-[#41](https://github.com/afk-sapien/pyboy-rs/pull/41), through a local
+Run on 2026-11-18 with the CGB VRAM transfer rewrite of
+[#42](https://github.com/afk-sapien/pyboy-rs/pull/42), through a local
 release build of the wheel. Each cell is passed tests out of tests run on that
 model.
 
 | Suite | DMG | CGB |
 | --- | --- | --- |
 | Mooneye (automatic tests) | 48 of 94 | 45 of 86 |
-| SameSuite | not run on DMG | 7 of 69 |
+| SameSuite | not run on DMG | 11 of 69 |
 | Blargg, the ROM's own report | 24 of 39 | 25 of 32 |
 | Blargg, c-sp screenshots | 5 of 8 | 5 of 8 |
 | dmg-acid2 | 1 of 1 | 1 of 1 |
 | cgb-acid2 | not a DMG test | 1 of 1 |
 | rtc3test | 0 of 3 | 0 of 3 |
-| All | 78 of 145 | 84 of 200 |
+| All | 78 of 145 | 88 of 200 |
 
 No test timed out or raised an error. Tests made for other models or
 revisions are left out of the counts (see [Method](#method)).
@@ -33,6 +33,11 @@ revisions are left out of the counts (see [Method](#method)).
 | --- | --- | --- | --- |
 | First run | main at 96211ba, the published 0.1.8 wheel | 75 of 145 | 80 of 200 |
 | IO register reads | [#41](https://github.com/afk-sapien/pyboy-rs/pull/41) | 78 of 145 | 84 of 200 |
+| CGB VRAM transfers | [#42](https://github.com/afk-sapien/pyboy-rs/pull/42) | 78 of 145 | 88 of 200 |
+
+The VRAM transfer rewrite makes all four SameSuite `dma` tests pass on CGB:
+`gbc_dma_cont`, `gdma_addr_mask`, `hdma_lcd_off` and `hdma_mode0`. No other
+test changed from pass to fail or back, and no DMG result changed.
 
 The IO register fixes make three more tests pass on DMG and four more on
 CGB: Mooneye `acceptance/if_ie_registers` and `acceptance/oam_dma/reg_read` on
@@ -72,7 +77,7 @@ cartridge failure is `mbc1/multicart_rom_8Mb`.
 | Sound channel 3 | 2 of 14 |
 | Sound channel 4 | 3 of 12 |
 | Sound steps from DIV writes (`apu/div_*`) | 0 of 5 |
-| GDMA and HDMA (`dma`) | 0 of 4 |
+| GDMA and HDMA (`dma`) | 4 of 4 |
 | `interrupt/ei_delay_halt` | 1 of 1 |
 | `ppu/blocking_bgpi_increase` | 1 of 1 |
 
@@ -130,6 +135,12 @@ The tool locks the clock to emulated frames, so the MBC3 clock moves once
 per completed frame (16.7 ms, see [rtc.md](rtc.md#locking-the-clock)). The
 measured tick and the sub-second timings are off by fractions of a frame.
 Results with the clock following the host may differ.
+
+The lock fixes the reading but not the clock base, which comes from the host
+clock when the machine starts. The sub-second phase therefore changes from run
+to run, and with it the measured tick: the basic tests picture differs from
+the reference in 223 pixels in most runs and 228 in some, on either model.
+The verdicts do not change.
 
 ## Method
 
@@ -209,6 +220,6 @@ are cached. `--only` runs some suites. The output folder gets
 `summary.txt` (the counts), `results.txt` and `results.json` (one line per test
 and model, with the frames run and the reason for each verdict) and the
 compared pictures. The first run is kept in `data/conformance/2026-11-18` in
-the maintainer checkout, and the runs before and after #41 in
-`data/conformance/2026-11-18-f020652` and `2026-11-18-io-reads`. `data/` is
-not part of the repository.
+the maintainer checkout, the runs before and after #41 in
+`data/conformance/2026-11-18-f020652` and `2026-11-18-io-reads`, and the run
+after #42 in `2026-11-18-hdma`. `data/` is not part of the repository.
