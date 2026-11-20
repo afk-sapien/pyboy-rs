@@ -393,6 +393,24 @@ impl Motherboard {
         self.decoded.heap_bytes()
     }
 
+    /// Write one byte of ROM bank `bank` at bank-relative `address`, as a
+    /// breakpoint or a patch does. Only the decoded instructions that read
+    /// the byte are dropped, where `Cartridge::override_rom` and writes
+    /// through `cartridge.rom` start the whole table over.
+    pub fn override_rom(
+        &mut self,
+        bank: usize,
+        address: u16,
+        value: u8,
+    ) -> Result<(), &'static str> {
+        if bank >= self.cartridge.rom_count() || address >= 0x4000 {
+            return Err("ROM bank or bank-relative address out of bounds");
+        }
+        let offset = bank * 16384 + usize::from(address);
+        self.decoded.write(&mut self.cartridge.rom, offset, value);
+        Ok(())
+    }
+
     /// The decoded instruction at `pc` when `fetch` reads its three bytes
     /// straight from ROM, under the same conditions and from the same
     /// offset. None when `fetch` would read them through the bus.
@@ -703,9 +721,11 @@ impl Bus for Motherboard {
     /// The loop of `run_fetched`, taking each instruction that `fetch` would
     /// read straight from ROM from the decoded ROM instead.
     ///
-    /// The ROM bytes do not change during a slice: only `override_rom` and
-    /// the Python ROM writes change them, and neither runs from an
-    /// instruction. So one `sync` per slice keeps every entry equal to the
+    /// The ROM bytes do not change during a slice: only the `override_rom`
+    /// methods and the Python ROM writes change them, and none runs from an
+    /// instruction. `Motherboard::override_rom` drops the entries that read
+    /// the byte it writes, and `sync` starts the table over after any other
+    /// change. So one `sync` per slice keeps every entry equal to the
     /// decoding of the bytes `fetch` reads. The boot ROM stays mapped or
     /// unmapped for a whole slice because the ff50 write that unmaps it bails.
     fn run(&mut self, cpu: &mut Cpu, target: i64) -> Result<(), NoProgress> {
