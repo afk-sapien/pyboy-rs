@@ -906,4 +906,4 @@ change smaller than that is noise.
 
 | Fix | PR | DMG tests | CGB tests | Against 0.1.9 | Against its parent | A/A spread |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +2.3% to +9.9%, median +1.6% to +10.3% | -0.6% to +3.6%, median -0.6% to +3.1% | 1.9%, median 1.8% |
+| Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +3.4% to +9.6%, median +2.8% to +10.0% | +0.2% to +3.7%, median -0.2% to +3.8% | 2.3%, median 1.4% |
