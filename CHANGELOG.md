@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.1.9
+
+0.1.8 with one fix: a hook no longer slows the emulator down. The same save
+states, screens and audio as 0.1.8.
+
+Built from the `release/0.1.9` branch. The changes on main after 0.1.8 (#37
+to #43) are not in it.
+
+### Fixed
+
+- Hooks and ROM writes. In 0.1.8 every write to a ROM byte, such as the two
+  writes of each hook hit, cleared the whole instruction cache and decoded
+  every instruction again, so a hook that fires every frame made the core
+  several times slower than in 0.1.7 and used up to 14 MB more memory. A
+  ROM write through `memory[bank, address]` now drops only the cached
+  instructions that read the written byte, the ones starting at it and at
+  the two bytes before it. A new ROM still clears the whole cache.
+- The Linux x86_64 wheel's PGO profile is recorded again from the 0.1.9
+  source, from the same five Red and five Crystal play states, with Rust
+  1.97.1. The profile holds no ROM or save data.
+
+### Speed
+
+Frames per second of the emulator core alone, without Python, each version
+built as its Linux x86_64 wheel is (with PGO from its own profile), best of 9
+rounds of 43,200 frames on one core. The fix (3b8d6e9, the same code as this
+release apart from the version) against 0.1.8 (v0.1.8) and against 0.1.7
+(v0.1.7), with a hook on the VBlank vector that is handled as PyBoy's hook
+handler does, without the Python callback:
+
+| Game | Input | Picture | 0.1.7 | 0.1.8 | 0.1.9 |
+| --- | --- | --- | ---: | ---: | ---: |
+| Red | idle | off | 29,397 | 5,244 | 43,234 |
+| Red | input | off | 31,075 | 5,340 | 42,922 |
+| Red | input | every frame | 16,195 | 4,598 | 19,304 |
+| Crystal | idle | off | 16,362 | 1,928 | 21,899 |
+| Crystal | input | off | 26,569 | 2,012 | 32,814 |
+| Crystal | input | every frame | 13,032 | 1,846 | 15,441 |
+
+With 0.1.9 a hooked run is as fast as the same run without the hook. Without
+a hook, the 18 cases of the 0.1.8 table run at the speed of 0.1.8 (no case
+slower than its A/A spread). Peak resident memory with the hook falls back
+to the 0.1.7 level (6.6 MB for Red, 7.2 MB for Crystal).
+
+### Identical output
+
+- In each of the 18 cases of the 0.1.8 table, run for 216,000 frames, 0.1.9
+  ends with the same save state as 0.1.8, and every drawn frame has the same
+  pixels and pixel attributes. Every hooked run ends with the same save state
+  on 0.1.7, 0.1.8 and 0.1.9.
+- Tests write each byte from the one before an instruction to three after
+  it, also across a bank edge, and check that exactly the cached
+  instructions that read the byte are dropped. A breakpoint on running code
+  stops as often, and saves the same state, as without the cache.
+- No save state format change and no Python API change.
+
 ## 0.1.8
 
 The same save states, screens and audio as 0.1.7, in less time. The emulator
