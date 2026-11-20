@@ -8,21 +8,21 @@ starting point for picking accuracy fixes.
 
 ## Scores
 
-Run on 2026-11-20 with the EI delay and halt bug fix of
-[#54](https://github.com/afk-sapien/pyboy-rs/pull/54), through a local
+Run on 2026-11-20 with the interrupt dispatch fix of
+[#DISPNUM](https://github.com/afk-sapien/pyboy-rs/pull/DISPNUM), through a local
 release build of the wheel. Each cell is passed tests out of tests run on that
 model.
 
 | Suite | DMG | CGB |
 | --- | --- | --- |
-| Mooneye (automatic tests) | 60 of 94 | 57 of 86 |
+| Mooneye (automatic tests) | 61 of 94 | 58 of 86 |
 | SameSuite | not run on DMG | 11 of 69 |
 | Blargg, the ROM's own report | 25 of 39 | 26 of 32 |
 | Blargg, c-sp screenshots | 6 of 8 | 6 of 8 |
 | dmg-acid2 | 1 of 1 | 1 of 1 |
 | cgb-acid2 | not a DMG test | 1 of 1 |
 | rtc3test | 0 of 3 | 0 of 3 |
-| All | 92 of 145 | 102 of 200 |
+| All | 93 of 145 | 103 of 200 |
 
 No test timed out or raised an error. Tests made for other models or
 revisions are left out of the counts (see [Method](#method)).
@@ -36,6 +36,12 @@ revisions are left out of the counts (see [Method](#method)).
 | CGB VRAM transfers | [#42](https://github.com/afk-sapien/pyboy-rs/pull/42) | 78 of 145 | 88 of 200 |
 | Timer on the system counter | [#53](https://github.com/afk-sapien/pyboy-rs/pull/53) | 86 of 145 | 96 of 200 |
 | EI delay and the halt bug | [#54](https://github.com/afk-sapien/pyboy-rs/pull/54) | 92 of 145 | 102 of 200 |
+| Interrupt dispatch and the IE push | [#DISPNUM](https://github.com/afk-sapien/pyboy-rs/pull/DISPNUM) | 93 of 145 | 103 of 200 |
+
+The interrupt dispatch fix makes Mooneye `acceptance/interrupts/ie_push`
+pass on each model. It checks that the high byte push of a dispatch can
+land on IE and move the dispatch to another interrupt or cancel it. No
+other test changed from pass to fail or back.
 
 The EI delay and halt bug fix makes six more tests pass on each model:
 Mooneye `acceptance/ei_sequence`, `ei_timing`, `rapid_di_ei` and
@@ -74,7 +80,7 @@ the values it prints, and `cgb_sound` test 09 prints other wave bytes.
 | Timer (`acceptance/timer`) | 13 of 13 | 13 of 13 |
 | PPU (`acceptance/ppu`, `misc/ppu`) | 2 of 12 | 1 of 8 |
 | OAM DMA (`acceptance/oam_dma`) | 2 of 3 | 2 of 2 |
-| Register bits, DAA, IE push (`acceptance/bits`, `instr`, `interrupts`, `misc/bits`) | 4 of 5 | 4 of 5 |
+| Register bits, DAA, IE push (`acceptance/bits`, `instr`, `interrupts`, `misc/bits`) | 5 of 5 | 5 of 5 |
 | State after boot (`boot_*`, `serial/boot_sclk_align`) | 0 of 4 | 0 of 3 |
 | Cartridges (`emulator-only/mbc1`, `mbc2`, `mbc5`) | 27 of 28 | 27 of 28 |
 
@@ -83,8 +89,7 @@ lands inside an instruction (`call`, `ret`, `jp`, `push`, `pop`, `rst`, `ei`,
 `reti`). The passes are `div_timing`, `ei_sequence`, `ei_timing`,
 `halt_ime0_ei`, `halt_ime0_nointr_timing`, `halt_ime1_timing`,
 `if_ie_registers`, `intr_timing`, `rapid_di_ei` and `reti_intr_timing` on both
-models, with `di_timing-GS` and `halt_ime1_timing2-GS` on DMG. The failure in
-the register bits area is `interrupts/ie_push`. The boot tests check the
+models, with `di_timing-GS` and `halt_ime1_timing2-GS` on DMG. The boot tests check the
 registers and I/O state that the real boot ROM leaves behind. The core runs
 PyBoy's replacement boot ROMs, which leave a different state. The one
 cartridge failure is `mbc1/multicart_rom_8Mb`.
