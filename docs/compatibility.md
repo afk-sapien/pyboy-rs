@@ -125,6 +125,26 @@ CPU interrupt semantics. Deliberate differences:
   resets the counters and copies only from the HBlank interrupt. Unlike
   SameBoy, a block is copied at the end of the slice that enters mode 0,
   not at the exact cycle, and STOP does not pause a transfer.
+- TIMA counts from the system counter, the 16-bit counter whose high byte is
+  DIV, on each falling edge of the bit TAC selects (bit 9, 3, 5 or 7). A DIV
+  write, or a TAC write that stops the timer or selects another bit, counts
+  once when it takes the selected bit from 1 to 0. An overflowed TIMA reads
+  0 for 4 cycles, then takes TMA and sets the interrupt flag, also with the
+  timer stopped by then. A TIMA write in those 4 cycles cancels the reload
+  and the flag, as Pan Docs describes. SameBoy keeps the written value but
+  still sets the flag. In the 4 cycles after the reload a TIMA write is
+  ignored and a TMA write reaches TIMA too. IF reads and writes see a timer
+  flag due on their own cycle. PyBoy 2.7.0 keeps a TIMA counter of its own,
+  apart from DIV, reloads at the overflow and counts no edge on writes.
+- The format 15 save state holds PyBoy's TIMA counter, which pyboy-rs
+  writes as the cycles since the selected bit last fell (0 with the timer
+  stopped) and does not read.
+  A state from PyBoy or from pyboy-rs 0.1.9 and older therefore counts TIMA
+  in step with DIV from the load on, so its next count can come up to one
+  period, 16 to 1024 cycles, earlier or later than in the build that saved
+  it. The pyboy-rs section keeps the cycles since an overflow, so a state
+  saved in the 8 cycles after one continues like the run that saved it. A
+  state without the section loads with no reload due.
 - The format 15 save state has no field for two pieces of transfer state:
   the cycles the CPU still owes for a copy, and the LCD mode an HBlank
   transfer last saw on a halted CPU. The pyboy-rs section of a save state
@@ -152,9 +172,16 @@ that holds what format 15 has no field for. Every state has the section.
 
 Version 1 names 0.2.0. Its payload is the cycles the CPU still owes for a
 VRAM transfer (8 bytes, little-endian, 0 to 65,536) and the LCD mode an
-HBlank transfer last saw (1 byte, 0 when no HBlank transfer runs). A later
-field raises the version and adds to the payload. The format 15 body does
-not change.
+HBlank transfer last saw (1 byte, 0 when no HBlank transfer runs).
+
+Version 2 names 0.2.0. Its payload is the version 1 fields, then the cycles
+since TIMA last overflowed (1 byte, 0 to 7, or 0xFF when the overflow is 8
+or more cycles back or TIMA never overflowed). The reload is due at 4, and
+writes act on it until 8. A state with 8 to 0xFE there is refused. A
+version 1 section loads with no reload due.
+
+A later field raises the version and adds to the payload. The format 15
+body does not change.
 
 - PyBoy 2.7.0 loads a pyboy-rs state and leaves the section unread, as if
   the state had none.

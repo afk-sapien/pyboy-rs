@@ -8,14 +8,31 @@ Draft for 0.2.0. Not released.
 
 - Save states carry a pyboy-rs section after the PyBoy state format 15 body.
   The body stays byte-identical with PyBoy 2.7.0. The section holds what
-  format 15 has no field for, starting with the cycles a VRAM transfer still
-  holds the CPU for and the LCD mode an HBlank transfer last saw, so a state
-  saved mid-transfer continues exactly like the run that saved it. Layout,
-  versions and rules are in
-  [docs/compatibility.md](docs/compatibility.md#save-states).
+  format 15 has no field for: the cycles a VRAM transfer still holds the CPU
+  for, the LCD mode an HBlank transfer last saw and the cycles since a TIMA
+  overflow. So a state saved mid-transfer or just after an overflow
+  continues exactly like the run that saved it. Layout, versions and rules
+  are in [docs/compatibility.md](docs/compatibility.md#save-states).
 - Execution checkpoints name the hardware state format
-  `pyboy-format-15+pyboy-rs-1`. Checkpoints and recordings from 0.1.9 and
-  older still restore and replay.
+  `pyboy-format-15+pyboy-rs-2`. Checkpoints and recordings from 0.1.9 and
+  older still restore and replay. A recording replays to the same states
+  only while the game never reaches a case this release runs differently,
+  such as the timer cases under Fixed. Otherwise the replay raises
+  `ReplayDivergence` at the first checksum that differs.
+
+### Fixed
+
+- The timer counts as on hardware. TIMA counts on each falling edge of the
+  system counter bit that TAC selects, the counter whose high byte is DIV.
+  So a DIV write, or a TAC write that stops the timer or selects another
+  bit, counts once when it takes the selected bit from 1 to 0. An
+  overflowed TIMA reads 0 for 4 cycles, then takes TMA and sets the
+  interrupt flag. A TIMA write in those 4 cycles cancels the reload and the
+  flag. In the 4 cycles after the reload a TIMA write is ignored and a TMA
+  write reaches TIMA too. IF reads and writes see a timer flag due on their
+  own cycle. PyBoy 2.7.0 keeps a TIMA counter of its own, apart from DIV,
+  and reloads at once. Mooneye timer goes from 5 of 13 to 13 of 13 on DMG
+  and CGB.
 
 ### Compatibility
 
@@ -26,6 +43,9 @@ Draft for 0.2.0. Not released.
   unread.
 - States saved by PyBoy and by pyboy-rs 0.1.9 and older load, with the
   section fields idle.
+- The TIMA counter those states hold is not used. TIMA counts in step with
+  DIV from the load on, so its next count can come up to one period, 16 to
+  1024 cycles, earlier or later than in the build that saved the state.
 - Compare states with PyBoy or across builds by their `state_body`, not as
   whole files.
 

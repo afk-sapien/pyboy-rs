@@ -110,7 +110,7 @@ preserve each hook's underlying instruction and restore it while retaining
 the receiving machine's callback and context objects.
 
 A checkpoint names its hardware state format. This build writes
-``pyboy-format-15+pyboy-rs-1``, a format 15 body and the pyboy-rs section
+``pyboy-format-15+pyboy-rs-2``, a format 15 body and the pyboy-rs section
 (docs/compatibility.md, Save states). Checkpoints and recordings from
 pyboy-rs 0.1.9 and older name ``pyboy-format-15`` and hold the body alone.
 They still restore, and their recordings still replay: the replay checks
