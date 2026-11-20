@@ -138,11 +138,12 @@ and moves once per completed frame (16.7 ms, see
 timings are off by fractions of a frame. Results with the clock following the
 host may differ.
 
-The lock fixes the reading but not the clock base, which comes from the host
-clock when the machine starts. The sub-second phase therefore changes from run
-to run, and with it the measured tick: the basic tests picture differs from
-the reference in 223 pixels in most runs and 228 in some, on either model.
-The verdicts do not change.
+Without the base set, a new clock takes it from the host clock when the
+machine starts, so the sub-second phase and the measured tick changed from
+run to run. In 20 runs the basic tests picture differed from the reference in
+223 pixels in 14, in 228 on both models in 5, and in 228 on CGB only in 1.
+With the base set, 20 of 20 runs give the same six pictures, with 223 pixels
+in the basic tests. The verdicts are the same either way.
 
 ## Method
 
