@@ -12,13 +12,22 @@ from importlib.metadata import version
 from pathlib import Path
 import time
 
+from . import _native
 from .diagnostics import ReplayDivergence, compare, snapshot, validate_checkpoints, validate_ranges
 
 # What a checkpoint needs from the build that restores it: the hardware state
 # layout (PyBoy 2.7.0 format 15) and the execution runtime layout. A rebuilt or
 # other-platform wheel with the same layouts restores it. The build identity is
 # still recorded for provenance but is no longer a condition.
-STATE_FORMAT = 'pyboy-format-15'
+#
+# A state is format 15 followed by the pyboy-rs section, named by the section
+# version. A checkpoint from before the section, from pyboy-rs 0.1.9 and
+# older, holds format 15 alone, and its recording hashes that. A replay of
+# such a recording hashes the format 15 body only, so it still verifies.
+LEGACY_STATE_FORMAT = 'pyboy-format-15'
+STATE_FORMAT = f'{LEGACY_STATE_FORMAT}+pyboy-rs-{_native.STATE_SECTION_VERSION}'
+STATE_FORMATS = (LEGACY_STATE_FORMAT,) + tuple(f'{LEGACY_STATE_FORMAT}+pyboy-rs-{version}'
+                                               for version in range(1, _native.STATE_SECTION_VERSION + 1))
 # Runtime format 2 adds a halted clock's frozen reading, and format 3 a VRAM
 # transfer's copy in progress. The native layer writes format 3 only while a
 # copy is in progress or a halted CPU has a transfer active, format 2 only
@@ -26,8 +35,8 @@ STATE_FORMAT = 'pyboy-format-15'
 # checkpoint records the format its runtime bytes use.
 RUNTIME_FORMAT = 3
 COMPAT = {'state_format': STATE_FORMAT, 'runtime_format': RUNTIME_FORMAT}
-READABLE_COMPAT = tuple({'state_format': STATE_FORMAT, 'runtime_format': version}
-                        for version in range(1, RUNTIME_FORMAT + 1))
+READABLE_COMPAT = tuple({'state_format': state, 'runtime_format': version}
+                        for state in STATE_FORMATS for version in range(1, RUNTIME_FORMAT + 1))
 
 BUTTONS = ('up', 'down', 'right', 'left', 'a', 'b', 'select', 'start')
 
@@ -349,6 +358,8 @@ class Execution:
         if self._recording is not None:
             raise RuntimeError('Stop recording before replay')
         recording, initial, final, checkpoints, ranges = self._checked_recording(recording)
+        # A recording from before the pyboy-rs section hashed format 15 alone.
+        body = initial.get('compat', {}).get('state_format') == LEGACY_STATE_FORMAT
         self.restore_execution(initial)
         self._sequence = None
         last_verified = 0
@@ -358,9 +369,10 @@ class Execution:
             self._queued_input = []
             self.tick(1, render=row['render'], sound=row['sound'])
             if offset in checkpoints:
-                compare(recording, checkpoints[offset], snapshot(self, offset, ranges), last_verified)
+                compare(recording, checkpoints[offset], snapshot(self, offset, ranges, body), last_verified)
                 last_verified = offset
-        actual = hashlib.sha256(self._machine.save_state()).hexdigest()
+        state = self._machine.save_state()
+        actual = hashlib.sha256(self._machine.state_body(state) if body else state).hexdigest()
         patches = self.execution_checkpoint()['patches']
         lock = self._machine.clock_lock_state() if self._machine.rtc_present() else None
         if (actual != recording['final_sha256'] or self._machine.execution_runtime() != final['runtime']

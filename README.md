@@ -77,7 +77,9 @@ cargo run --release -p pyboy-core --example headless -- game.gb 120
 - CPU, timer, joypad, serial, LCD (DMG and CGB) and four-channel sound,
   translated from PyBoy 2.7.0 and checked against it by differential tests
 - Cartridges: ROM-only, MBC1, MBC2, MBC3 with real-time clock, MBC5
-- PyBoy state format 15 save states, byte-identical with PyBoy
+- Save states whose PyBoy state format 15 body is byte-identical with PyBoy,
+  followed by a small pyboy-rs section that PyBoy leaves unread.
+  `state_body` returns the body ([details](docs/compatibility.md#save-states))
 - Python API: `tick`, `button`, `send_input`, `memory`, `register_file`,
   `screen`, `sound`, `save_state`, `load_state`, hooks and `symbol_lookup`
 - Deterministic clock control: lock, advance and export the MBC3 clock

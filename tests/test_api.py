@@ -7,9 +7,12 @@ from test_machine import DEMO
 
 
 def state(emulator):
+    """The format 15 state PyBoy saves, which for pyboy-rs is the body before
+    its own section."""
     stream = io.BytesIO()
     emulator.save_state(stream)
-    return stream.getvalue()
+    data = stream.getvalue()
+    return emulator.state_body(data) if isinstance(emulator, PyBoy) else data
 
 
 @pytest.mark.parametrize("cgb", [False, True])

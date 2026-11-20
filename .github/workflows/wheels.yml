@@ -26,18 +26,25 @@ concurrency:
 
 env:
   SMOKE: |
-    import os, pathlib, sys
+    import io, os, pathlib, sys
     import pyboy_rs
     from pyboy_rs import Machine, PyBoy, _native
     expected = os.environ["EXPECTED_VERSION"]
     assert pyboy_rs.__version__ == _native.__version__ == expected, (pyboy_rs.__version__, _native.__version__, expected)
     assert pyboy_rs.HAS_CLOCK_CONTROL and pyboy_rs.has_feature("clock_lock_state")
-    assert pyboy_rs.has_feature("bank_bytes")
+    assert pyboy_rs.has_feature("bank_bytes") and pyboy_rs.has_feature("state_body")
+    # The newest state section names the first release that reads it.
+    since = tuple(map(int, pyboy_rs.STATE_SECTION_SINCE.split(".")))
+    assert since <= tuple(map(int, expected.split("."))), (pyboy_rs.STATE_SECTION_SINCE, expected)
     rom = pathlib.Path(pyboy_rs.__file__).parent / "assets" / "default_rom.gb"
     with PyBoy(rom) as emulator:
         emulator.set_emulation_speed(0)
         emulator.tick(30)
         assert emulator.has_rtc is False
+        stream = io.BytesIO()
+        emulator.save_state(stream)
+        state = stream.getvalue()
+        assert state[len(emulator.state_body(state)):][:4] == b"PBRS"
         block = emulator.memory.read_bank_bytes(0, 0x8000, 0xA000)
         assert isinstance(block, bytes) and len(block) == 0x2000
         assert list(block) == emulator.memory[0, 0x8000:0xA000]
@@ -92,6 +99,18 @@ jobs:
             test "$GITHUB_REF_NAME" = "v$py" || { echo "::error::tag $GITHUB_REF_NAME does not equal v$py (pyproject.toml)"; exit 1; }
             test "$GITHUB_REF_NAME" = "v$cargo" || { echo "::error::tag $GITHUB_REF_NAME does not equal v$cargo (Cargo.toml)"; exit 1; }
           fi
+          # Each pyboy-rs state section version names the first release that reads it.
+          # A release older than any version named there is refused.
+          python3 - "$py" <<'EOF'
+          import re, sys
+          version = tuple(map(int, sys.argv[1].split(".")))
+          source = open("crates/pyboy-core/src/state.rs").read()
+          table = re.search(r"pub const SECTION_SINCE\b[^=]*=(.*?);", source, re.S).group(1)
+          named = [tuple(map(int, t)) for t in re.findall(r"\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]", table)]
+          if not named or max(named) > version:
+              newest = ".".join(map(str, max(named))) if named else "nothing"
+              sys.exit(f"::error::the state section names pyboy-rs {newest}, newer than {sys.argv[1]}")
+          EOF
           awk -v v="$py" '$0 == "## " v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
           grep -q '[^[:space:]]' notes.md || { echo "::error::no CHANGELOG.md section '## $py'"; exit 1; }
           echo "version=$py" >> "$GITHUB_OUTPUT"

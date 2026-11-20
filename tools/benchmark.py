@@ -86,8 +86,13 @@ def worker(args):
         start = time.perf_counter()
         advance(machine, args.frames, args.mode)
         seconds = time.perf_counter() - start
-        with Path(str(args.prefix) + ".state").open("wb") as stream:
-            machine.save_state(stream)
+        # The format 15 body, which PyBoy saves too, so the outputs compare.
+        stream = io.BytesIO()
+        machine.save_state(stream)
+        state = stream.getvalue()
+        if hasattr(machine, "state_body"):
+            state = machine.state_body(state)
+        Path(str(args.prefix) + ".state").write_bytes(state)
         Path(str(args.prefix) + ".rgba").write_bytes(bytes(machine.screen.raw_buffer))
         Path(str(args.prefix) + ".audio").write_bytes(
             bytes(machine.sound.raw_buffer[:machine.sound.raw_buffer_head]))

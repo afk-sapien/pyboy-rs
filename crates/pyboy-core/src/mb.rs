@@ -1812,7 +1812,8 @@ mod tests {
         // 16 bytes at 2 cycles each in single speed, and 4 more, per transfer.
         assert_eq!(m.mb.hdma.stall, 2 * 36);
 
-        // The cycles still owed go in a version 3 runtime record only.
+        // The cycles still owed go in the state's pyboy-rs section, and in a
+        // version 3 runtime record for recordings whose states have none.
         let state = m.save_state().unwrap();
         let runtime = m.save_execution_runtime().unwrap();
         assert_eq!(runtime[0], 3);
@@ -1822,24 +1823,41 @@ mod tests {
         assert_eq!((hdma.src, hdma.dst, hdma.stall), (0xc020, 0x8820, 72));
         assert!(hdma.busy);
         assert_eq!(loaded.save_execution_runtime().unwrap(), runtime);
-        loaded.load_state(&state).unwrap();
+        let mut resumed = hdma_machine();
+        resumed.load_state(&state).unwrap();
+        assert_eq!(resumed.mb.hdma.stall, 72);
+        assert!(resumed.mb.hdma.busy);
+        assert_eq!(resumed.save_execution_runtime().unwrap(), runtime);
+        // Without the section, as PyBoy saves a state, nothing is owed.
+        let body = m.state_body(&state).unwrap();
+        loaded.load_state(body).unwrap();
         assert_eq!(loaded.mb.hdma.stall, 0);
         assert!(!loaded.mb.hdma.busy);
         assert_eq!(loaded.save_execution_runtime().unwrap()[0], 1);
+        loaded.load_execution(body, &runtime, 0).unwrap();
+        assert_eq!(loaded.mb.hdma.stall, 72);
 
         // The CPU waits the copy out while the devices run on.
         let pc = m.cpu.pc;
         let start = m.cpu.cycles;
         while m.mb.hdma.stall != 0 {
             slice(&mut m);
+            slice(&mut resumed);
             assert_eq!(m.cpu.pc, pc);
         }
         assert_eq!(m.cpu.cycles - start, 72);
         assert!(m.mb.hdma.busy);
         slice(&mut m);
+        slice(&mut resumed);
         assert_ne!(m.cpu.pc, pc);
         // The first slice to find no transfer clears the flag.
         assert!(!m.mb.hdma.busy);
+        // A load in the middle of the copy resumes it exactly.
+        for _ in 0..200 {
+            slice(&mut m);
+            slice(&mut resumed);
+        }
+        assert_eq!(resumed.save_state().unwrap(), m.save_state().unwrap());
     }
 
     /// SameSuite gdma_addr_mask and hdma_lcd_off: the low four address bits

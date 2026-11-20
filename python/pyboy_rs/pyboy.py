@@ -421,7 +421,17 @@ class PyBoy(Execution):
                 self.memory[key] = 0xdb
 
     def save_state(self, file_like_object):
+        """Write the PyBoy format 15 state, then the pyboy-rs section."""
         file_like_object.write(self._machine.save_state())
+
+    def state_body(self, state):
+        """The format 15 bytes of a saved state, which are what PyBoy would save.
+
+        Takes the bytes of a state for this emulator's cartridge and model,
+        with or without the pyboy-rs section. Two builds that emulate the same
+        way save the same body, so compare bodies across builds.
+        """
+        return self._machine.state_body(bytes(state))
 
     def load_state(self, file_like_object):
         if self._recording is not None or self._sequence is not None:

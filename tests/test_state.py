@@ -3,8 +3,20 @@ import struct
 
 import pytest
 from pyboy import PyBoy
-from pyboy_rs import Machine
+import pyboy_rs
+from pyboy_rs import Machine, STATE_SECTION_SINCE, STATE_SECTION_VERSION
 from test_machine import DEMO
+
+
+def body(native, state):
+    """The format 15 body of a pyboy-rs state, after checking that the state
+    is that body and a whole pyboy-rs section of the current version."""
+    head = native.state_body(state)
+    section = state[len(head):]
+    assert state[:len(head)] == head
+    since = tuple(int(part) for part in STATE_SECTION_SINCE.split('.'))
+    assert section[:13] == b'PBRS' + struct.pack('<H3BI', STATE_SECTION_VERSION, *since, len(section) - 13)
+    return head
 
 
 @pytest.mark.parametrize("sampling", [False, True])
@@ -47,7 +59,7 @@ def test_expired_serial_deadline_preserves_compiled_scheduler_and_sweep(sampling
             assert native.run_frame()
             expected = io.BytesIO()
             reference.save_state(expected)
-            assert native.save_state() == expected.getvalue()
+            assert body(native, native.save_state()) == expected.getvalue()
     finally:
         reference.stop(save=False)
 
@@ -66,14 +78,46 @@ def test_state_bytes_and_cross_loading(cgb):
                 stream = io.BytesIO()
                 reference.save_state(stream)
                 expected = stream.getvalue()
-                actual = native.save_state()
+                state = native.save_state()
+                actual = body(native, state)
                 assert len(actual) == len(expected)
                 mismatch = next((i for i, (a,b) in enumerate(zip(actual, expected)) if a != b), None)
                 assert mismatch is None, (frame, mismatch, actual[mismatch:mismatch+16], expected[mismatch:mismatch+16])
-                reference.load_state(io.BytesIO(actual))
+                # PyBoy reads format 15 and leaves the pyboy-rs section unread.
+                reference.load_state(io.BytesIO(state))
+                # A state without the section, as PyBoy and pyboy-rs 0.1.9
+                # save it, loads with nothing in progress.
                 native.load_state(expected)
+                assert native.save_state() == state
     finally:
         reference.stop(save=False)
+
+
+def test_state_body_helper_and_section_constants():
+    assert STATE_SECTION_VERSION >= 1
+    assert len(STATE_SECTION_SINCE.split('.')) == 3
+    assert pyboy_rs.has_feature('state_section') and pyboy_rs.has_feature('state_body')
+    with pyboy_rs.PyBoy(DEMO) as emulator:
+        emulator.set_emulation_speed(0)
+        emulator.tick(30)
+        stream = io.BytesIO()
+        emulator.save_state(stream)
+        state = stream.getvalue()
+        head = emulator.state_body(state)
+        assert head == body(emulator._machine, state)
+        assert emulator.state_body(head) == head
+        with pytest.raises(ValueError, match='Trailing data'):
+            emulator.state_body(head + b'x')
+        with pytest.raises(ValueError, match='section length'):
+            emulator.state_body(state + b'x')
+        newer = bytearray(state)
+        struct.pack_into('<H3B', newer, len(head) + 4, STATE_SECTION_VERSION + 1, 9, 9, 9)
+        assert emulator.state_body(bytes(newer)) == head
+        with pytest.raises(ValueError, match=r'needs pyboy-rs 9\.9\.9 or newer'):
+            emulator.load_state(io.BytesIO(bytes(newer)))
+        stream = io.BytesIO()
+        emulator.save_state(stream)
+        assert stream.getvalue() == state
 
 
 def test_bad_state_rejected_without_mutation():

@@ -109,7 +109,15 @@ not serialized. The receiving machine must already have matching hook addresses.
 preserve each hook's underlying instruction and restore it while retaining
 the receiving machine's callback and context objects.
 
-Legacy save and load methods retain the upstream format-15 hardware bytes.
+A checkpoint names its hardware state format. This build writes
+``pyboy-format-15+pyboy-rs-1``, a format 15 body and the pyboy-rs section
+(docs/compatibility.md, Save states). Checkpoints and recordings from
+pyboy-rs 0.1.9 and older name ``pyboy-format-15`` and hold the body alone.
+They still restore, and their recordings still replay: the replay checks
+their state checksums against the format 15 body.
+
+Legacy save and load methods retain the upstream format-15 hardware bytes,
+followed by the pyboy-rs section.
 They do not preserve pending inputs or all runtime fields. Use the execution
 checkpoint API for exact resume. Raw loads are rejected while a recording or
 sequence is active. Older Core format-1 checkpoints retain their historical
