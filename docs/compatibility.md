@@ -48,7 +48,7 @@ components. pyboy-rs targets 2.7.0 and rejects format 17.
 | `core/lcd.py` | `lcd.rs` | DMG/CGB timing, palettes, backgrounds, windows, sprites |
 | `core/sound.py` | `channels.rs`, `sound.rs` | Four channels, sequencer, registers, stereo sampling |
 | `core/mb.py`, `core/ram.py` | `mb.rs` | Memory map, boot, interrupts, DMA, HDMA, double speed |
-| Component state methods | `state.rs` | PyBoy state format 15, exact tested byte layout |
+| Component state methods | `state.rs` | PyBoy state format 15 body, exact tested byte layout, then the pyboy-rs section |
 | `pyboy.py` headless API | PyO3 extension and `python/pyboy_rs/pyboy.py` | Headless subset, see [python-api.md](python-api.md) |
 
 The opcode implementations are mechanically translated from the pinned Python
@@ -77,8 +77,8 @@ CPU interrupt semantics. Deliberate differences:
 - An instruction that makes no progress raises an error instead of hanging.
 - Memory accesses are validated.
 - State loading is atomic, and malformed or unsupported states are rejected.
-  Only format 15 is accepted, with bounded counters and validated audio and LCD
-  state.
+  Only format 15 is accepted, alone or followed by the pyboy-rs section, with
+  bounded counters and validated audio and LCD state.
 - `Sound.ndarray` exposes only valid stereo sample pairs. Upstream uses a byte
   count as a row count.
 - RTC register writes and the halt bit follow Pan Docs. See
@@ -127,14 +127,47 @@ CPU interrupt semantics. Deliberate differences:
   not at the exact cycle, and STOP does not pause a transfer.
 - The format 15 save state has no field for two pieces of transfer state:
   the cycles the CPU still owes for a copy, and the LCD mode an HBlank
-  transfer last saw on a halted CPU. Execution runtime format 3 keeps both.
-  A save state taken while the CPU still owes cycles drops them on load, so
-  the CPU runs on at once, up to 4,100 cycles ahead of an uninterrupted run
-  (a 2048-byte general transfer in single speed). A save state taken while a
-  halted CPU has an HBlank transfer active loads with the mode set from STAT,
-  so the CPU can copy one block more or one fewer when it wakes. On the Gold
-  and Crystal speed fixtures, idle and input, 216,000 frames each, none of
-  the 864,000 frame ends fell in either case.
+  transfer last saw on a halted CPU. The pyboy-rs section of a save state
+  keeps both (see [Save states](#save-states)). A state without the section,
+  as PyBoy and pyboy-rs 0.1.9 and older save it, loads with no cycles owed,
+  so the CPU runs on at once, up to 4,100 cycles ahead of an uninterrupted
+  run (a 2048-byte general transfer in single speed), and with the mode set
+  from STAT, so a halted CPU can copy one block more or one fewer when it
+  wakes. On the Gold and Crystal speed fixtures, idle and input, 216,000
+  frames each, none of the 864,000 frame ends fell in either case.
+
+## Save states
+
+A pyboy-rs save state is a PyBoy state format 15 body, byte-identical with
+what PyBoy 2.7.0 saves for the same machine, followed by a pyboy-rs section
+that holds what format 15 has no field for. Every state has the section.
+
+| Bytes | Field |
+| --- | --- |
+| 4 | `PBRS` |
+| 2 | Section version, little-endian |
+| 3 | The first pyboy-rs release that reads this version: major, minor, patch |
+| 4 | Payload length, little-endian |
+| Payload | The fields of that version |
+
+Version 1 names 0.2.0. Its payload is the cycles the CPU still owes for a
+VRAM transfer (8 bytes, little-endian, 0 to 65,536) and the LCD mode an
+HBlank transfer last saw (1 byte, 0 when no HBlank transfer runs). A later
+field raises the version and adds to the payload. The format 15 body does
+not change.
+
+- PyBoy 2.7.0 loads a pyboy-rs state and leaves the section unread, as if
+  the state had none.
+- pyboy-rs 0.1.9 and older refuse a state with the section, with "Trailing
+  data in save state".
+- A state without the section, as PyBoy and pyboy-rs 0.1.9 and older save
+  it, loads with the section fields idle.
+- A section of a newer version than the build reads is refused, and the
+  error names the pyboy-rs release it needs. So is a section whose length
+  does not match, and any other bytes after the body.
+- `PyBoy.state_body(state)` and `Machine.state_body(state)` return the
+  format 15 body of a state of any section version. Compare bodies, not
+  whole states, with PyBoy or across builds.
 
 Save states depend on hardware mode and sample rate. Like PyBoy's, they do not
 identify the ROM. Load them only against the matching ROM.
@@ -156,7 +189,8 @@ oracle. They cover randomized inputs for all opcode slots, interrupt and HALT
 scheduling, timer traces, serial traces, all joypad combinations, cartridge
 banking and RTC traces, sound registers and samples, demo-ROM frames, DMG/CGB
 rendering, sprite and window priority, palettes, DMA, HDMA, double speed, hooks,
-input scheduling, and byte-identical save states with cross-loading.
+input scheduling, and save states with byte-identical format 15 bodies and
+cross-loading.
 
 Tests use the demo and synthetic data, not commercial ROMs. Passing them does
 not establish full game compatibility. The separate PokeSim Core integration

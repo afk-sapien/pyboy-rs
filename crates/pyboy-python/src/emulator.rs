@@ -473,6 +473,10 @@ impl Emulator {
         let data = self.inner.save_state().map_err(PyValueError::new_err)?;
         Ok(PyBytes::new(py, &data))
     }
+    fn state_body<'py>(&self, py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyBytes>> {
+        let body = self.inner.state_body(data).map_err(PyValueError::new_err)?;
+        Ok(PyBytes::new(py, body))
+    }
     fn execution_runtime<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let data = self
             .inner

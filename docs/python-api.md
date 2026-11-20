@@ -9,7 +9,9 @@ window is headless.
 - Emulation: `tick`, `set_emulation_speed`, `stop`
 - Input: `button`, `button_press`, `button_release`, and button events through
   `send_input`
-- State: `memory`, `register_file`, `save_state`, `load_state`
+- State: `memory`, `register_file`, `save_state`, `load_state`, and
+  `state_body`, which returns the PyBoy format 15 part of a saved state (see
+  [compatibility.md](compatibility.md#save-states))
 - Output: `screen`, `sound` (NumPy arrays and Pillow images need the `images`
   extra)
 - Hooks and symbols: `hook_register`, `hook_deregister`, `symbol_lookup`
@@ -25,8 +27,12 @@ window is headless.
 loaded in any process continues exactly like the run that saved it, see
 [compatibility.md](compatibility.md#divergences)), `long_run_state` (a run of
 any length keeps saving states that load again, and a state saved past 2^48
-cycles by an older build loads), and `profiling` (only in
-builds with that feature). `pyboy_rs.has_feature(name)` tests one.
+cycles by an older build loads), `state_section` (saved states carry the
+pyboy-rs section after the format 15 body, see
+[compatibility.md](compatibility.md#save-states)), `state_body` (the
+`state_body` helper, with `pyboy_rs.STATE_SECTION_VERSION` and
+`pyboy_rs.STATE_SECTION_SINCE`), and `profiling` (only in builds with that
+feature). `pyboy_rs.has_feature(name)` tests one.
 `getattr(pyboy_rs, "FEATURES", ())` is the portable test.
 `PyBoy.has_rtc` is `False`, never an error, on a cartridge without a clock.
 

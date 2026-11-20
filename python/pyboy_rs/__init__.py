@@ -1,6 +1,7 @@
 """Native Rust components translated from PyBoy."""
 
-from ._native import CPU, Cartridge, HAS_PROFILING, Interaction, Machine, Serial, Sound, Timer, UPSTREAM_VERSION
+from ._native import (CPU, Cartridge, HAS_PROFILING, Interaction, Machine, STATE_SECTION_SINCE,
+                      STATE_SECTION_VERSION, Serial, Sound, Timer, UPSTREAM_VERSION)
 from .pyboy import PyBoy
 
 __version__ = "0.1.8"
@@ -10,7 +11,7 @@ __version__ = "0.1.8"
 FEATURES = frozenset({"rtc_file", "clock_lock", "clock_lock_state", "advance_clock", "export_rtc",
                       "rtc_export_follows_host", "checkpoint_clock_lock", "bank_bytes",
                       "rtc_register_writes", "rtc_halt", "empty_memory_slices", "exact_state_reload",
-                      "long_run_state"}
+                      "long_run_state", "state_section", "state_body"}
                      | ({"profiling"} if HAS_PROFILING else set()))
 HAS_CLOCK_CONTROL = "clock_lock_state" in FEATURES
 
@@ -20,5 +21,6 @@ def has_feature(name):
     return name in FEATURES
 
 
-__all__ = ["CPU", "Cartridge", "FEATURES", "HAS_CLOCK_CONTROL", "HAS_PROFILING", "Interaction", "Machine", "PyBoy", "Serial",
-           "Sound", "Timer", "UPSTREAM_VERSION", "__version__", "has_feature"]
+__all__ = ["CPU", "Cartridge", "FEATURES", "HAS_CLOCK_CONTROL", "HAS_PROFILING", "Interaction", "Machine", "PyBoy",
+           "STATE_SECTION_SINCE", "STATE_SECTION_VERSION", "Serial", "Sound", "Timer", "UPSTREAM_VERSION", "__version__",
+           "has_feature"]

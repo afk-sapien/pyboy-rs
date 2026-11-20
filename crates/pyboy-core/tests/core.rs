@@ -2,7 +2,7 @@ use pyboy_core::{
     cpu::{Cpu, FlatBus},
     interaction::{Button, Interaction},
     mb::Machine,
-    state::{CLOCK_CAP, REBASE_ABOVE},
+    state::{CLOCK_CAP, REBASE_ABOVE, SECTION_SINCE, SECTION_VERSION},
     timer::Timer,
 };
 
@@ -129,6 +129,84 @@ fn truncated_state_is_atomic_and_wrong_versions_are_rejected() {
     future[0] = 17;
     assert!(machine.load_state(&future).is_err());
     assert_eq!(machine.save_state().unwrap(), before);
+}
+
+#[test]
+fn every_state_carries_the_section_and_a_state_without_it_loads() {
+    let mut machine = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    for _ in 0..30 {
+        machine.begin_frame(false, false);
+        machine.run_frame().unwrap();
+    }
+    let state = machine.save_state().unwrap();
+    let body = machine.state_body(&state).unwrap().to_vec();
+    assert_eq!(machine.state_body(&body).unwrap(), body);
+    let section = &state[body.len()..];
+    assert!(SECTION_SINCE.windows(2).all(|pair| pair[0] <= pair[1]));
+    let [major, minor, patch] = SECTION_SINCE[usize::from(SECTION_VERSION) - 1];
+    let mut header = b"PBRS".to_vec();
+    header.extend(SECTION_VERSION.to_le_bytes());
+    header.extend([major, minor, patch]);
+    header.extend(9u32.to_le_bytes());
+    assert_eq!(section[..13], header);
+    // Version 1 with no copy in progress: 8 bytes of stall, then the mode.
+    assert_eq!(section[13..21], [0; 8]);
+    assert_eq!(section.len(), 22);
+
+    // A state without the section, as PyBoy and pyboy-rs 0.1.9 save it,
+    // loads with the section fields idle and saves the same body.
+    let mut other = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    other.load_state(&body).unwrap();
+    assert_eq!(other.save_state().unwrap(), state);
+    for _ in 0..30 {
+        machine.begin_frame(false, false);
+        machine.run_frame().unwrap();
+        other.begin_frame(false, false);
+        other.run_frame().unwrap();
+    }
+    assert_eq!(other.save_state().unwrap(), machine.save_state().unwrap());
+}
+
+#[test]
+fn a_bad_or_newer_section_is_refused_without_mutation() {
+    let mut machine = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    machine.begin_frame(false, false);
+    machine.run_frame().unwrap();
+    let before = machine.save_state().unwrap();
+    let at = machine.state_body(&before).unwrap().len();
+    let refused = |machine: &mut Machine, state: &[u8], message: &str| {
+        let error = machine.load_state(state).unwrap_err();
+        assert!(error.contains(message), "{error}");
+        assert_eq!(machine.save_state().unwrap(), before);
+    };
+    let edit = |offset: usize, bytes: &[u8]| {
+        let mut state = before.clone();
+        state[at + offset..at + offset + bytes.len()].copy_from_slice(bytes);
+        state
+    };
+
+    // Foreign bytes after the body, and a section cut short or overlong.
+    let mut foreign = before[..at].to_vec();
+    foreign.extend(b"PBRZ\x01\x00\x00\x02\x00\x09\x00\x00\x00");
+    refused(&mut machine, &foreign, "Trailing data");
+    refused(&mut machine, &before[..at + 5], "Trailing data");
+    refused(&mut machine, &before[..before.len() - 1], "section length");
+    let mut longer = before.clone();
+    longer.push(0);
+    refused(&mut machine, &longer, "section length");
+    let overlong = edit(9, &10u32.to_le_bytes());
+    refused(&mut machine, &overlong, "section length");
+    let unversioned = edit(4, &0u16.to_le_bytes());
+    refused(&mut machine, &unversioned, "section version");
+    refused(&mut machine, &edit(20, &[4]), "VRAM transfer");
+
+    // A newer version is refused with the release its header names.
+    let mut newer = edit(4, &(SECTION_VERSION + 1).to_le_bytes());
+    newer[at + 6..at + 9].copy_from_slice(&[0, 3, 1]);
+    refused(&mut machine, &newer, "needs pyboy-rs 0.3.1 or newer");
+    // The body of a state with a newer section is still its format 15 bytes.
+    assert_eq!(machine.state_body(&newer).unwrap(), &before[..at]);
+    assert!(machine.state_body(&longer).is_err());
 }
 
 fn mbc3_rtc_demo() -> Vec<u8> {
@@ -573,7 +651,7 @@ fn only_a_state_past_the_old_cap_is_rebased_on_load() {
         let state = long.save_state().unwrap();
         let mut loaded = fresh_like(&short);
         loaded.load_state(&state)?;
-        Ok::<_, &str>((loaded.cpu.cycles, loaded.save_state().unwrap() == state))
+        Ok::<_, String>((loaded.cpu.cycles, loaded.save_state().unwrap() == state))
     };
     assert_eq!(load(CLOCK_CAP), Ok((CLOCK_CAP, true)));
     assert_eq!(load(CLOCK_CAP + 1), Ok(((1 << 40) + 1, false)));

@@ -3,11 +3,15 @@
 Releases are built by `.github/workflows/wheels.yml`. Pushing a tag `vX.Y.Z`:
 
 1. Fails at once unless `vX.Y.Z` equals the version in `Cargo.toml` and
-   `pyproject.toml` (and `python/pyboy_rs/__init__.py` and `Cargo.lock` agree), and
-   `CHANGELOG.md` has a `## X.Y.Z` section.
+   `pyproject.toml` (and `python/pyboy_rs/__init__.py` and `Cargo.lock` agree),
+   `CHANGELOG.md` has a `## X.Y.Z` section, and X.Y.Z is at least the newest
+   release that `SECTION_SINCE` in `crates/pyboy-core/src/state.rs` names. A
+   build below that would save states its own release notes say need a newer
+   pyboy-rs.
 2. Builds the sdist and five wheels and smoke-tests each wheel on Python 3.11, 3.12
-   and 3.13 (import, version, a short run, `Machine.read_bank_bytes`); the sdist is
-   built from source and tested too.
+   and 3.13 (import, version, a short run, `Machine.read_bank_bytes`, and a saved
+   state that carries the pyboy-rs section after its format 15 body); the sdist
+   is built from source and tested too.
 3. Hashes the six files into `SHA256SUMS.txt`.
 4. Creates the GitHub release as a draft with the `CHANGELOG.md` section as notes,
    attaches the seven files, downloads them back and checks `SHA256SUMS.txt`, and

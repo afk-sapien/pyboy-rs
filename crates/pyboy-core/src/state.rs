@@ -3,7 +3,7 @@
 use crate::{
     cartridge::{CLOCK_LIMIT, Controller, Rtc},
     lcd::{ColorPalette, FRAME_CYCLES},
-    mb::{Machine, now},
+    mb::{Hdma, Machine, now},
 };
 
 /// Newest execution runtime layout. Version 2 adds the halted clock's frozen
@@ -12,8 +12,39 @@ use crate::{
 /// something a load could not rebuild, a halted clock for version 2 and a
 /// copy in progress or a halted CPU with a transfer active for version 3. So
 /// every other runtime keeps the version 1 bytes of 0.1.1 and old recordings
-/// still replay.
+/// still replay. The state's pyboy-rs section holds the version 3 fields
+/// too, and version 3 stays for recordings whose states have no section.
 pub const RUNTIME_FORMAT: u8 = 3;
+
+/// Newest layout of the pyboy-rs section, which every saved state carries
+/// after its format 15 bytes. Format 15 is PyBoy's layout, so what pyboy-rs
+/// emulates beyond PyBoy is saved here. The section is a header, then the
+/// payload:
+///
+/// - the magic `PBRS`
+/// - the version, 2 bytes little endian
+/// - the first pyboy-rs release that reads this version, as major, minor
+///   and patch bytes, which a build that knows only older versions names
+///   when it refuses the state
+/// - the payload length, 4 bytes little endian
+///
+/// Version 1 holds a VRAM transfer's copy in progress: the cycles it still
+/// holds the CPU for, 8 bytes, and the LCD mode an HBlank transfer last
+/// saw, 1 byte, which is 0 when none runs.
+///
+/// A new field raises the version and goes after the fields before it. A
+/// load reads every version up to this one, and a state without the
+/// section, as PyBoy and pyboy-rs 0.1.9 and older save it, loads with every
+/// section field idle.
+pub const SECTION_VERSION: u16 = 1;
+
+/// The first pyboy-rs release that reads each section version, from version
+/// 1 on, never decreasing. The release workflow refuses to publish a version
+/// below the last (docs/RELEASING.md).
+pub const SECTION_SINCE: [[u8; 3]; SECTION_VERSION as usize] = [[0, 2, 0]];
+
+const SECTION_MAGIC: [u8; 4] = *b"PBRS";
+const SECTION_HEADER: usize = 13;
 
 /// The highest CPU clock a state may hold, about 777 emulated days. Releases
 /// before 0.1.6 refuse any state above it, and a long run there kept saving
@@ -31,6 +62,39 @@ const SOUND_EPOCH: i64 = 1 << 39;
 /// when it is already below that.
 fn epoch_delta(clock: i64, epoch: i64) -> i64 {
     (clock / epoch - 1).max(0) * epoch
+}
+
+/// The version and payload of the pyboy-rs section that follows a state's
+/// format 15 bytes, or nothing when no bytes follow them. Any other bytes
+/// there are refused, and so is a section whose length does not match.
+fn section_payload(section: &[u8]) -> Result<Option<(u16, &[u8])>, &'static str> {
+    if section.is_empty() {
+        return Ok(None);
+    }
+    if section.len() < SECTION_HEADER || section[..4] != SECTION_MAGIC {
+        return Err("Trailing data in save state");
+    }
+    let version = u16::from_le_bytes([section[4], section[5]]);
+    let length = u32::from_le_bytes([section[9], section[10], section[11], section[12]]);
+    let payload = &section[SECTION_HEADER..];
+    if version == 0 {
+        return Err("Invalid pyboy-rs section version");
+    }
+    if usize::try_from(length) != Ok(payload.len()) {
+        return Err("Invalid pyboy-rs section length");
+    }
+    Ok(Some((version, payload)))
+}
+
+/// A VRAM transfer's copy in progress: the cycles it still holds the CPU
+/// for and the LCD mode it last saw.
+fn hdma_codec(c: &mut Codec, hdma: &mut Hdma) -> Result<(), &'static str> {
+    c.int(&mut hdma.stall, 8)?;
+    c.byte(&mut hdma.mode)?;
+    if !(0..=1 << 16).contains(&hdma.stall) || hdma.mode > 3 {
+        return Err("Invalid VRAM transfer state");
+    }
+    Ok(())
 }
 
 pub struct Codec {
@@ -140,18 +204,88 @@ impl Codec {
 }
 
 impl Machine {
-    /// PyBoy format 15 state. See `save_state_at`.
+    /// PyBoy format 15 state followed by the pyboy-rs section. See
+    /// `save_state_at`.
     pub fn save_state(&mut self) -> Result<Vec<u8>, &'static str> {
         self.save_state_at(now())
     }
 
-    /// PyBoy format 15 state, with `wall` as the host time. Only a halted
-    /// real-time clock that is not locked depends on it: it is stored as the
-    /// base that reads the frozen value at that instant.
+    /// PyBoy format 15 state followed by the pyboy-rs section, with `wall`
+    /// as the host time. Only a halted real-time clock that is not locked
+    /// depends on it: it is stored as the base that reads the frozen value at
+    /// that instant.
     pub fn save_state_at(&mut self, wall: f64) -> Result<Vec<u8>, &'static str> {
         let mut codec = Codec::writer();
         self.codec(&mut codec, wall)?;
-        Ok(codec.data)
+        let mut payload = Codec::writer();
+        self.section_codec(&mut payload, SECTION_VERSION)?;
+        let mut data = codec.data;
+        data.extend_from_slice(&SECTION_MAGIC);
+        data.extend_from_slice(&SECTION_VERSION.to_le_bytes());
+        data.extend_from_slice(&SECTION_SINCE[usize::from(SECTION_VERSION) - 1]);
+        data.extend_from_slice(&(payload.data.len() as u32).to_le_bytes());
+        data.extend_from_slice(&payload.data);
+        Ok(data)
+    }
+
+    /// The format 15 bytes of a state for this machine's cartridge and
+    /// model, which are the bytes PyBoy would save. A state from PyBoy or
+    /// pyboy-rs 0.1.9 and older is all body. Two builds that emulate the
+    /// same way save the same body, so this is what to compare across
+    /// builds. The body is parsed in full, and what follows it must be a
+    /// pyboy-rs section of any version, whole.
+    pub fn state_body<'a>(&self, bytes: &'a [u8]) -> Result<&'a [u8], &'static str> {
+        if bytes.len() > 2_000_000 {
+            return Err("Save state is too large");
+        }
+        let mut candidate = self.clone();
+        let mut codec = Codec::reader(bytes);
+        candidate.codec(&mut codec, now())?;
+        let (body, section) = bytes.split_at(codec.position);
+        section_payload(section)?;
+        Ok(body)
+    }
+
+    /// The pyboy-rs section's payload in the layout of `version`. A save
+    /// writes the newest, and a load reads the version the section names.
+    /// Each version's fields follow those of the versions before it.
+    fn section_codec(&mut self, c: &mut Codec, version: u16) -> Result<(), &'static str> {
+        debug_assert!((1..=SECTION_VERSION).contains(&version));
+        // Version 1. The LCD mode a transfer last saw counts only while an
+        // HBlank transfer runs. It is saved as 0 otherwise, so a run and a
+        // reload of its state save the same section.
+        if c.reading {
+            hdma_codec(c, &mut self.mb.hdma)?;
+        } else {
+            let mut hdma = self.mb.hdma.clone();
+            if !hdma.active {
+                hdma.mode = 0;
+            }
+            hdma_codec(c, &mut hdma)?;
+        }
+        Ok(())
+    }
+
+    /// Load the pyboy-rs section after a state's format 15 bytes. Without
+    /// one, every section field keeps the idle value the caller set.
+    fn load_section(&mut self, section: &[u8]) -> Result<(), String> {
+        let Some((version, payload)) = section_payload(section)? else {
+            return Ok(());
+        };
+        if version > SECTION_VERSION {
+            let since = &section[6..9];
+            return Err(format!(
+                "This save state needs pyboy-rs {}.{}.{} or newer: its pyboy-rs section is \
+                 version {version}, and this build reads up to version {SECTION_VERSION}",
+                since[0], since[1], since[2]
+            ));
+        }
+        let mut codec = Codec::reader(payload);
+        self.section_codec(&mut codec, version)?;
+        if codec.position != payload.len() {
+            return Err("Invalid pyboy-rs section length".into());
+        }
+        Ok(())
     }
 
     /// Runtime fields intentionally absent from the upstream hardware format.
@@ -171,16 +305,16 @@ impl Machine {
         state: &[u8],
         runtime: &[u8],
         frame: u64,
-    ) -> Result<(), &'static str> {
+    ) -> Result<(), String> {
         if runtime.len() > 2_000_000 {
-            return Err("Execution runtime is too large");
+            return Err("Execution runtime is too large".into());
         }
         let mut candidate = self.clone();
         candidate.load_state(state)?;
         let mut codec = Codec::reader(runtime);
         candidate.execution_runtime_codec(&mut codec)?;
         if codec.position != runtime.len() {
-            return Err("Trailing execution runtime data");
+            return Err("Trailing execution runtime data".into());
         }
         let hdma = &mut candidate.mb.hdma;
         hdma.busy = hdma.active || hdma.stall != 0;
@@ -261,18 +395,13 @@ impl Machine {
             }
         }
         if version >= 3 {
-            let hdma = &mut mb.hdma;
-            c.int(&mut hdma.stall, 8)?;
-            c.byte(&mut hdma.mode)?;
-            if !(0..=1 << 16).contains(&hdma.stall) || hdma.mode > 3 {
-                return Err("Invalid VRAM transfer state");
-            }
+            hdma_codec(c, &mut mb.hdma)?;
         }
         Ok(())
     }
 
     /// Load a state. See `load_state_at`.
-    pub fn load_state(&mut self, bytes: &[u8]) -> Result<(), &'static str> {
+    pub fn load_state(&mut self, bytes: &[u8]) -> Result<(), String> {
         self.load_state_at(bytes, now())
     }
 
@@ -286,16 +415,21 @@ impl Machine {
     /// therefore loads to the same clock on any machine with the same clock
     /// reading. A halted clock freezes at the loaded base's reading, using
     /// `wall` as the host time when the clock is not locked.
-    pub fn load_state_at(&mut self, bytes: &[u8], wall: f64) -> Result<(), &'static str> {
+    pub fn load_state_at(&mut self, bytes: &[u8], wall: f64) -> Result<(), String> {
         if bytes.len() > 2_000_000 {
-            return Err("Save state is too large");
+            return Err("Save state is too large".into());
         }
         let mut candidate = self.clone();
         let mut codec = Codec::reader(bytes);
         candidate.codec(&mut codec, wall)?;
-        if codec.position != bytes.len() {
-            return Err("Trailing data in save state");
-        }
+        // The section fields idle, for a state without the section: no copy
+        // in progress. An execution runtime record may still restore one.
+        let hdma = &mut candidate.mb.hdma;
+        hdma.stall = 0;
+        hdma.mode = candidate.mb.lcd.stat & 3;
+        candidate.load_section(&bytes[codec.position..])?;
+        let hdma = &mut candidate.mb.hdma;
+        hdma.busy = hdma.active || hdma.stall != 0;
         // Only a state the cap used to refuse is rebased here. Any other
         // state loads exactly as saved, and its first completed frame
         // rebases it as the saving machine would have.
@@ -306,11 +440,6 @@ impl Machine {
         candidate.mb.remap();
         candidate.mb.reset_lcd_deadline();
         candidate.mb.lcd.framebuffer_written = true;
-        // The format holds no copy in progress. An execution runtime record
-        // may restore one.
-        candidate.mb.hdma.stall = 0;
-        candidate.mb.hdma.mode = candidate.mb.lcd.stat & 3;
-        candidate.mb.hdma.busy = candidate.mb.hdma.active;
         *self = candidate;
         Ok(())
     }

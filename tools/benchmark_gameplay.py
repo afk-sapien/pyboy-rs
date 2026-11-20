@@ -54,8 +54,13 @@ def worker(args):
                     machine.tick(1, True, args.mode == "audio")
         observations.extend(machine.memory[address] for address in (0xd35e, 0xd361, 0xd362, 0xd057))
     elapsed = time.perf_counter() - start
-    with Path(str(args.prefix) + ".state").open("wb") as stream:
-        machine.save_state(stream)
+    # The format 15 body, which PyBoy saves too, so the outputs compare.
+    stream = io.BytesIO()
+    machine.save_state(stream)
+    state = stream.getvalue()
+    if hasattr(machine, "state_body"):
+        state = machine.state_body(state)
+    Path(str(args.prefix) + ".state").write_bytes(state)
     Path(str(args.prefix) + ".rgba").write_bytes(bytes(machine.screen.raw_buffer))
     Path(str(args.prefix) + ".audio").write_bytes(bytes(machine.sound.raw_buffer[:machine.sound.raw_buffer_head]))
     Path(str(args.prefix) + ".trace").write_bytes(observations)

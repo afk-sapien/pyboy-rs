@@ -290,6 +290,37 @@ def test_checkpoint_transfers_hook_instruction_and_preserves_callbacks():
         assert first.memory[0, 0x100] == second.memory[0, 0x100] == 0x3c
 
 
+def test_a_recording_from_before_the_state_section_replays(monkeypatch):
+    """pyboy-rs 0.1.9 and older saved format 15 alone and hashed it, as
+    recorded here with the section cut from every state and checksum."""
+    import hashlib
+    from pyboy_rs import diagnostics, execution
+    with machine() as first, machine() as second:
+        first.tick(60)
+        with monkeypatch.context() as patch:
+            patch.setattr(execution, 'STATE_FORMAT', execution.LEGACY_STATE_FORMAT)
+            patch.setattr(execution, 'snapshot', lambda *args: diagnostics.snapshot(*args, True))
+            first.start_recording(60, diagnostic_interval=20)
+            first.button_press('start')
+            first.tick(30)
+            first.button_release('start')
+            first.tick(30)
+            recording = first.stop_recording()
+        for checkpoint in (recording['initial'], recording['final']):
+            assert checkpoint['compat']['state_format'] == 'pyboy-format-15'
+            checkpoint['state'] = first.state_body(checkpoint['state'])
+        recording['final_sha256'] = hashlib.sha256(recording['final']['state']).hexdigest()
+        assert len(recording['checkpoints']) == 3
+        result = second.replay(recording)
+        assert result['verified']
+        assert second.execution_checkpoint()['state'] == first.execution_checkpoint()['state']
+        # A checkpoint hashed with the section does not match a legacy replay.
+        broken = deepcopy(recording)
+        broken['checkpoints'][0]['state_sha256'] = hashlib.sha256(hardware(first)).hexdigest()
+        with pytest.raises(Exception, match='diverged'):
+            second.replay(broken)
+
+
 @pytest.mark.parametrize('opcodes', [None, [], [(0, 0x100, 256)], [(0, 0x100, 0xdb)],
                                    [(0, 0x101, 0)], [(0, 0x100, True)],
                                    [(0, 0x100, 0), (0, 0x100, 0)]])

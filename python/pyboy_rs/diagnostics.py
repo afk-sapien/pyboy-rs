@@ -22,9 +22,14 @@ def validate_ranges(ranges):
     return result
 
 
-def snapshot(emulator, offset, ranges):
+def snapshot(emulator, offset, ranges, body=False):
+    """Checksums of the emulator now. `body` hashes the state's format 15 bytes
+    alone, as recordings from before the pyboy-rs section did."""
+    state = emulator._machine.save_state()
+    if body:
+        state = emulator._machine.state_body(state)
     return {'offset': offset, 'frame': emulator.frame_count,
-            'state_sha256': hashlib.sha256(emulator._machine.save_state()).hexdigest(),
+            'state_sha256': hashlib.sha256(state).hexdigest(),
             'runtime_sha256': hashlib.sha256(emulator._machine.execution_runtime()).hexdigest(),
             'overlays_sha256': hashlib.sha256(repr([(bank, address, emulator.memory[bank, address])
                 for (bank, address), original in sorted(emulator.memory._rom_original.items())

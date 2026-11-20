@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+Draft for 0.2.0. Not released.
+
+### Changed
+
+- Save states carry a pyboy-rs section after the PyBoy state format 15 body.
+  The body stays byte-identical with PyBoy 2.7.0. The section holds what
+  format 15 has no field for, starting with the cycles a VRAM transfer still
+  holds the CPU for and the LCD mode an HBlank transfer last saw, so a state
+  saved mid-transfer continues exactly like the run that saved it. Layout,
+  versions and rules are in
+  [docs/compatibility.md](docs/compatibility.md#save-states).
+- Execution checkpoints name the hardware state format
+  `pyboy-format-15+pyboy-rs-1`. Checkpoints and recordings from 0.1.9 and
+  older still restore and replay.
+
+### Compatibility
+
+- pyboy-rs 0.1.9 and older refuse a state saved by this release, with
+  "Trailing data in save state". Keep the old build's own states for it, or
+  pass it `state_body(state)`, which loads with the section fields idle.
+- PyBoy 2.7.0 loads a state saved by this release and leaves the section
+  unread.
+- States saved by PyBoy and by pyboy-rs 0.1.9 and older load, with the
+  section fields idle.
+- Compare states with PyBoy or across builds by their `state_body`, not as
+  whole files.
+
+### Added
+
+- `PyBoy.state_body(state)` and `Machine.state_body(state)` return the
+  format 15 body of a saved state. `pyboy_rs.STATE_SECTION_VERSION` and
+  `pyboy_rs.STATE_SECTION_SINCE` give the section version this build writes
+  and the first release that reads it. Features `state_section` and
+  `state_body`.
+- A release fails if its version is below the release that the newest
+  section version names.
+
 ## 0.1.9
 
 0.1.8 with one fix: a hook no longer slows the emulator down. The same save

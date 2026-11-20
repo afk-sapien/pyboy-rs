@@ -8,6 +8,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("UPSTREAM_VERSION", pyboy_core::UPSTREAM_VERSION)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("HAS_PROFILING", cfg!(feature = "profile"))?;
+    let [major, minor, patch] = *pyboy_core::state::SECTION_SINCE.last().unwrap();
+    m.add("STATE_SECTION_VERSION", pyboy_core::state::SECTION_VERSION)?;
+    m.add("STATE_SECTION_SINCE", format!("{major}.{minor}.{patch}"))?;
     m.add_class::<components::Cpu>()?;
     m.add_class::<components::Timer>()?;
     m.add_class::<components::Serial>()?;

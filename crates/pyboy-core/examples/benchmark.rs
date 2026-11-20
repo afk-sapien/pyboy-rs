@@ -94,7 +94,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     advance(machine, frames, mode)?;
     let seconds = start.elapsed().as_secs_f64();
     let prefix = &args[5];
-    fs::write(format!("{prefix}.state"), machine.save_state()?)?;
+    // The format 15 body, which PyBoy saves too, so the outputs compare.
+    let state = machine.save_state()?;
+    fs::write(format!("{prefix}.state"), machine.state_body(&state)?)?;
     let pixels: Vec<u8> = machine
         .mb
         .lcd
