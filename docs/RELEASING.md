@@ -95,8 +95,11 @@ target only, and there are no ROMs to record the others with.
 
 CI has no ROMs, so the profile is recorded locally and committed. It holds
 function names, control-flow hashes and counters, about 380 KB. Before
-`tools/pgo.sh record` writes it, it checks that no 64-byte stretch of any ROM or
-state it played appears in it.
+`tools/pgo.sh record` writes it, it checks that no 64-byte stretch of data from
+any ROM or state it played appears in it. A 32-byte block counts as data when
+it has at least 3 distinct byte values and at least 8 bytes that differ from
+its most common byte. A block of one or two small values in fill does not
+count, since a small counter followed by zero counters matches it by chance.
 
 PGO changes how the compiler lays out, inlines and orders code, not what the
 code does. Save states and audio from a PGO wheel are identical to those from a

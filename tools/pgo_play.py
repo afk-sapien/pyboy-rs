@@ -11,8 +11,13 @@ buttons come from a seeded script (walking, A and B presses, the start menu
 and idle waits), so every run plays the same inputs from the same states.
 Gzip compressed states are read too.
 
-The second form checks that no stretch of 64 bytes from any FILE (a ROM or a
-state) appears in PROFILE. It exits 1 if one does.
+The second form checks that no ROM or state data from any FILE appears in
+PROFILE. It looks for each aligned 32-byte block of each FILE that holds data:
+at least 3 distinct byte values, and at least 8 bytes that differ from the
+block's most common byte. Any 64-byte stretch of a FILE holds one whole aligned
+block, so a stretch whose block holds data is found. A block of one or two
+small values in fill is not looked for, since a small counter followed by zero
+counters in the profile matches it by chance. It exits 1 if a block is found.
 """
 
 import argparse
@@ -25,6 +30,7 @@ import time
 SNAPSHOT_EVERY = 30
 LISTEN_SHARE = 0.2
 WINDOW = 32
+MIN_SPREAD = 8
 
 
 def read_file(path):
@@ -118,6 +124,13 @@ def play(groups, frames):
             print(f"played {frames} frames in {time.perf_counter() - start:.1f} s: {path}", flush=True)
 
 
+def holds_data(block):
+    """True when a block has at least 3 distinct byte values and at least
+    MIN_SPREAD bytes that differ from its most common byte."""
+    values = set(block)
+    return len(values) > 2 and len(block) - max(block.count(value) for value in values) >= MIN_SPREAD
+
+
 def scan(profile_path, paths):
     profile = open(profile_path, "rb").read()
     windows = {profile[i:i + WINDOW] for i in range(len(profile) - WINDOW + 1)}
@@ -128,7 +141,7 @@ def scan(profile_path, paths):
         # Any 64-byte stretch of the file contains one of these aligned blocks.
         for i in range(0, len(data) - WINDOW + 1, WINDOW):
             block = data[i:i + WINDOW]
-            if len(set(block)) > 2 and block in windows:
+            if holds_data(block) and block in windows:
                 hits += 1
         print(f"{hits} blocks of {path} found in {profile_path}")
         found += hits
