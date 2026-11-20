@@ -355,7 +355,7 @@ fn a_pending_reload_survives_a_save_state() {
         let state = machine.save_state().unwrap();
         let byte = if since < 8 { since as u8 } else { 0xff };
         assert_eq!(state[body_len + 13 + 9], byte, "{since}");
-        assert_eq!(state.len(), body_len + 13 + 10);
+        assert_eq!(state.len(), body_len + 13 + 11);
         let mut other = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
         other.load_state(&state).unwrap();
         let expected = if since < 8 {

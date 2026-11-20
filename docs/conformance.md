@@ -8,21 +8,21 @@ starting point for picking accuracy fixes.
 
 ## Scores
 
-Run on 2026-11-20 with the timer on the system counter of
-[#53](https://github.com/afk-sapien/pyboy-rs/pull/53), through a local
+Run on 2026-11-20 with the EI delay and halt bug fix of
+[#54](https://github.com/afk-sapien/pyboy-rs/pull/54), through a local
 release build of the wheel. Each cell is passed tests out of tests run on that
 model.
 
 | Suite | DMG | CGB |
 | --- | --- | --- |
-| Mooneye (automatic tests) | 56 of 94 | 53 of 86 |
+| Mooneye (automatic tests) | 60 of 94 | 57 of 86 |
 | SameSuite | not run on DMG | 11 of 69 |
-| Blargg, the ROM's own report | 24 of 39 | 25 of 32 |
-| Blargg, c-sp screenshots | 5 of 8 | 5 of 8 |
+| Blargg, the ROM's own report | 25 of 39 | 26 of 32 |
+| Blargg, c-sp screenshots | 6 of 8 | 6 of 8 |
 | dmg-acid2 | 1 of 1 | 1 of 1 |
 | cgb-acid2 | not a DMG test | 1 of 1 |
 | rtc3test | 0 of 3 | 0 of 3 |
-| All | 86 of 145 | 96 of 200 |
+| All | 92 of 145 | 102 of 200 |
 
 No test timed out or raised an error. Tests made for other models or
 revisions are left out of the counts (see [Method](#method)).
@@ -35,6 +35,16 @@ revisions are left out of the counts (see [Method](#method)).
 | IO register reads | [#41](https://github.com/afk-sapien/pyboy-rs/pull/41) | 78 of 145 | 84 of 200 |
 | CGB VRAM transfers | [#42](https://github.com/afk-sapien/pyboy-rs/pull/42) | 78 of 145 | 88 of 200 |
 | Timer on the system counter | [#53](https://github.com/afk-sapien/pyboy-rs/pull/53) | 86 of 145 | 96 of 200 |
+| EI delay and the halt bug | [#54](https://github.com/afk-sapien/pyboy-rs/pull/54) | 92 of 145 | 102 of 200 |
+
+The EI delay and halt bug fix makes six more tests pass on each model:
+Mooneye `acceptance/ei_sequence`, `ei_timing`, `rapid_di_ei` and
+`reti_intr_timing`, and Blargg `halt_bug` in the ROM's own report and in the
+screenshot check. No test changed from pass to fail. `reti_intr_timing` was
+not a target. It checks that RETI sets IME at once, so a second pending
+interrupt comes before the instruction after RETI. The core already did that,
+but the test first checks that exactly one instruction runs after EI. SameSuite
+`interrupt/ei_delay_halt` and the Mooneye `halt_ime*` tests pass as before.
 
 The timer fix makes eight more Mooneye tests pass on each model, so all 13
 `acceptance/timer` tests pass: `rapid_toggle`, `tima_reload`,
@@ -60,7 +70,7 @@ the values it prints, and `cgb_sound` test 09 prints other wave bytes.
 
 | Area | DMG | CGB |
 | --- | --- | --- |
-| Instruction, interrupt and OAM DMA timing (top-level `acceptance`) | 8 of 29 | 6 of 27 |
+| Instruction, interrupt and OAM DMA timing (top-level `acceptance`) | 12 of 29 | 10 of 27 |
 | Timer (`acceptance/timer`) | 13 of 13 | 13 of 13 |
 | PPU (`acceptance/ppu`, `misc/ppu`) | 2 of 12 | 1 of 8 |
 | OAM DMA (`acceptance/oam_dma`) | 2 of 3 | 2 of 2 |
@@ -70,8 +80,9 @@ the values it prints, and `cgb_sound` test 09 prints other wave bytes.
 
 The timing tests check the cycle on which each memory access or interrupt
 lands inside an instruction (`call`, `ret`, `jp`, `push`, `pop`, `rst`, `ei`,
-`reti`). The passes are `div_timing`, `intr_timing`, `halt_ime0_ei`,
-`halt_ime0_nointr_timing`, `halt_ime1_timing` and `if_ie_registers` on both
+`reti`). The passes are `div_timing`, `ei_sequence`, `ei_timing`,
+`halt_ime0_ei`, `halt_ime0_nointr_timing`, `halt_ime1_timing`,
+`if_ie_registers`, `intr_timing`, `rapid_di_ei` and `reti_intr_timing` on both
 models, with `di_timing-GS` and `halt_ime1_timing2-GS` on DMG. The failure in
 the register bits area is `interrupts/ie_push`. The boot tests check the
 registers and I/O state that the real boot ROM leaves behind. The core runs
@@ -104,7 +115,7 @@ The passes in sound are `channel_3_stop_delay`,
 | `mem_timing` | 3 of 3 | 3 of 3 |
 | `mem_timing-2` | 3 of 3 | 3 of 3 |
 | `interrupt_time` | CGB only | 1 of 1 |
-| `halt_bug` | 0 of 1 | 0 of 1 |
+| `halt_bug` | 1 of 1 | 1 of 1 |
 | `dmg_sound` | 4 of 12 | DMG only |
 | `cgb_sound` | CGB only | 6 of 12 |
 | `oam_bug` | 2 of 8 | DMG only |
@@ -116,7 +127,7 @@ and 8.
 
 The screenshot check runs each group's combined ROM for the time c-sp gives
 and compares the final picture with c-sp's picture from real hardware.
-`cpu_instrs`, `instr_timing`, `interrupt_time`, `mem_timing` and
+`cpu_instrs`, `halt_bug`, `instr_timing`, `interrupt_time`, `mem_timing` and
 `mem_timing-2` pass on both models. On CGB the combined `cpu_instrs` ROM runs
 in double speed and finishes 29.8 emulated seconds after the boot ROM hands
 over, inside c-sp's 31. On DMG it finishes at 53.5 seconds, inside c-sp's 55.

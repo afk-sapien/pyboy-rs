@@ -30,7 +30,24 @@ def test_every_opcode_against_python(opcode, oracle):
             setattr(reference, name, value)
         reference.fetch_and_execute()
         native.step()
-        compare_cpu(native, reference)
+        compare_cpu(native, reference, **diverging(opcode, state))
+
+
+def diverging(opcode, state):
+    """The fields where one step differs from PyBoy 2.7.0 by design.
+
+    A direct step ends no slice early, so an EI with IME clear always leaves
+    IME for the next instruction to set. A HALT with IME clear and an
+    interrupt pending takes the halt bug instead of halting.
+    """
+    pending = state["interrupts_flag_register"] & state["interrupts_enabled_register"] & 0x1F
+    if state["interrupt_master_enable"]:
+        return {}
+    if opcode == 0xFB:
+        return dict(interrupt_master_enable=0, ime_pending=1, bail=1)
+    if opcode == 0x76 and pending:
+        return dict(halted=0, halt_bug=1, PC=(state["PC"] + 1) & 0xFFFF)
+    return {}
 
 
 @pytest.mark.parametrize("flags", range(32))

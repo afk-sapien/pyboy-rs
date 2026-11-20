@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 use crate::{
     cartridge::{CLOCK_LIMIT, Controller, Rtc},
+    cpu::Cpu,
     lcd::{ColorPalette, FRAME_CYCLES},
     mb::{Hdma, Machine, now},
     timer::{NO_OVERFLOW, Timer},
@@ -36,16 +37,19 @@ pub const RUNTIME_FORMAT: u8 = 3;
 /// Version 2 adds the cycles since TIMA last overflowed, 1 byte, 0 to 7,
 /// while its reload is due or in the 4 cycles after, and 0xFF otherwise.
 ///
+/// Version 3 adds 1 byte of CPU flags: bit 0 for an EI whose IME the next
+/// instruction sets, bit 1 for a HALT that took the halt bug.
+///
 /// A new field raises the version and goes after the fields before it. A
 /// load reads every version up to this one, and a state without the
 /// section, as PyBoy and pyboy-rs 0.1.9 and older save it, loads with every
 /// section field idle.
-pub const SECTION_VERSION: u16 = 2;
+pub const SECTION_VERSION: u16 = 3;
 
 /// The first pyboy-rs release that reads each section version, from version
 /// 1 on, never decreasing. The release workflow refuses to publish a version
 /// below the last (docs/RELEASING.md).
-pub const SECTION_SINCE: [[u8; 3]; SECTION_VERSION as usize] = [[0, 2, 0], [0, 2, 0]];
+pub const SECTION_SINCE: [[u8; 3]; SECTION_VERSION as usize] = [[0, 2, 0], [0, 2, 0], [0, 2, 0]];
 
 const SECTION_MAGIC: [u8; 4] = *b"PBRS";
 const SECTION_HEADER: usize = 13;
@@ -117,6 +121,24 @@ fn timer_codec(c: &mut Codec, timer: &mut Timer) -> Result<(), &'static str> {
             0..=7 => timer.last_cycles - i64::from(since),
             _ => return Err("Invalid timer state"),
         };
+    }
+    Ok(())
+}
+
+/// An EI whose IME the next instruction sets, bit 0, and a HALT that took
+/// the halt bug, bit 1. The body's IME and halted fields are read first.
+fn cpu_codec(c: &mut Codec, cpu: &mut Cpu) -> Result<(), &'static str> {
+    let mut flags = u8::from(cpu.ime_pending) | u8::from(cpu.halt_bug) << 1;
+    c.byte(&mut flags)?;
+    if c.reading {
+        cpu.ime_pending = flags & 1 != 0;
+        cpu.halt_bug = flags & 2 != 0;
+        if flags > 3
+            || (cpu.ime_pending && cpu.interrupt_master_enable)
+            || (cpu.halt_bug && cpu.halted)
+        {
+            return Err("Invalid CPU state");
+        }
     }
     Ok(())
 }
@@ -290,6 +312,9 @@ impl Machine {
         if version >= 2 {
             timer_codec(c, &mut self.mb.timer)?;
         }
+        if version >= 3 {
+            cpu_codec(c, &mut self.cpu)?;
+        }
         Ok(())
     }
 
@@ -451,11 +476,13 @@ impl Machine {
         candidate.codec(&mut codec, wall)?;
         // The section fields idle, for a state without the section: no copy
         // in progress, which an execution runtime record may still restore,
-        // and no TIMA reload due.
+        // no TIMA reload due, and no EI delay or halt bug.
         let hdma = &mut candidate.mb.hdma;
         hdma.stall = 0;
         hdma.mode = candidate.mb.lcd.stat & 3;
         candidate.mb.timer.overflow = NO_OVERFLOW;
+        candidate.cpu.ime_pending = false;
+        candidate.cpu.halt_bug = false;
         candidate.load_section(&bytes[codec.position..])?;
         let hdma = &mut candidate.mb.hdma;
         hdma.busy = hdma.active || hdma.stall != 0;

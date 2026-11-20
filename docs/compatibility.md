@@ -54,7 +54,9 @@ components. pyboy-rs targets 2.7.0 and rejects format 17.
 The opcode implementations are mechanically translated from the pinned Python
 AST. The generator rejects unrecognized constructs and verifies source hashes.
 Generated Rust is checked in, so building the core does not need Python.
-Regenerate with:
+HALT, DI and EI are the exceptions: the generator emits a call to a `Cpu`
+method for each instead of the upstream body (see
+[Divergences](#divergences)). Regenerate with:
 
 ```sh
 python tools/generate_opcodes.py
@@ -72,7 +74,7 @@ register in closed form, and tests check it against the `tick` loops.
 ## Divergences
 
 Upstream quirks are preserved, including serial timing, joypad selection and
-CPU interrupt semantics. Deliberate differences:
+CPU interrupt dispatch. Deliberate differences:
 
 - An instruction that makes no progress raises an error instead of hanging.
 - Memory accesses are validated.
@@ -136,6 +138,19 @@ CPU interrupt semantics. Deliberate differences:
   ignored and a TMA write reaches TIMA too. IF reads and writes see a timer
   flag due on their own cycle. PyBoy 2.7.0 keeps a TIMA counter of its own,
   apart from DIV, reloads at the overflow and counts no edge on writes.
+- EI sets IME after the instruction that follows it, so exactly one
+  instruction runs before an interrupt is taken, and DI in that instruction
+  takes none. A second EI does not start the wait over. Interrupts are
+  taken only between slices, so EI sets IME at once inside a slice with no
+  interrupt pending. When one is pending, or EI ends the slice, the next
+  slice runs the following instruction alone and then sets IME. PyBoy
+  2.7.0 sets IME at once.
+- HALT with IME clear and an interrupt pending does not halt. The next
+  instruction reads its first byte twice (the halt bug), so `HALT; INC A`
+  increments A twice. After EI then HALT, the interrupt returns to the
+  HALT, as in SameBoy. PyBoy 2.7.0 halts and wakes at once without the bug.
+  The format 15 save state has no field for either, so the pyboy-rs
+  section keeps both, and a state without it loads with neither.
 - The format 15 save state holds PyBoy's TIMA counter, which pyboy-rs
   writes as the cycles since the selected bit last fell (0 with the timer
   stopped) and does not read.
@@ -179,6 +194,13 @@ since TIMA last overflowed (1 byte, 0 to 7, or 0xFF when the overflow is 8
 or more cycles back or TIMA never overflowed). The reload is due at 4, and
 writes act on it until 8. A state with 8 to 0xFE there is refused. A
 version 1 section loads with no reload due.
+
+Version 3 names 0.2.0. Its payload is the version 2 fields, then 1 byte of
+CPU flags: bit 0 when an EI has run and IME waits for the instruction after
+it, bit 1 when a HALT took the halt bug and the next instruction reads its
+first byte twice. A state with other bits set, with bit 0 and IME set, or
+with bit 1 and the CPU halted is refused. A version 1 or 2 section loads
+with both clear.
 
 A later field raises the version and adds to the payload. The format 15
 body does not change.

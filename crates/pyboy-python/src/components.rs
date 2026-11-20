@@ -48,6 +48,8 @@ impl Cpu {
             ("halted", i64::from(c.halted)),
             ("stopped", i64::from(c.stopped)),
             ("bail", i64::from(c.bail)),
+            ("ime_pending", i64::from(c.ime_pending)),
+            ("halt_bug", i64::from(c.halt_bug)),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_owned(), v))
@@ -68,7 +70,13 @@ impl Cpu {
                 | "interrupts_enabled_register" => 255,
                 "HL" | "SP" | "PC" => 65535,
                 "cycles" => i64::MAX - (1 << 32),
-                "interrupt_master_enable" | "interrupt_queued" | "halted" | "stopped" | "bail" => 1,
+                "interrupt_master_enable"
+                | "interrupt_queued"
+                | "halted"
+                | "stopped"
+                | "bail"
+                | "ime_pending"
+                | "halt_bug" => 1,
                 _ => return Err(PyKeyError::new_err(name)),
             };
             if !(0..=max).contains(&value) {
@@ -92,6 +100,8 @@ impl Cpu {
                 "halted" => c.halted = value != 0,
                 "stopped" => c.stopped = value != 0,
                 "bail" => c.bail = value != 0,
+                "ime_pending" => c.ime_pending = value != 0,
+                "halt_bug" => c.halt_bug = value != 0,
                 _ => unreachable!(),
             }
         }
@@ -120,7 +130,8 @@ impl Cpu {
 
     fn step(&mut self) -> i64 {
         let before = self.inner.cycles;
-        self.inner.fetch_and_execute(&mut self.bus);
+        // An instruction that makes no progress returns 0 cycles.
+        let _ = self.inner.step(&mut self.bus);
         self.inner.cycles - before
     }
 
