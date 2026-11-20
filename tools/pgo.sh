@@ -11,7 +11,7 @@
 # writes pgo/profile.txt with the toolchain and a fingerprint of the source the
 # profile was recorded from. Commit both files. ROMs and states stay local: the
 # profile holds function names and counters only, and record checks that no
-# 64-byte stretch of any ROM or state appears in it.
+# 64-byte stretch of ROM or state data appears in it (tools/pgo_play.py --scan).
 #
 # check compares that fingerprint and the workspace version with HEAD. It exits
 # 1 if the Rust source, a manifest, Cargo.lock or the version changed since the
