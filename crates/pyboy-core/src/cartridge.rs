@@ -775,6 +775,9 @@ impl Cartridge {
         }
     }
 
+    /// Write one ROM byte. The motherboard's decoded instructions start over
+    /// after it, so `Motherboard::override_rom`, which drops only the ones
+    /// that read the byte, is the cheaper write on a running machine.
     pub fn override_rom(
         &mut self,
         bank: usize,

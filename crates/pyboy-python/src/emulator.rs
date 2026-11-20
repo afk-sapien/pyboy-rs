@@ -396,7 +396,10 @@ impl Emulator {
         let i = usize::from(address);
         match address {
             0..=0x7fff if bank == -1 => mb.bootrom[i] = value,
-            0..=0x7fff => mb.cartridge.rom[bank as usize * 16384 + i % 16384] = value,
+            // read_bank checked the bank, and i % 16384 is below 0x4000.
+            0..=0x7fff => mb
+                .override_rom(bank as usize, address % 16384, value)
+                .map_err(PyValueError::new_err)?,
             0x8000..=0x9fff => mb.lcd.vram[bank as usize][i - 0x8000] = value,
             0xa000..=0xbfff => mb.cartridge.ram[bank as usize * 8192 + i - 0xa000] = value,
             _ => mb.ram[bank as usize * 4096 + i % 4096] = value,
