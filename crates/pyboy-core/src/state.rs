@@ -182,6 +182,8 @@ impl Machine {
         if codec.position != runtime.len() {
             return Err("Trailing execution runtime data");
         }
+        let hdma = &mut candidate.mb.hdma;
+        hdma.busy = hdma.active || hdma.stall != 0;
         candidate.frame_count = frame;
         candidate.validate_state()?;
         // The runtime record restores the low ROM bank.
@@ -308,6 +310,7 @@ impl Machine {
         // may restore one.
         candidate.mb.hdma.stall = 0;
         candidate.mb.hdma.mode = candidate.mb.lcd.stat & 3;
+        candidate.mb.hdma.busy = candidate.mb.hdma.active;
         *self = candidate;
         Ok(())
     }

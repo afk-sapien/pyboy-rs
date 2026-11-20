@@ -41,6 +41,10 @@ pub struct Hdma {
     /// The LCD mode at the last slice end. While the CPU is halted it stays
     /// the mode of the HALT until an interrupt is due to wake the CPU.
     pub mode: u8,
+    /// A transfer or its stall may be pending. Set by whatever starts one,
+    /// and cleared by the first slice that finds neither. While it is clear,
+    /// a slice makes no other transfer check.
+    pub busy: bool,
 }
 
 /// Where a 4 KiB page outside work RAM reads or writes on the bus fast path.
@@ -319,20 +323,20 @@ impl Machine {
         // Whether every device was ticked at the last slice end, so that its
         // deadline fields hold what PyBoy sizes the next slice from.
         let mut current = true;
+        // Whether no slice of this call has ended yet.
+        let mut first = true;
         while !self.mb.lcd.frame_done {
             #[cfg(feature = "profile")]
             self.profile.begin();
             let start = self.cpu.cycles;
-            let target = if self.mb.singlestep {
-                4
-            } else if current {
-                self.mb.slice_target()
+            // The only transfer check of a slice without one.
+            let result = if self.mb.hdma.busy {
+                self.transfer_slice(start, current, first)
             } else {
-                self.mb.lazy_slice_target(start)
+                let target = self.next_target(start, current);
+                self.cpu.tick(&mut self.mb, target)
             };
-            if self.mb.hdma.stall != 0 {
-                self.mb.hdma_stall(&mut self.cpu, target);
-            } else if let Err(error) = self.cpu.tick(&mut self.mb, target) {
+            if let Err(error) = result {
                 // PyBoy leaves every device at the last slice end.
                 self.mb.catch_up(start, &mut self.cpu);
                 return Err(error);
@@ -361,13 +365,15 @@ impl Machine {
             }
             #[cfg(feature = "profile")]
             self.profile.mark(4);
-            if self.mb.hdma.active {
-                self.mb.hdma_follow(&mut self.cpu);
-            }
             current = !lazy;
             if self.mb.singlestep {
+                self.follow_transfer();
                 return Ok(false);
             }
+            first = false;
+        }
+        if !first {
+            self.follow_transfer();
         }
         if !current {
             self.mb.catch_up(self.cpu.cycles, &mut self.cpu);
@@ -378,6 +384,48 @@ impl Machine {
             self.rebase_clocks();
         }
         Ok(true)
+    }
+
+    /// The cycles the next slice runs for.
+    #[inline(always)]
+    fn next_target(&mut self, start: i64, current: bool) -> i64 {
+        if self.mb.singlestep {
+            4
+        } else if current {
+            self.mb.slice_target()
+        } else {
+            self.mb.lazy_slice_target(start)
+        }
+    }
+
+    /// Take the transfer step of the last slice end, as the LCD enters
+    /// mode 0 or turns off.
+    #[inline]
+    fn follow_transfer(&mut self) {
+        if self.mb.hdma.active {
+            self.mb.hdma_follow(&mut self.cpu);
+        }
+    }
+
+    /// One slice while a transfer or its stall may be pending. It takes the
+    /// transfer step of the slice end before it first, unless this call ran
+    /// no slice before it. Nothing between two slices can change that step,
+    /// and the copy it may make moves no clock.
+    #[cold]
+    #[inline(never)]
+    fn transfer_slice(&mut self, start: i64, current: bool, first: bool) -> Result<(), NoProgress> {
+        if !first {
+            self.follow_transfer();
+        }
+        let target = self.next_target(start, current);
+        if self.mb.hdma.stall != 0 {
+            self.mb.hdma_stall(&mut self.cpu, target);
+            return Ok(());
+        }
+        if !self.mb.hdma.active {
+            self.mb.hdma.busy = false;
+        }
+        self.cpu.tick(&mut self.mb, target)
     }
 
     pub fn read(&mut self, address: u16) -> u8 {
@@ -492,6 +540,7 @@ impl Motherboard {
         self.hdma.status = value & 127;
         self.hdma.active = value & 128 != 0;
         self.hdma.mode = self.lcd.stat & 3;
+        self.hdma.busy = true;
         if !self.hdma.active || self.hdma.mode == 0 {
             self.hdma_copy(cpu, self.hdma.active);
         }
@@ -533,6 +582,7 @@ impl Motherboard {
             }
         }
         self.hdma.stall += cycles;
+        self.hdma.busy = true;
     }
 
     /// Copy a block of an HBlank transfer where SameBoy does, as the LCD
@@ -1770,9 +1820,11 @@ mod tests {
         loaded.load_execution(&state, &runtime, 0).unwrap();
         let hdma = &loaded.mb.hdma;
         assert_eq!((hdma.src, hdma.dst, hdma.stall), (0xc020, 0x8820, 72));
+        assert!(hdma.busy);
         assert_eq!(loaded.save_execution_runtime().unwrap(), runtime);
         loaded.load_state(&state).unwrap();
         assert_eq!(loaded.mb.hdma.stall, 0);
+        assert!(!loaded.mb.hdma.busy);
         assert_eq!(loaded.save_execution_runtime().unwrap()[0], 1);
 
         // The CPU waits the copy out while the devices run on.
@@ -1783,8 +1835,11 @@ mod tests {
             assert_eq!(m.cpu.pc, pc);
         }
         assert_eq!(m.cpu.cycles - start, 72);
+        assert!(m.mb.hdma.busy);
         slice(&mut m);
         assert_ne!(m.cpu.pc, pc);
+        // The first slice to find no transfer clears the flag.
+        assert!(!m.mb.hdma.busy);
     }
 
     /// SameSuite gdma_addr_mask and hdma_lcd_off: the low four address bits
