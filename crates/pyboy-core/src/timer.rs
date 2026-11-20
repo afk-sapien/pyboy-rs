@@ -37,6 +37,10 @@ pub struct Timer {
     /// cycles after it matter: the reload is due at 4, and writes act on it
     /// until 8.
     pub overflow: i64,
+    /// `next_interrupt()` as of the last tick or write, which the slice loop
+    /// reads at every slice end. Not saved. Code that sets the fields above
+    /// directly calls `refresh` after.
+    pub due: i64,
 }
 
 impl Default for Timer {
@@ -50,6 +54,7 @@ impl Default for Timer {
             cycles_to_interrupt: 0,
             last_cycles: 0,
             overflow: NO_OVERFLOW,
+            due: i64::MAX,
         }
     }
 }
@@ -117,11 +122,17 @@ impl Timer {
     /// Whether a tick to `absolute_cycles` would set the interrupt flag.
     #[inline]
     pub fn interrupt_due(&self, absolute_cycles: i64) -> bool {
-        self.next_interrupt() <= absolute_cycles
+        self.due <= absolute_cycles
+    }
+
+    /// Sets `due` from the fields, after code outside these methods set them.
+    pub fn refresh(&mut self) {
+        self.due = self.next_interrupt();
     }
 
     fn schedule(&mut self) {
-        self.cycles_to_interrupt = match self.next_interrupt() {
+        self.refresh();
+        self.cycles_to_interrupt = match self.due {
             i64::MAX => MAX_CYCLES,
             cycle => cycle - self.last_cycles,
         };
@@ -155,7 +166,8 @@ impl Timer {
             let period = self.period();
             let mut next = from + period - ((counter + from - start) & (period - 1));
             while next <= absolute_cycles {
-                let counts = (absolute_cycles - next) / period + 1;
+                // A shift, as the period is a power of two.
+                let counts = ((absolute_cycles - next) >> period.trailing_zeros()) + 1;
                 let room = 256 - i64::from(self.tima);
                 if counts < room {
                     self.tima += counts as u8;

@@ -764,10 +764,8 @@ impl Motherboard {
         self.lcd_deadline = self.next_lcd_deadline(now);
         let lcd = &self.lcd;
         let lag = now - lcd.last_cycles;
-        let timer = match self.timer.next_interrupt() {
-            i64::MAX => MAX_CYCLES,
-            cycle => cycle - now,
-        };
+        // A running timer's interrupt is under MAX_CYCLES away.
+        let timer = (self.timer.due - now).min(MAX_CYCLES);
         let others = [
             timer,
             self.lcd_deadline - now,

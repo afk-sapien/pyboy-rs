@@ -131,6 +131,7 @@ impl Rng {
 }
 
 fn check(timer: &Timer, model: &Model, context: &str) {
+    assert_eq!(timer.due, timer.next_interrupt(), "{context}");
     assert_eq!(timer.last_cycles, model.time, "{context}");
     assert_eq!(timer.tima, model.tima, "{context}");
     assert_eq!(timer.tma, model.tma, "{context}");
@@ -176,6 +177,7 @@ fn random_traces_match_the_cycle_model() {
             last_cycles: model.time,
             ..Default::default()
         };
+        timer.refresh();
         for step in 0..2000 {
             let context = format!("seed {seed}, step {step}");
             let gap = match rng.below(20) {
@@ -362,6 +364,9 @@ fn a_pending_reload_survives_a_save_state() {
             NO_OVERFLOW
         };
         assert_eq!(other.mb.timer.overflow, expected, "{since}");
+        // The slice loop sees a reload due right after the load.
+        let timer = &other.mb.timer;
+        assert_eq!(timer.due, timer.next_interrupt(), "{since}");
         assert_eq!(other.save_state().unwrap(), state);
         // The body alone loads with no reload due.
         other.load_state(&state[..body_len]).unwrap();
