@@ -907,3 +907,12 @@ change smaller than that is noise.
 | Fix | PR | DMG tests | CGB tests | Against 0.1.9 | Against its parent | A/A spread |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +3.4% to +9.6%, median +2.8% to +10.0% | +0.2% to +3.7%, median -0.2% to +3.8% | 2.3%, median 1.4% |
+
+Cells past their A/A against the parent, from the `examples/benchmark.rs`
+rounds that run beside the harness:
+
+- #53, Red audio, about 1% slower than its parent in three runs, best then
+  median: -1.1% and -0.3% at d4f3759, -0.9% and -1.4% in a 15-round
+  re-check, -1.4% and -0.9% at 5d5fd46 (A/A 0.4% and 0.2%). The cause is
+  unknown. The cell is measured again after the last fix of this group,
+  and the loss is bisected only if it is still past its A/A then.
