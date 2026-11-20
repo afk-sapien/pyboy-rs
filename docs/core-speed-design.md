@@ -907,6 +907,7 @@ change smaller than that is noise.
 | Fix | PR | DMG tests | CGB tests | Against 0.1.9 | Against its parent | A/A spread |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +3.4% to +9.6%, median +2.8% to +10.0% | +0.2% to +3.7%, median -0.2% to +3.8% | 2.3%, median 1.4% |
+| EI delay and the halt bug | #54 | 86 to 92 of 145 | 96 to 102 of 200 | +3.6% to +10.6%, median +3.7% to +11.2% | -1.2% to +2.0%, median -0.5% to +2.4% | 0.9%, median 1.2% |
 
 Cells past their A/A against the parent, from the `examples/benchmark.rs`
 rounds that run beside the harness:
@@ -916,3 +917,10 @@ rounds that run beside the harness:
   re-check, -1.4% and -0.9% at 5d5fd46 (A/A 0.4% and 0.2%). The cause is
   unknown. The cell is measured again after the last fix of this group,
   and the loss is bisected only if it is still past its A/A then.
+- #54, three cells more than 1% slower than its parent by median in a
+  15-round run at load 1 to 3, best then median: Gold audio -2.5% and
+  -2.3% (A/A 0.9% and 0.3%), Crystal batch -1.6% and -1.4% (A/A 0.6% and
+  0.5%), Red audio -2.1% and -1.2% (A/A 0.7% and 0.4%). Gold audio was
+  -2.5% and -1.2% in an earlier run at load 6 too. The other nine cells
+  are within 1% by median. Moving the EI and HALT bodies out of the opcode
+  match made 10 of the 12 cells slower again, so that was dropped.

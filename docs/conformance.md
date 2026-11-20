@@ -9,7 +9,7 @@ starting point for picking accuracy fixes.
 ## Scores
 
 Run on 2026-11-20 with the EI delay and halt bug fix of
-[#PRNUM](https://github.com/afk-sapien/pyboy-rs/pull/PRNUM), through a local
+[#54](https://github.com/afk-sapien/pyboy-rs/pull/54), through a local
 release build of the wheel. Each cell is passed tests out of tests run on that
 model.
 
@@ -35,7 +35,7 @@ revisions are left out of the counts (see [Method](#method)).
 | IO register reads | [#41](https://github.com/afk-sapien/pyboy-rs/pull/41) | 78 of 145 | 84 of 200 |
 | CGB VRAM transfers | [#42](https://github.com/afk-sapien/pyboy-rs/pull/42) | 78 of 145 | 88 of 200 |
 | Timer on the system counter | [#53](https://github.com/afk-sapien/pyboy-rs/pull/53) | 86 of 145 | 96 of 200 |
-| EI delay and the halt bug | [#PRNUM](https://github.com/afk-sapien/pyboy-rs/pull/PRNUM) | 92 of 145 | 102 of 200 |
+| EI delay and the halt bug | [#54](https://github.com/afk-sapien/pyboy-rs/pull/54) | 92 of 145 | 102 of 200 |
 
 The EI delay and halt bug fix makes six more tests pass on each model:
 Mooneye `acceptance/ei_sequence`, `ei_timing`, `rapid_di_ei` and
