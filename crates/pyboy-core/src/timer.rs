@@ -151,6 +151,13 @@ impl Timer {
         self.last_cycles = absolute_cycles;
         self.div = (total >> 8) as u8;
         self.div_counter = total & 0xff;
+        if self.tac & 4 == 0 && self.overflow + RELOAD <= start {
+            // Stopped with no reload due, so only the system counter moves.
+            // This is what the rest of the tick and `schedule` would leave.
+            self.due = i64::MAX;
+            self.cycles_to_interrupt = MAX_CYCLES;
+            return false;
+        }
         let mut interrupt = false;
         // A due reload overwrites any count before it, and an edge on the
         // reload's own cycle counts from TMA, as SameBoy runs them in one
