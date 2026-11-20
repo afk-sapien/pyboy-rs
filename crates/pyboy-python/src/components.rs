@@ -184,7 +184,7 @@ impl Timer {
     }
     #[setter]
     fn set_tima(&mut self, value: u8) {
-        self.inner.tima = value;
+        self.inner.set_tima(value);
     }
     #[getter]
     fn tma(&self) -> u8 {
@@ -192,7 +192,7 @@ impl Timer {
     }
     #[setter]
     fn set_tma(&mut self, value: u8) {
-        self.inner.tma = value;
+        self.inner.set_tma(value);
     }
     #[getter]
     fn tac(&self) -> u8 {
@@ -200,7 +200,7 @@ impl Timer {
     }
     #[setter]
     fn set_tac(&mut self, value: u8) {
-        self.inner.tac = value;
+        self.inner.set_tac(value);
     }
     fn state(&self) -> BTreeMap<String, i64> {
         let t = &self.inner;
@@ -210,7 +210,7 @@ impl Timer {
             ("TMA", i64::from(t.tma)),
             ("TAC", i64::from(t.tac)),
             ("DIV_counter", t.div_counter),
-            ("TIMA_counter", t.tima_counter),
+            ("TIMA_counter", t.tima_counter()),
             ("last_cycles", t.last_cycles),
             ("_cycles_to_interrupt", t.cycles_to_interrupt),
         ]

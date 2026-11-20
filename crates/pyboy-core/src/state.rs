@@ -4,6 +4,7 @@ use crate::{
     cartridge::{CLOCK_LIMIT, Controller, Rtc},
     lcd::{ColorPalette, FRAME_CYCLES},
     mb::{Hdma, Machine, now},
+    timer::{NO_OVERFLOW, Timer},
 };
 
 /// Newest execution runtime layout. Version 2 adds the halted clock's frozen
@@ -32,16 +33,19 @@ pub const RUNTIME_FORMAT: u8 = 3;
 /// holds the CPU for, 8 bytes, and the LCD mode an HBlank transfer last
 /// saw, 1 byte, which is 0 when none runs.
 ///
+/// Version 2 adds the cycles since TIMA last overflowed, 1 byte, 0 to 7,
+/// while its reload is due or in the 4 cycles after, and 0xFF otherwise.
+///
 /// A new field raises the version and goes after the fields before it. A
 /// load reads every version up to this one, and a state without the
 /// section, as PyBoy and pyboy-rs 0.1.9 and older save it, loads with every
 /// section field idle.
-pub const SECTION_VERSION: u16 = 1;
+pub const SECTION_VERSION: u16 = 2;
 
 /// The first pyboy-rs release that reads each section version, from version
 /// 1 on, never decreasing. The release workflow refuses to publish a version
 /// below the last (docs/RELEASING.md).
-pub const SECTION_SINCE: [[u8; 3]; SECTION_VERSION as usize] = [[0, 2, 0]];
+pub const SECTION_SINCE: [[u8; 3]; SECTION_VERSION as usize] = [[0, 2, 0], [0, 2, 0]];
 
 const SECTION_MAGIC: [u8; 4] = *b"PBRS";
 const SECTION_HEADER: usize = 13;
@@ -93,6 +97,26 @@ fn hdma_codec(c: &mut Codec, hdma: &mut Hdma) -> Result<(), &'static str> {
     c.byte(&mut hdma.mode)?;
     if !(0..=1 << 16).contains(&hdma.stall) || hdma.mode > 3 {
         return Err("Invalid VRAM transfer state");
+    }
+    Ok(())
+}
+
+/// The cycles since TIMA overflowed, while its reload is due or in the 4
+/// cycles after, when writes still act on it. An older overflow acts on
+/// nothing, so it is saved as 0xFF, like no overflow.
+fn timer_codec(c: &mut Codec, timer: &mut Timer) -> Result<(), &'static str> {
+    let mut since = if timer.overflow + 8 > timer.last_cycles {
+        (timer.last_cycles - timer.overflow) as u8
+    } else {
+        0xff
+    };
+    c.byte(&mut since)?;
+    if c.reading {
+        timer.overflow = match since {
+            0xff => NO_OVERFLOW,
+            0..=7 => timer.last_cycles - i64::from(since),
+            _ => return Err("Invalid timer state"),
+        };
     }
     Ok(())
 }
@@ -263,6 +287,9 @@ impl Machine {
             }
             hdma_codec(c, &mut hdma)?;
         }
+        if version >= 2 {
+            timer_codec(c, &mut self.mb.timer)?;
+        }
         Ok(())
     }
 
@@ -423,10 +450,12 @@ impl Machine {
         let mut codec = Codec::reader(bytes);
         candidate.codec(&mut codec, wall)?;
         // The section fields idle, for a state without the section: no copy
-        // in progress. An execution runtime record may still restore one.
+        // in progress, which an execution runtime record may still restore,
+        // and no TIMA reload due.
         let hdma = &mut candidate.mb.hdma;
         hdma.stall = 0;
         hdma.mode = candidate.mb.lcd.stat & 3;
+        candidate.mb.timer.overflow = NO_OVERFLOW;
         candidate.load_section(&bytes[codec.position..])?;
         let hdma = &mut candidate.mb.hdma;
         hdma.busy = hdma.active || hdma.stall != 0;
@@ -438,6 +467,7 @@ impl Machine {
         }
         candidate.validate_state()?;
         candidate.mb.remap();
+        candidate.mb.timer.refresh();
         candidate.mb.reset_lcd_deadline();
         candidate.mb.lcd.framebuffer_written = true;
         *self = candidate;
@@ -482,6 +512,8 @@ impl Machine {
             // A finished transfer leaves the target at MAX_CYCLES, which is
             // only ever compared with the serial clock, so it moves too.
             &mut mb.serial.clock_target,
+            // NO_OVERFLOW stays where it is.
+            &mut mb.timer.overflow,
         ] {
             *clock = clock.saturating_sub(delta);
         }
@@ -492,6 +524,7 @@ impl Machine {
         sound.cycles_target -= delta as f64;
         sound.cycles_target_512hz -= delta as f64;
         sound.div_apu %= 8;
+        mb.timer.refresh();
         mb.reset_lcd_deadline();
     }
 
@@ -648,7 +681,10 @@ impl Machine {
         c.byte(&mut timer.div)?;
         c.byte(&mut timer.tima)?;
         c.int(&mut timer.div_counter, 2)?;
-        c.int(&mut timer.tima_counter, 2)?;
+        // TIMA counts from the system counter, so a load rebuilds this from
+        // DIV and ignores the saved value.
+        let mut tima_counter = timer.tima_counter();
+        c.int(&mut tima_counter, 2)?;
         c.byte(&mut timer.tma)?;
         c.byte(&mut timer.tac)?;
         c.int(&mut timer.last_cycles, 8)?;

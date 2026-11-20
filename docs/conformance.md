@@ -8,21 +8,21 @@ starting point for picking accuracy fixes.
 
 ## Scores
 
-Run on 2026-11-18 with the CGB VRAM transfer rewrite of
-[#42](https://github.com/afk-sapien/pyboy-rs/pull/42), through a local
+Run on 2026-11-20 with the timer on the system counter of
+[#53](https://github.com/afk-sapien/pyboy-rs/pull/53), through a local
 release build of the wheel. Each cell is passed tests out of tests run on that
 model.
 
 | Suite | DMG | CGB |
 | --- | --- | --- |
-| Mooneye (automatic tests) | 48 of 94 | 45 of 86 |
+| Mooneye (automatic tests) | 56 of 94 | 53 of 86 |
 | SameSuite | not run on DMG | 11 of 69 |
 | Blargg, the ROM's own report | 24 of 39 | 25 of 32 |
 | Blargg, c-sp screenshots | 5 of 8 | 5 of 8 |
 | dmg-acid2 | 1 of 1 | 1 of 1 |
 | cgb-acid2 | not a DMG test | 1 of 1 |
 | rtc3test | 0 of 3 | 0 of 3 |
-| All | 78 of 145 | 88 of 200 |
+| All | 86 of 145 | 96 of 200 |
 
 No test timed out or raised an error. Tests made for other models or
 revisions are left out of the counts (see [Method](#method)).
@@ -34,6 +34,16 @@ revisions are left out of the counts (see [Method](#method)).
 | First run | main at 96211ba, the published 0.1.8 wheel | 75 of 145 | 80 of 200 |
 | IO register reads | [#41](https://github.com/afk-sapien/pyboy-rs/pull/41) | 78 of 145 | 84 of 200 |
 | CGB VRAM transfers | [#42](https://github.com/afk-sapien/pyboy-rs/pull/42) | 78 of 145 | 88 of 200 |
+| Timer on the system counter | [#53](https://github.com/afk-sapien/pyboy-rs/pull/53) | 86 of 145 | 96 of 200 |
+
+The timer fix makes eight more Mooneye tests pass on each model, so all 13
+`acceptance/timer` tests pass: `rapid_toggle`, `tima_reload`,
+`tima_write_reloading`, `tma_write_reloading` and the four
+`tim00_div_trigger` to `tim11_div_trigger`. No test changed from pass to
+fail. Blargg `interrupt_time` passes as before because IF reads see a timer
+flag due on their own cycle. Its timer setup waits for the flag between two
+IF reads. Before IF reads brought the timer up to date, the branch missed
+that flag, and the CGB report and the screenshot on both models failed.
 
 The VRAM transfer rewrite makes all four SameSuite `dma` tests pass on CGB:
 `gbc_dma_cont`, `gdma_addr_mask`, `hdma_lcd_off` and `hdma_mode0`. No other
@@ -51,7 +61,7 @@ the values it prints, and `cgb_sound` test 09 prints other wave bytes.
 | Area | DMG | CGB |
 | --- | --- | --- |
 | Instruction, interrupt and OAM DMA timing (top-level `acceptance`) | 8 of 29 | 6 of 27 |
-| Timer (`acceptance/timer`) | 5 of 13 | 5 of 13 |
+| Timer (`acceptance/timer`) | 13 of 13 | 13 of 13 |
 | PPU (`acceptance/ppu`, `misc/ppu`) | 2 of 12 | 1 of 8 |
 | OAM DMA (`acceptance/oam_dma`) | 2 of 3 | 2 of 2 |
 | Register bits, DAA, IE push (`acceptance/bits`, `instr`, `interrupts`, `misc/bits`) | 4 of 5 | 4 of 5 |

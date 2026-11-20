@@ -355,7 +355,7 @@ impl Machine {
             }
             #[cfg(feature = "profile")]
             self.profile.mark(2);
-            if !lazy || self.mb.timer.overflow_due(now) {
+            if !lazy || self.mb.timer.interrupt_due(now) {
                 self.mb.tick_timer(&mut self.cpu);
             }
             #[cfg(feature = "profile")]
@@ -620,6 +620,15 @@ impl Motherboard {
             cpu.set_interruptflag(4);
         }
     }
+
+    /// Sets a timer flag due by the CPU's IF access, which can fall on the
+    /// reload's own cycle within the slice, before the slice end ticks it.
+    #[inline]
+    fn sync_timer_flag(&mut self, cpu: &mut Cpu) {
+        if self.timer.interrupt_due(cpu.cycles) {
+            self.tick_timer(cpu);
+        }
+    }
     fn tick_serial(&mut self, cpu: &mut Cpu) {
         if self.serial.tick(cpu.cycles) {
             cpu.set_interruptflag(8);
@@ -755,11 +764,8 @@ impl Motherboard {
         self.lcd_deadline = self.next_lcd_deadline(now);
         let lcd = &self.lcd;
         let lag = now - lcd.last_cycles;
-        let timer = if self.timer.tac & 4 != 0 {
-            self.timer.next_overflow() - now
-        } else {
-            MAX_CYCLES
-        };
+        // A running timer's interrupt is under MAX_CYCLES away.
+        let timer = (self.timer.due - now).min(MAX_CYCLES);
         let others = [
             timer,
             self.lcd_deadline - now,
@@ -1179,7 +1185,10 @@ impl Motherboard {
                     _ => self.timer.tac | 0xf8,
                 }
             }
-            0xff0f => cpu.interrupts_flag_register as u8 | 0xe0,
+            0xff0f => {
+                self.sync_timer_flag(cpu);
+                cpu.interrupts_flag_register as u8 | 0xe0
+            }
             0xff10..=0xff3f => {
                 self.sound.tick(cpu.cycles);
                 self.sound.get((address - 0xff10) as u8)
@@ -1280,12 +1289,17 @@ impl Motherboard {
                                 }
                                 self.timer.reset();
                             }
-                            0xff05 => self.timer.tima = value,
-                            0xff06 => self.timer.tma = value,
-                            _ => self.timer.tac = value & 7,
+                            0xff05 => self.timer.set_tima(value),
+                            0xff06 => self.timer.set_tma(value),
+                            _ => self.timer.set_tac(value),
                         }
                     }
-                    0xff0f => cpu.interrupts_flag_register = i64::from(value),
+                    0xff0f => {
+                        // A timer flag due by now is set first, so the
+                        // write clears it.
+                        self.sync_timer_flag(cpu);
+                        cpu.interrupts_flag_register = i64::from(value);
+                    }
                     0xff10..=0xff3f => {
                         self.sound.tick(cpu.cycles);
                         self.sound.set((address - 0xff10) as u8, value);

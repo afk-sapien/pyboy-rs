@@ -3,7 +3,6 @@ use pyboy_core::{
     interaction::{Button, Interaction},
     mb::Machine,
     state::{CLOCK_CAP, REBASE_ABOVE, SECTION_SINCE, SECTION_VERSION},
-    timer::Timer,
 };
 
 const DEMO: &[u8] = include_bytes!("../../../reference/pyboy-2.7.0/pyboy/default_rom.gb");
@@ -44,20 +43,6 @@ fn native_cpu_wraps_and_pushes_interrupt_return_address() {
     assert_eq!((cpu.pc, cpu.sp, cpu.cycles), (0x40, 65534, 20));
     assert_eq!(&bus.memory[65534..], &[255, 255]);
     assert_eq!(cpu.interrupts_flag_register, 4);
-}
-
-#[test]
-fn timer_overflow_reloads_modulo_and_interrupts() {
-    let mut timer = Timer {
-        tac: 5,
-        tima: 255,
-        tma: 37,
-        ..Default::default()
-    };
-    assert!(!timer.tick(15));
-    assert!(timer.tick(16));
-    assert_eq!(timer.tima, 37);
-    assert!(!timer.tick(16));
 }
 
 #[test]
@@ -147,11 +132,13 @@ fn every_state_carries_the_section_and_a_state_without_it_loads() {
     let mut header = b"PBRS".to_vec();
     header.extend(SECTION_VERSION.to_le_bytes());
     header.extend([major, minor, patch]);
-    header.extend(9u32.to_le_bytes());
+    header.extend(10u32.to_le_bytes());
     assert_eq!(section[..13], header);
     // Version 1 with no copy in progress: 8 bytes of stall, then the mode.
     assert_eq!(section[13..21], [0; 8]);
-    assert_eq!(section.len(), 22);
+    // Version 2 with no TIMA reload due.
+    assert_eq!(section[22], 0xff);
+    assert_eq!(section.len(), 23);
 
     // A state without the section, as PyBoy and pyboy-rs 0.1.9 save it,
     // loads with the section fields idle and saves the same body.
@@ -194,11 +181,20 @@ fn a_bad_or_newer_section_is_refused_without_mutation() {
     let mut longer = before.clone();
     longer.push(0);
     refused(&mut machine, &longer, "section length");
-    let overlong = edit(9, &10u32.to_le_bytes());
+    let overlong = edit(9, &11u32.to_le_bytes());
     refused(&mut machine, &overlong, "section length");
     let unversioned = edit(4, &0u16.to_le_bytes());
     refused(&mut machine, &unversioned, "section version");
     refused(&mut machine, &edit(20, &[4]), "VRAM transfer");
+    refused(&mut machine, &edit(22, &[8]), "timer state");
+    // A version 1 section is one byte shorter, so with the version 2 byte
+    // it is refused, and without it loads with no reload due.
+    let mut first = edit(4, &1u16.to_le_bytes());
+    refused(&mut machine, &first, "section length");
+    first.pop();
+    first[at + 9..at + 13].copy_from_slice(&9u32.to_le_bytes());
+    machine.load_state(&first).unwrap();
+    assert_eq!(machine.save_state().unwrap(), before);
 
     // A newer version is refused with the release its header names.
     let mut newer = edit(4, &(SECTION_VERSION + 1).to_le_bytes());

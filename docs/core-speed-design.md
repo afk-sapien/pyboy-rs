@@ -891,3 +891,28 @@ did not change with B1, B2 or item 2. B5 adds at most one 4 kB page in Red.
 All 18 cells give the same state and frame hashes before and after each
 change in the default build, after B1, B2, item 2 and B5 in the PGO build,
 and end to end in the PGO build.
+
+## Accuracy fixes
+
+Each accuracy fix merged since 0.1.9, with the test ROMs it turns from fail
+to pass and its speed. Tests are the totals from `tools/conformance.py`
+over every suite, before and after the fix. Speed is harness frames per
+second on the PGO build as released, over 9 rounds of 43,200 frames,
+against 0.1.9 and against the main it merged into. Each speed column gives
+the range over the 18 cells of the best round, then of the median round.
+Each round ran both builds and the first again, and the A/A column is the
+largest change between those two runs of one build, best then median. A
+change smaller than that is noise.
+
+| Fix | PR | DMG tests | CGB tests | Against 0.1.9 | Against its parent | A/A spread |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +3.4% to +9.6%, median +2.8% to +10.0% | +0.2% to +3.7%, median -0.2% to +3.8% | 2.3%, median 1.4% |
+
+Cells past their A/A against the parent, from the `examples/benchmark.rs`
+rounds that run beside the harness:
+
+- #53, Red audio, about 1% slower than its parent in three runs, best then
+  median: -1.1% and -0.3% at d4f3759, -0.9% and -1.4% in a 15-round
+  re-check, -1.4% and -0.9% at 5d5fd46 (A/A 0.4% and 0.2%). The cause is
+  unknown. The cell is measured again after the last fix of this group,
+  and the loss is bisected only if it is still past its A/A then.
