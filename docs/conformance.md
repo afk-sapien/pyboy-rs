@@ -131,10 +131,12 @@ CGB.
 | Range tests | All bits set, Valid bits, High minutes, High hours. Invalid value tick and Invalid rollovers show N/A, where hardware shows PASS. |
 | Sub-second writes | All 8 checks |
 
-The tool locks the clock to emulated frames, so the MBC3 clock moves once
-per completed frame (16.7 ms, see [rtc.md](rtc.md#locking-the-clock)). The
-measured tick and the sub-second timings are off by fractions of a frame.
-Results with the clock following the host may differ.
+The tool locks the clock to emulated frames and sets its base to the lock
+time, so the MBC3 clock reads zero at power-on whatever the date of the run,
+and moves once per completed frame (16.7 ms, see
+[rtc.md](rtc.md#locking-the-clock)). The measured tick and the sub-second
+timings are off by fractions of a frame. Results with the clock following the
+host may differ.
 
 The lock fixes the reading but not the clock base, which comes from the host
 clock when the machine starts. The sub-second phase therefore changes from run

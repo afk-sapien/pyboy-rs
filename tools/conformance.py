@@ -485,6 +485,9 @@ def run_rtc(task):
     subtest's run time."""
     machine = new_machine(task["rom"], task["model"])
     machine.lock_clock(RTC_CLOCK, True)
+    # A new clock takes its base from the host clock, so without this the
+    # start reading would depend on when the tool runs.
+    machine.rtc_set_timezero(RTC_CLOCK)
     task["boot"] = boot(machine)
     count = RTC_MENU_FRAMES
     run(machine, count)
