@@ -1,0 +1,455 @@
+pyboy-rs conformance scoreboard (report only)
+date        2026-11-19 23:30:30 PST
+label       v0.1.9 release wheel
+pyboy-rs    0.1.9, native module sha256 1d5f1e5c6666352e
+python      3.12.12 x86_64 Linux
+run         8 s wall, 1 jobs
+frames      counted from the boot ROM hand-over to the cartridge
+sources
+  mooneye    18aa29462dfe1fcd32a2cb3621733abdc72410074918b9245aa99a6920f7d3f2  https://gekkio.fi/files/mooneye-test-suite/mts-20260714-0944-31510e1/mts-20260714-0944-31510e1.zip
+  c-sp       b9a9d7a1075aa35a3d07c07c34974048672d8520dca9e07a50178f5860c3832c  https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip
+  dmg-acid2  464e14b7d42e7feea0b7ede42be7071dc88913f75b9ffa444299424b63d1dff1  https://github.com/mattcurrie/dmg-acid2/releases/download/v1.0/dmg-acid2.gb
+  cgb-acid2  197fb0bcec544f0400527fc707e0a94f55435974986e6986b424ace5de81720e  https://github.com/mattcurrie/cgb-acid2/releases/download/v1.1/cgb-acid2.gbc
+  rtc3test   a271013fb37ea1d927b854798401320b220d57abb3ca77f3d318ceb8a9def30d  https://github.com/aaaaaa123456789/rtc3test/releases/download/v004/rtc3test.gb
+
+suite          model verdict  frames  test  detail
+mooneye        dmg   fail         14  acceptance/add_sp_e_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/add_sp_e_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/bits/mem_oam  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/bits/mem_oam  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         11  acceptance/bits/reg_f  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/bits/reg_f  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/bits/unused_hwio-GS  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/bits/unused_hwio-GS  hint -GS names other models
+mooneye        dmg   n/a           0  acceptance/boot_div-S  hint -S names other models
+mooneye        cgb   n/a           0  acceptance/boot_div-S  hint -S names other models
+mooneye        dmg   n/a           0  acceptance/boot_div-dmg0  hint -dmg0 names other models
+mooneye        cgb   n/a           0  acceptance/boot_div-dmg0  hint -dmg0 names other models
+mooneye        dmg   fail         11  acceptance/boot_div-dmgABCmgb  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/boot_div-dmgABCmgb  hint -dmgABCmgb names other models
+mooneye        dmg   n/a           0  acceptance/boot_div2-S  hint -S names other models
+mooneye        cgb   n/a           0  acceptance/boot_div2-S  hint -S names other models
+mooneye        dmg   n/a           0  acceptance/boot_hwio-S  hint -S names other models
+mooneye        cgb   n/a           0  acceptance/boot_hwio-S  hint -S names other models
+mooneye        dmg   n/a           0  acceptance/boot_hwio-dmg0  hint -dmg0 names other models
+mooneye        cgb   n/a           0  acceptance/boot_hwio-dmg0  hint -dmg0 names other models
+mooneye        dmg   fail         11  acceptance/boot_hwio-dmgABCmgb  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/boot_hwio-dmgABCmgb  hint -dmgABCmgb names other models
+mooneye        dmg   n/a           0  acceptance/boot_regs-dmg0  hint -dmg0 names other models
+mooneye        cgb   n/a           0  acceptance/boot_regs-dmg0  hint -dmg0 names other models
+mooneye        dmg   fail         11  acceptance/boot_regs-dmgABC  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/boot_regs-dmgABC  hint -dmgABC names other models
+mooneye        dmg   n/a           0  acceptance/boot_regs-mgb  hint -mgb names other models
+mooneye        cgb   n/a           0  acceptance/boot_regs-mgb  hint -mgb names other models
+mooneye        dmg   n/a           0  acceptance/boot_regs-sgb  hint -sgb names other models
+mooneye        cgb   n/a           0  acceptance/boot_regs-sgb  hint -sgb names other models
+mooneye        dmg   n/a           0  acceptance/boot_regs-sgb2  hint -sgb2 names other models
+mooneye        cgb   n/a           0  acceptance/boot_regs-sgb2  hint -sgb2 names other models
+mooneye        dmg   fail         13  acceptance/call_cc_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/call_cc_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         15  acceptance/call_cc_timing2  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         15  acceptance/call_cc_timing2  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/call_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/call_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         15  acceptance/call_timing2  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         15  acceptance/call_timing2  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         16  acceptance/di_timing-GS  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   n/a           0  acceptance/di_timing-GS  hint -GS names other models
+mooneye        dmg   pass         11  acceptance/div_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/div_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/ei_sequence  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/ei_sequence  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/ei_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/ei_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/halt_ime0_ei  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/halt_ime0_ei  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         15  acceptance/halt_ime0_nointr_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         15  acceptance/halt_ime0_nointr_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         11  acceptance/halt_ime1_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/halt_ime1_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         19  acceptance/halt_ime1_timing2-GS  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   n/a           0  acceptance/halt_ime1_timing2-GS  hint -GS names other models
+mooneye        dmg   fail         11  acceptance/if_ie_registers  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/if_ie_registers  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         23  acceptance/instr/daa  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         23  acceptance/instr/daa  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/interrupts/ie_push  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/interrupts/ie_push  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/intr_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/intr_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         13  acceptance/jp_cc_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/jp_cc_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/jp_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/jp_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         14  acceptance/ld_hl_sp_e_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/ld_hl_sp_e_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/oam_dma/basic  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/oam_dma/basic  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/oam_dma/reg_read  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/oam_dma/reg_read  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         37  acceptance/oam_dma/sources-GS  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/oam_dma/sources-GS  hint -GS names other models
+mooneye        dmg   fail         14  acceptance/oam_dma_restart  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/oam_dma_restart  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         14  acceptance/oam_dma_start  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/oam_dma_start  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         14  acceptance/oam_dma_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/oam_dma_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/pop_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/pop_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         14  acceptance/ppu/hblank_ly_scx_timing-GS  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/ppu/hblank_ly_scx_timing-GS  hint -GS names other models
+mooneye        dmg   pass         14  acceptance/ppu/intr_1_2_timing-GS  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   n/a           0  acceptance/ppu/intr_1_2_timing-GS  hint -GS names other models
+mooneye        dmg   pass         13  acceptance/ppu/intr_2_0_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  acceptance/ppu/intr_2_0_timing  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         13  acceptance/ppu/intr_2_mode0_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/ppu/intr_2_mode0_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         23  acceptance/ppu/intr_2_mode0_timing_sprites  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         23  acceptance/ppu/intr_2_mode0_timing_sprites  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/ppu/intr_2_mode3_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/ppu/intr_2_mode3_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/ppu/intr_2_oam_ok_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/ppu/intr_2_oam_ok_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         22  acceptance/ppu/lcdon_timing-GS  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/ppu/lcdon_timing-GS  hint -GS names other models
+mooneye        dmg   fail         54  acceptance/ppu/lcdon_write_timing-GS  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/ppu/lcdon_write_timing-GS  hint -GS names other models
+mooneye        dmg   fail         11  acceptance/ppu/stat_irq_blocking  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/ppu/stat_irq_blocking  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/ppu/stat_lyc_onoff  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/ppu/stat_lyc_onoff  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         19  acceptance/ppu/vblank_stat_intr-GS  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/ppu/vblank_stat_intr-GS  hint -GS names other models
+mooneye        dmg   fail         14  acceptance/push_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/push_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/rapid_di_ei  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/rapid_di_ei  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/ret_cc_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/ret_cc_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/ret_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/ret_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/reti_intr_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/reti_intr_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         13  acceptance/reti_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         13  acceptance/reti_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         14  acceptance/rst_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         14  acceptance/rst_timing  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/serial/boot_sclk_align-dmgABCmgb  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   n/a           0  acceptance/serial/boot_sclk_align-dmgABCmgb  hint -dmgABCmgb names other models
+mooneye        dmg   pass         52  acceptance/timer/div_write  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         52  acceptance/timer/div_write  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/timer/rapid_toggle  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/rapid_toggle  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/timer/tim00  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/timer/tim00  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/timer/tim00_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tim00_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/timer/tim01  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/timer/tim01  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/timer/tim01_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tim01_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/timer/tim10  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/timer/tim10  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/timer/tim10_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tim10_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         11  acceptance/timer/tim11  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  acceptance/timer/tim11  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         11  acceptance/timer/tim11_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tim11_div_trigger  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/timer/tima_reload  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tima_reload  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/timer/tima_write_reloading  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tima_write_reloading  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   fail         11  acceptance/timer/tma_write_reloading  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         11  acceptance/timer/tma_write_reloading  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass        179  emulator-only/mbc1/bits_bank1  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        179  emulator-only/mbc1/bits_bank1  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass        176  emulator-only/mbc1/bits_bank2  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        176  emulator-only/mbc1/bits_bank2  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass        179  emulator-only/mbc1/bits_mode  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        179  emulator-only/mbc1/bits_mode  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass        349  emulator-only/mbc1/bits_ramg  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        349  emulator-only/mbc1/bits_ramg  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   fail         12  emulator-only/mbc1/multicart_rom_8Mb  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        cgb   fail         12  emulator-only/mbc1/multicart_rom_8Mb  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   pass         56  emulator-only/mbc1/ram_256kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         56  emulator-only/mbc1/ram_256kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         56  emulator-only/mbc1/ram_64kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         56  emulator-only/mbc1/ram_64kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         14  emulator-only/mbc1/rom_16Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         14  emulator-only/mbc1/rom_16Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         14  emulator-only/mbc1/rom_1Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         14  emulator-only/mbc1/rom_1Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         14  emulator-only/mbc1/rom_2Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         14  emulator-only/mbc1/rom_2Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         14  emulator-only/mbc1/rom_4Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         14  emulator-only/mbc1/rom_4Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         14  emulator-only/mbc1/rom_512kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         14  emulator-only/mbc1/rom_512kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         14  emulator-only/mbc1/rom_8Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         14  emulator-only/mbc1/rom_8Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass        356  emulator-only/mbc2/bits_ramg  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        356  emulator-only/mbc2/bits_ramg  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass        187  emulator-only/mbc2/bits_romb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        187  emulator-only/mbc2/bits_romb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass        175  emulator-only/mbc2/bits_unused  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass        175  emulator-only/mbc2/bits_unused  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         29  emulator-only/mbc2/ram  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         29  emulator-only/mbc2/ram  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         11  emulator-only/mbc2/rom_1Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  emulator-only/mbc2/rom_1Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         11  emulator-only/mbc2/rom_2Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  emulator-only/mbc2/rom_2Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         11  emulator-only/mbc2/rom_512kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         11  emulator-only/mbc2/rom_512kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_16Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_16Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_1Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_1Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_2Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_2Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_32Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_32Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_4Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_4Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_512kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_512kb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_64Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_64Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   pass         13  emulator-only/mbc5/rom_8Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        cgb   pass         13  emulator-only/mbc5/rom_8Mb  registers 03 05 08 0d 15 22, serial 03 05 08 0d 15 22
+mooneye        dmg   not run       0  madness/mgb_oam_dma_halt_sprites  not part of Mooneye's automatic suite
+mooneye        cgb   not run       0  madness/mgb_oam_dma_halt_sprites  not part of Mooneye's automatic suite
+mooneye        dmg   not run       0  manual-only/sprite_priority  judged by a person, not by the ROM
+mooneye        cgb   not run       0  manual-only/sprite_priority  judged by a person, not by the ROM
+mooneye        dmg   n/a           0  misc/bits/unused_hwio-C  hint -C names other models
+mooneye        cgb   fail         11  misc/bits/unused_hwio-C  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   n/a           0  misc/boot_div-A  hint -A names other models
+mooneye        cgb   n/a           0  misc/boot_div-A  hint -A names other models
+mooneye        dmg   n/a           0  misc/boot_div-cgb0  hint -cgb0 names other models
+mooneye        cgb   n/a           0  misc/boot_div-cgb0  hint -cgb0 names other models
+mooneye        dmg   n/a           0  misc/boot_div-cgbABCDE  hint -cgbABCDE names other models
+mooneye        cgb   fail         11  misc/boot_div-cgbABCDE  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   n/a           0  misc/boot_hwio-C  hint -C names other models
+mooneye        cgb   fail         11  misc/boot_hwio-C  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   n/a           0  misc/boot_regs-A  hint -A names other models
+mooneye        cgb   n/a           0  misc/boot_regs-A  hint -A names other models
+mooneye        dmg   n/a           0  misc/boot_regs-cgb  hint -cgb names other models
+mooneye        cgb   fail         11  misc/boot_regs-cgb  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   n/a           0  misc/ppu/vblank_stat_intr-C  hint -C names other models
+mooneye        cgb   fail         19  misc/ppu/vblank_stat_intr-C  registers 42 42 42 42 42 42, serial 42 42 42 42 42 42
+mooneye        dmg   not run       0  utils/bootrom_dumper  utility ROMs, not tests
+mooneye        cgb   not run       0  utils/bootrom_dumper  utility ROMs, not tests
+mooneye        dmg   not run       0  utils/dump_boot_hwio  utility ROMs, not tests
+mooneye        cgb   not run       0  utils/dump_boot_hwio  utility ROMs, not tests
+samesuite      cgb   fail          4  apu/channel_1/channel_1_align  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_1/channel_1_align_cpu  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_1/channel_1_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_1/channel_1_duty  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_1/channel_1_duty_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   n/a           0  apu/channel_1/channel_1_extra_length_clocking-cgb0B  hint -cgb0B names other revisions
+samesuite      cgb   fail          5  apu/channel_1/channel_1_freq_change  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   n/a           0  apu/channel_1/channel_1_freq_change_timing-A  hint -A names other revisions
+samesuite      cgb   n/a           0  apu/channel_1/channel_1_freq_change_timing-cgb0BC  hint -cgb0BC names other revisions
+samesuite      cgb   fail          4  apu/channel_1/channel_1_freq_change_timing-cgbDE  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         20  apu/channel_1/channel_1_nrx2_glitch  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail        156  apu/channel_1/channel_1_nrx2_speed_change  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_1/channel_1_restart  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_1/channel_1_restart_nrx2_glitch  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         18  apu/channel_1/channel_1_stop_div  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_1/channel_1_stop_restart  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         59  apu/channel_1/channel_1_sweep  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         55  apu/channel_1/channel_1_sweep_restart  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         50  apu/channel_1/channel_1_sweep_restart_2  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_1/channel_1_volume  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         97  apu/channel_1/channel_1_volume_div  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_2/channel_2_align  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_2/channel_2_align_cpu  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_2/channel_2_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_2/channel_2_duty  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_2/channel_2_duty_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   n/a           0  apu/channel_2/channel_2_extra_length_clocking-cgb0B  hint -cgb0B names other revisions
+samesuite      cgb   fail          5  apu/channel_2/channel_2_freq_change  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         20  apu/channel_2/channel_2_nrx2_glitch  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail        156  apu/channel_2/channel_2_nrx2_speed_change  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_2/channel_2_restart  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_2/channel_2_restart_nrx2_glitch  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         18  apu/channel_2/channel_2_stop_div  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_2/channel_2_stop_restart  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          6  apu/channel_2/channel_2_volume  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         49  apu/channel_2/channel_2_volume_div  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_3/channel_3_and_glitch  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   n/a           0  apu/channel_3/channel_3_extra_length_clocking-cgb0  hint -cgb0 names other revisions
+samesuite      cgb   n/a           0  apu/channel_3/channel_3_extra_length_clocking-cgbB  hint -cgbB names other revisions
+samesuite      cgb   fail          4  apu/channel_3/channel_3_first_sample  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_freq_change_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_restart_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_restart_during_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_restart_stop_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_shift_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_shift_skip_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   pass          4  apu/channel_3/channel_3_stop_delay  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   fail         19  apu/channel_3/channel_3_stop_div  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   pass          4  apu/channel_3/channel_3_wave_ram_dac_on_rw  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   fail          4  apu/channel_3/channel_3_wave_ram_locked_write  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_3/channel_3_wave_ram_sync  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_4/channel_4_align  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          4  apu/channel_4/channel_4_delay  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          6  apu/channel_4/channel_4_equivalent_frequencies  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   n/a           0  apu/channel_4/channel_4_extra_length_clocking-cgb0B  hint -cgb0B names other revisions
+samesuite      cgb   fail          5  apu/channel_4/channel_4_freq_change  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  apu/channel_4/channel_4_frequency_alignment  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   pass          6  apu/channel_4/channel_4_lfsr  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   pass          6  apu/channel_4/channel_4_lfsr15  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   pass          7  apu/channel_4/channel_4_lfsr_15_7  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   fail          7  apu/channel_4/channel_4_lfsr_7_15  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          7  apu/channel_4/channel_4_lfsr_restart  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          6  apu/channel_4/channel_4_lfsr_restart_fast  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         97  apu/channel_4/channel_4_volume_div  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         64  apu/div_trigger_volume_10  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         61  apu/div_write_trigger  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         62  apu/div_write_trigger_10  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         36  apu/div_write_trigger_volume  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail         36  apu/div_write_trigger_volume_10  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  dma/gbc_dma_cont  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  dma/gdma_addr_mask  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          5  dma/hdma_lcd_off  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   fail          8  dma/hdma_mode0  registers 42 42 42 42 42 42, serial 42
+samesuite      cgb   pass          8  interrupt/ei_delay_halt  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   pass          7  ppu/blocking_bgpi_increase  registers 03 05 08 0d 15 22, serial 03
+samesuite      cgb   n/a           0  sgb/command_mlt_req  Super Game Boy test
+samesuite      cgb   n/a           0  sgb/command_mlt_req_1_incrementing  Super Game Boy test
+blargg         dmg   n/a           0  cgb_sound/01-registers  CGB-only cartridge
+blargg         cgb   pass         52  cgb_sound/01-registers  $A000 = 00: 01-registers Passed
+blargg         dmg   n/a           0  cgb_sound/02-len ctr  CGB-only cartridge
+blargg         cgb   pass        567  cgb_sound/02-len ctr  $A000 = 00: 02-len ctr 0 1 2 3 Passed
+blargg         dmg   n/a           0  cgb_sound/03-trigger  CGB-only cartridge
+blargg         cgb   fail         35  cgb_sound/03-trigger  $A000 = 03: 03-trigger 0 Enabling in first half of length period should clock length Failed #3
+blargg         dmg   n/a           0  cgb_sound/04-sweep  CGB-only cartridge
+blargg         cgb   fail         51  cgb_sound/04-sweep  $A000 = 08: 04-sweep If shift=0 and period>0, trigger enables Failed #8
+blargg         dmg   n/a           0  cgb_sound/05-sweep details  CGB-only cartridge
+blargg         cgb   fail         35  cgb_sound/05-sweep details  $A000 = 02: 05-sweep details Timer treats period 0 as 8 Failed #2
+blargg         dmg   n/a           0  cgb_sound/06-overflow on trigger  CGB-only cartridge
+blargg         cgb   pass         57  cgb_sound/06-overflow on trigger  $A000 = 00: 06-overflow on trigger 0555 0666 071C 0787 07C1 07E0 07F0 0556 0667 071D 0788 07C2 07E1 07F1 Passed
+blargg         dmg   n/a           0  cgb_sound/07-len sweep period sync  CGB-only cartridge
+blargg         cgb   fail         36  cgb_sound/07-len sweep period sync  $A000 = 05: 07-len sweep period sync Powering up APU MODs next frame time with 8192 Failed #5
+blargg         dmg   n/a           0  cgb_sound/08-len ctr during power  CGB-only cartridge
+blargg         cgb   pass        149  cgb_sound/08-len ctr during power  $A000 = 00: 08-len ctr during power 40 00 40 40 Passed
+blargg         dmg   n/a           0  cgb_sound/09-wave read while on  CGB-only cartridge
+blargg         cgb   fail         39  cgb_sound/09-wave read while on  $A000 = 01: 00 22 55 00 BB 99 55 11 77 AA BB CC FF FF FF BB 11 33 55 99 DD 11 FF 44 99 11 55 AA 33 66 00 AA 44 CC 88 64660509 Failed
+blargg         dmg   n/a           0  cgb_sound/10-wave trigger while on  CGB-only cartridge
+blargg         cgb   pass        236  cgb_sound/10-wave trigger while on  $A000 = 00: AA BB CC DD EE FF 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF Passed
+blargg         dmg   n/a           0  cgb_sound/11-regs after power  CGB-only cartridge
+blargg         cgb   pass         56  cgb_sound/11-regs after power  $A000 = 00: 11-regs after power Passed
+blargg         dmg   n/a           0  cgb_sound/12-wave  CGB-only cartridge
+blargg         cgb   fail         31  cgb_sound/12-wave  $A000 = 02: 12-wave Timer period or phase resetting is wrong Failed #2
+blargg         dmg   pass        141  cpu_instrs/01-special  serial: 01-special Passed
+blargg         cgb   pass        141  cpu_instrs/01-special  serial: 01-special Passed
+blargg         dmg   pass         27  cpu_instrs/02-interrupts  serial: 02-interrupts Passed
+blargg         cgb   pass         27  cpu_instrs/02-interrupts  serial: 02-interrupts Passed
+blargg         dmg   pass        142  cpu_instrs/03-op sp,hl  serial: 03-op sp,hl Passed
+blargg         cgb   pass         84  cpu_instrs/03-op sp,hl  serial: 03-op sp,hl Passed
+blargg         dmg   pass        165  cpu_instrs/04-op r,imm  serial: 04-op r,imm Passed
+blargg         cgb   pass         95  cpu_instrs/04-op r,imm  serial: 04-op r,imm Passed
+blargg         dmg   pass        226  cpu_instrs/05-op rp  serial: 05-op rp Passed
+blargg         cgb   pass        125  cpu_instrs/05-op rp  serial: 05-op rp Passed
+blargg         dmg   pass         36  cpu_instrs/06-ld r,r  serial: 06-ld r,r Passed
+blargg         cgb   pass         30  cpu_instrs/06-ld r,r  serial: 06-ld r,r Passed
+blargg         dmg   pass         44  cpu_instrs/07-jr,jp,call,ret,rst  serial: 07-jr,jp,call,ret,rst Passed
+blargg         cgb   pass         36  cpu_instrs/07-jr,jp,call,ret,rst  serial: 07-jr,jp,call,ret,rst Passed
+blargg         dmg   pass         34  cpu_instrs/08-misc instrs  serial: 08-misc instrs Passed
+blargg         cgb   pass         30  cpu_instrs/08-misc instrs  serial: 08-misc instrs Passed
+blargg         dmg   pass        547  cpu_instrs/09-op r,r  serial: 09-op r,r Passed
+blargg         cgb   pass        286  cpu_instrs/09-op r,r  serial: 09-op r,r Passed
+blargg         dmg   pass        830  cpu_instrs/10-bit ops  serial: 10-bit ops Passed
+blargg         cgb   pass        428  cpu_instrs/10-bit ops  serial: 10-bit ops Passed
+blargg         dmg   pass       1052  cpu_instrs/11-op a,(hl)  serial: 11-op a,(hl) Passed
+blargg         cgb   pass        539  cpu_instrs/11-op a,(hl)  serial: 11-op a,(hl) Passed
+blargg         dmg   pass         51  dmg_sound/01-registers  $A000 = 00: 01-registers Passed
+blargg         cgb   n/a           0  dmg_sound/01-registers  DMG test, c-sp lists no CGB result
+blargg         dmg   pass        566  dmg_sound/02-len ctr  $A000 = 00: 02-len ctr 0 1 2 3 Passed
+blargg         cgb   n/a           0  dmg_sound/02-len ctr  DMG test, c-sp lists no CGB result
+blargg         dmg   fail         34  dmg_sound/03-trigger  $A000 = 03: 03-trigger 0 Enabling in first half of length period should clock length Failed #3
+blargg         cgb   n/a           0  dmg_sound/03-trigger  DMG test, c-sp lists no CGB result
+blargg         dmg   fail         50  dmg_sound/04-sweep  $A000 = 08: 04-sweep If shift=0 and period>0, trigger enables Failed #8
+blargg         cgb   n/a           0  dmg_sound/04-sweep  DMG test, c-sp lists no CGB result
+blargg         dmg   fail         35  dmg_sound/05-sweep details  $A000 = 02: 05-sweep details Timer treats period 0 as 8 Failed #2
+blargg         cgb   n/a           0  dmg_sound/05-sweep details  DMG test, c-sp lists no CGB result
+blargg         dmg   pass         56  dmg_sound/06-overflow on trigger  $A000 = 00: 06-overflow on trigger 0555 0666 071C 0787 07C1 07E0 07F0 0556 0667 071D 0788 07C2 07E1 07F1 Passed
+blargg         cgb   n/a           0  dmg_sound/06-overflow on trigger  DMG test, c-sp lists no CGB result
+blargg         dmg   fail         36  dmg_sound/07-len sweep period sync  $A000 = 05: 07-len sweep period sync Powering up APU MODs next frame time with 8192 Failed #5
+blargg         cgb   n/a           0  dmg_sound/07-len sweep period sync  DMG test, c-sp lists no CGB result
+blargg         dmg   fail        148  dmg_sound/08-len ctr during power  $A000 = 01: 08-len ctr during power 40 00 40 40 3CF589B4 Failed
+blargg         cgb   n/a           0  dmg_sound/08-len ctr during power  DMG test, c-sp lists no CGB result
+blargg         dmg   fail         38  dmg_sound/09-wave read while on  $A000 = 01: FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 3689339D Failed
+blargg         cgb   n/a           0  dmg_sound/09-wave read while on  DMG test, c-sp lists no CGB result
+blargg         dmg   fail        235  dmg_sound/10-wave trigger while on  $A000 = 01: DD EE FF 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 8130733A Failed
+blargg         cgb   n/a           0  dmg_sound/10-wave trigger while on  DMG test, c-sp lists no CGB result
+blargg         dmg   pass         44  dmg_sound/11-regs after power  $A000 = 00: 11-regs after power Passed
+blargg         cgb   n/a           0  dmg_sound/11-regs after power  DMG test, c-sp lists no CGB result
+blargg         dmg   fail        235  dmg_sound/12-wave write while on  $A000 = 01: DD EE FF 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 00 11 22 33 44 55 66 77 88 99 AA BB CC DD EE FF 8130733A Failed
+blargg         cgb   n/a           0  dmg_sound/12-wave write while on  DMG test, c-sp lists no CGB result
+blargg         dmg   fail        107  halt_bug  $A000 = 01: 1 0C04 01 01 01 0C04 11 00 01 0C04 11 10 11 0C04 11 11 11 0C04 E1 00 01 0C04 E1 E0 E1 0C04 E1 E1 E1 0C04 3DB103C3 Failed
+blargg         cgb   fail        107  halt_bug  $A000 = 01: 1 0C04 01 01 01 0C04 11 00 01 0C04 11 10 11 0C04 11 11 11 0C04 E1 00 01 0C04 E1 E0 E1 0C04 E1 E1 E1 0C04 3DB103C3 Failed
+blargg         dmg   pass         40  instr_timing  serial: instr_timing Passed
+blargg         cgb   pass         40  instr_timing  serial: instr_timing Passed
+blargg         dmg   n/a           0  interrupt_time  CGB-only test, a real DMG fails it
+blargg         cgb   pass         32  interrupt_time  $A000 = 00: interrupt time 00 00 00 00 08 0D 01 00 00 01 08 0D Passed
+blargg         dmg   pass         29  mem_timing/01-read_timing  serial: 01-read_timing Passed
+blargg         cgb   pass         29  mem_timing/01-read_timing  serial: 01-read_timing Passed
+blargg         dmg   pass         28  mem_timing/02-write_timing  serial: 02-write_timing Passed
+blargg         cgb   pass         28  mem_timing/02-write_timing  serial: 02-write_timing Passed
+blargg         dmg   pass         31  mem_timing/03-modify_timing  serial: 03-modify_timing Passed
+blargg         cgb   pass         31  mem_timing/03-modify_timing  serial: 03-modify_timing Passed
+blargg         dmg   pass         30  mem_timing-2/01-read_timing  $A000 = 00: 01-read_timing Passed
+blargg         cgb   pass         30  mem_timing-2/01-read_timing  $A000 = 00: 01-read_timing Passed
+blargg         dmg   pass         29  mem_timing-2/02-write_timing  $A000 = 00: 02-write_timing Passed
+blargg         cgb   pass         29  mem_timing-2/02-write_timing  $A000 = 00: 02-write_timing Passed
+blargg         dmg   pass         32  mem_timing-2/03-modify_timing  $A000 = 00: 03-modify_timing Passed
+blargg         cgb   pass         32  mem_timing-2/03-modify_timing  $A000 = 00: 03-modify_timing Passed
+blargg         dmg   fail         37  oam_bug/1-lcd_sync  $A000 = 03: 1-lcd_sync Turning LCD on starts too early in scanline Failed #3
+blargg         cgb   n/a           0  oam_bug/1-lcd_sync  DMG-only bug, a real CGB fails it
+blargg         dmg   fail         41  oam_bug/2-causes  $A000 = 02: 2-causes LD DE,$FE00 : INC DE Failed #2
+blargg         cgb   n/a           0  oam_bug/2-causes  DMG-only bug, a real CGB fails it
+blargg         dmg   pass        104  oam_bug/3-non_causes  $A000 = 00: 3-non_causes Passed
+blargg         cgb   n/a           0  oam_bug/3-non_causes  DMG-only bug, a real CGB fails it
+blargg         dmg   fail         50  oam_bug/4-scanline_timing  $A000 = 03: 4-scanline_timing INC DE at first corruption Failed #3
+blargg         cgb   n/a           0  oam_bug/4-scanline_timing  DMG-only bug, a real CGB fails it
+blargg         dmg   fail         43  oam_bug/5-timing_bug  $A000 = 02: 5-timing_bug Should corrupt at beginning of first scanline Failed #2
+blargg         cgb   n/a           0  oam_bug/5-timing_bug  DMG-only bug, a real CGB fails it
+blargg         dmg   pass         91  oam_bug/6-timing_no_bug  $A000 = 00: -- -- -- -- 80 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 90 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- Passed
+blargg         cgb   n/a           0  oam_bug/6-timing_no_bug  DMG-only bug, a real CGB fails it
+blargg         dmg   fail        494  oam_bug/7-timing_effect  $A000 = 01: 7-timing_effect 00000000 Failed
+blargg         cgb   n/a           0  oam_bug/7-timing_effect  DMG-only bug, a real CGB fails it
+blargg         dmg   fail         53  oam_bug/8-instr_effect  $A000 = 02: 8-instr_effect 00000000 INC/DEC rp pattern is wrong Failed #2
+blargg         cgb   n/a           0  oam_bug/8-instr_effect  DMG-only bug, a real CGB fails it
+blargg-screen  dmg   n/a           0  cgb_sound  c-sp has no picture for this model
+blargg-screen  cgb   fail       2210  cgb_sound  3094 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   pass       3286  cpu_instrs  0 of 23040 pixels differ (exact)
+blargg-screen  cgb   fail       1852  cpu_instrs  2190 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   fail       2151  dmg_sound  3165 of 23040 pixels differ (exact)
+blargg-screen  cgb   n/a           0  dmg_sound  c-sp has no picture for this model
+blargg-screen  dmg   fail        120  halt_bug  669 of 23040 pixels differ (exact)
+blargg-screen  cgb   fail        120  halt_bug  669 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   pass         60  instr_timing  0 of 23040 pixels differ (exact)
+blargg-screen  cgb   pass         60  instr_timing  0 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   pass        120  interrupt_time  0 of 23040 pixels differ (exact)
+blargg-screen  cgb   pass        120  interrupt_time  0 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   pass        180  mem_timing  0 of 23040 pixels differ (exact)
+blargg-screen  cgb   pass        180  mem_timing  0 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   pass        239  mem_timing-2  0 of 23040 pixels differ (exact)
+blargg-screen  cgb   pass        239  mem_timing-2  0 of 23040 pixels differ (cgb5)
+blargg-screen  dmg   fail       1255  oam_bug  2301 of 23040 pixels differ (exact)
+blargg-screen  cgb   fail       1255  oam_bug  140 of 23040 pixels differ (cgb5)
+acid2          dmg   pass        299  dmg-acid2  0 of 23040 pixels differ (exact)
+acid2          cgb   pass        299  dmg-acid2  0 of 23040 pixels differ (mapped)
+acid2          dmg   n/a           0  cgb-acid2  CGB-only cartridge
+acid2          cgb   pass        299  cgb-acid2  0 of 23040 pixels differ (cgb5)
+rtc3test       dmg   fail        845  basic-tests  228 of 23040 pixels differ (exact)
+rtc3test       cgb   fail        845  basic-tests  223 of 23040 pixels differ (cgb5)
+rtc3test       dmg   fail        554  range-tests  753 of 23040 pixels differ (exact)
+rtc3test       cgb   fail        554  range-tests  835 of 23040 pixels differ (cgb5)
+rtc3test       dmg   fail       1637  sub-second-writes  1598 of 23040 pixels differ (exact)
+rtc3test       cgb   fail       1637  sub-second-writes  1598 of 23040 pixels differ (cgb5)

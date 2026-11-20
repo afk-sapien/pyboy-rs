@@ -1,0 +1,220 @@
+row	model	pyboy-rs	SameBoy	GambatteSpeedrun	mGBA	PyBoy
+acid/dmg-acid2.gb	DMG	pass	PASS	PASS	PASS	PASS
+acid/cgb-acid2.gbc	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/01-special.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/02-interrupts.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/03-op_sp,hl.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/04-op_r,imm.gb	DMG	pass	PASS	PASS	FAIL	PASS
+blargg/cpu_instrs/05-op_rp.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/06-ld_r,r.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/07-jr,jp,call,ret,rst.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/08-misc_instrs.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/09-op_r,r.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/10-bit_ops.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/cpu_instrs/11-op_a,(hl).gb	DMG	pass	PASS	PASS	PASS	FAIL
+blargg/halt_bug.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/instr_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/interrupt_time.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/mem_timing/01-read_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/mem_timing/02-write_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/mem_timing/03-modify_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/mem_timing-2/01-read_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/mem_timing-2/02-write_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/mem_timing-2/03-modify_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/oam_bug/1-lcd_sync.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/oam_bug/2-causes.gb	DMG	fail	PASS	FAIL	FAIL	FAIL
+blargg/oam_bug/3-non_causes.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/oam_bug/4-scanline_timing.gb	DMG	fail	PASS	FAIL	FAIL	FAIL
+blargg/oam_bug/5-timing_bug.gb	DMG	fail	PASS	FAIL	FAIL	FAIL
+blargg/oam_bug/6-timing_no_bug.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/oam_bug/8-instr_effect.gb	DMG	fail	PASS	FAIL	FAIL	FAIL
+blargg/dmg_sound/01-registers.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/dmg_sound/02-len_ctr.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/dmg_sound/03-trigger.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/dmg_sound/04-sweep.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/dmg_sound/05-sweep_details.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/dmg_sound/06-overflow_on_trigger.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/dmg_sound/07-len_sweep_period_sync.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/dmg_sound/08-len_ctr_during_power.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/dmg_sound/09-wave_read_while_on.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/dmg_sound/10-wave_trigger_while_on.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+blargg/dmg_sound/11-regs_after_power.gb	DMG	pass	PASS	PASS	PASS	PASS
+blargg/dmg_sound/12-wave_write_while_on.gb	DMG	fail	PASS	PASS	PASS	FAIL
+blargg/cgb_sound/01-registers.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cgb_sound/02-len_ctr.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cgb_sound/03-trigger.gb	CGB	fail	PASS	PASS	PASS	FAIL
+blargg/cgb_sound/04-sweep.gb	CGB	fail	PASS	PASS	PASS	FAIL
+blargg/cgb_sound/05-sweep_details.gb	CGB	fail	PASS	PASS	PASS	FAIL
+blargg/cgb_sound/06-overflow_on_trigger.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cgb_sound/07-len_sweep_period_sync.gb	CGB	fail	PASS	PASS	PASS	FAIL
+blargg/cgb_sound/08-len_ctr_during_power.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cgb_sound/09-wave_read_while_on.gb	CGB	fail	PASS	PASS	PASS	FAIL
+blargg/cgb_sound/10-wave_trigger_while_on.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cgb_sound/11-regs_after_power.gb	CGB	pass	PASS	PASS	PASS	PASS
+blargg/cgb_sound/12-wave.gb	CGB	fail	PASS	PASS	PASS	FAIL
+ax6/rtc3test-1.gb	CGB	fail	PASS	FAIL	FAIL	FAIL
+ax6/rtc3test-2.gb	CGB	fail	PASS	FAIL	FAIL	FAIL
+ax6/rtc3test-3.gb	CGB	fail	PASS	FAIL	FAIL	FAIL
+mooneye/acceptance/add_sp_e_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/bits/mem_oam.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/bits/reg_f.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/bits/unused_hwio-GS.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/boot_div-dmgABCmgb.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/boot_hwio-dmgABCmgb.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/boot_regs-dmgABC.gb	DMG	fail	PASS	PASS	PASS	PASS
+mooneye/acceptance/call_cc_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/call_cc_timing2.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/call_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/call_timing2.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/div_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/di_timing-GS.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/ei_sequence.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ei_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/halt_ime0_ei.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/halt_ime0_nointr_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/halt_ime1_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/halt_ime1_timing2-GS.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/if_ie_registers.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/instr/daa.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/interrupts/ie_push.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/intr_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/jp_cc_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/jp_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ld_hl_sp_e_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/oam_dma/basic.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/oam_dma/reg_read.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/oam_dma/sources-GS.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/oam_dma_restart.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/oam_dma_start.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/oam_dma_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/pop_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ppu/hblank_ly_scx_timing-GS.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/ppu/intr_1_2_timing-GS.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/ppu/intr_2_0_timing.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/ppu/intr_2_mode0_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ppu/intr_2_mode0_timing_sprites.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/ppu/intr_2_mode3_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ppu/intr_2_oam_ok_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ppu/lcdon_timing-GS.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/ppu/lcdon_write_timing-GS.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/ppu/stat_irq_blocking.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ppu/stat_lyc_onoff.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ppu/vblank_stat_intr-GS.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/push_timing.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/rapid_di_ei.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/reti_intr_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/reti_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ret_cc_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/ret_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/rst_timing.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/serial/boot_sclk_align-dmgABCmgb.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/timer/div_write.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/timer/rapid_toggle.gb	DMG	fail	PASS	PASS	FAIL	FAIL
+mooneye/acceptance/timer/tim00.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/timer/tim00_div_trigger.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/timer/tim01.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/timer/tim01_div_trigger.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/timer/tim10.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/timer/tim10_div_trigger.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/timer/tim11.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/acceptance/timer/tim11_div_trigger.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/timer/tima_reload.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/timer/tima_write_reloading.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/acceptance/timer/tma_write_reloading.gb	DMG	fail	PASS	PASS	PASS	FAIL
+mooneye/emulator-only/mbc1/bits_bank1.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/bits_bank2.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/bits_mode.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/bits_ramg.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/multicart_rom_8Mb.gb	DMG	fail	PASS	FAIL	PASS	FAIL
+mooneye/emulator-only/mbc1/ram_256kb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc1/ram_64kb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/rom_16Mb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc1/rom_1Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/rom_2Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/rom_4Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/rom_512kb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc1/rom_8Mb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc2/bits_ramg.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc2/bits_romb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc2/bits_unused.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc2/ram.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc2/rom_1Mb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc2/rom_2Mb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc2/rom_512kb.gb	DMG	pass	PASS	FAIL	PASS	PASS
+mooneye/emulator-only/mbc5/rom_16Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_1Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_2Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_32Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_4Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_512kb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_64Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/emulator-only/mbc5/rom_8Mb.gb	DMG	pass	PASS	PASS	PASS	PASS
+mooneye/manual-only/sprite_priority.gb	DMG	not run	PASS	PASS	PASS	PASS
+mooneye/misc/boot_div-cgbABCDE.gb	CGB	fail	PASS	PASS	FAIL	FAIL
+mooneye/misc/boot_regs-cgb.gb	CGB	fail	PASS	PASS	PASS	PASS
+samesuite/apu/channel_1/channel_1_align.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_align_cpu.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_duty.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_duty_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_freq_change.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_nrx2_glitch.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_nrx2_speed_change.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_restart.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_restart_nrx2_glitch.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_stop_div.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_stop_restart.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_sweep.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_sweep_restart.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_sweep_restart_2.gb	CGB	fail	PASS	PASS	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_volume.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_1/channel_1_volume_div.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_align.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_align_cpu.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_duty.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_duty_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_freq_change.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_nrx2_glitch.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_nrx2_speed_change.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_restart.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_restart_nrx2_glitch.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_stop_div.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_stop_restart.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_volume.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_2/channel_2_volume_div.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_and_glitch.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_first_sample.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_freq_change_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_restart_delay.gb	CGB	fail	PASS	NO RESULT	PASS	FAIL
+samesuite/apu/channel_3/channel_3_restart_during_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_restart_stop_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_shift_delay.gb	CGB	fail	PASS	NO RESULT	PASS	FAIL
+samesuite/apu/channel_3/channel_3_shift_skip_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_stop_delay.gb	CGB	pass	PASS	NO RESULT	FAIL	PASS
+samesuite/apu/channel_3/channel_3_stop_div.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_3/channel_3_wave_ram_locked_write.gb	CGB	fail	PASS	PASS	PASS	FAIL
+samesuite/apu/channel_3/channel_3_wave_ram_sync.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_align.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_delay.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_equivalent_frequencies.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_frequency_alignment.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_freq_change.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_lfsr.gb	CGB	pass	PASS	NO RESULT	FAIL	PASS
+samesuite/apu/channel_4/channel_4_lfsr15.gb	CGB	pass	PASS	NO RESULT	FAIL	PASS
+samesuite/apu/channel_4/channel_4_lfsr_15_7.gb	CGB	pass	PASS	NO RESULT	FAIL	PASS
+samesuite/apu/channel_4/channel_4_lfsr_7_15.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_lfsr_restart.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_lfsr_restart_fast.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/channel_4/channel_4_volume_div.gb	CGB	fail	PASS	NO RESULT	PASS	FAIL
+samesuite/apu/div_trigger_volume_10.gb	CGB	fail	PASS	NO RESULT	PASS	FAIL
+samesuite/apu/div_write_trigger.gb	CGB	fail	PASS	PASS	FAIL	FAIL
+samesuite/apu/div_write_trigger_10.gb	CGB	fail	PASS	PASS	FAIL	FAIL
+samesuite/apu/div_write_trigger_volume.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/apu/div_write_trigger_volume_10.gb	CGB	fail	PASS	NO RESULT	FAIL	FAIL
+samesuite/dma/gbc_dma_cont.gb	CGB	fail	PASS	PASS	PASS	FAIL
+samesuite/dma/gdma_addr_mask.gb	CGB	fail	PASS	PASS	PASS	FAIL
+samesuite/dma/hdma_lcd_off.gb	CGB	fail	PASS	FAIL	FAIL	FAIL
+samesuite/dma/hdma_mode0.gb	CGB	fail	PASS	PASS	FAIL	FAIL
+samesuite/ppu/blocking_bgpi_increase.gb	CGB	pass	PASS	PASS	PASS	PASS

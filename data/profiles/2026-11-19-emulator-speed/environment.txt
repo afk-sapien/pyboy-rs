@@ -1,0 +1,53 @@
+date        2026-11-19 23:34:55 PST
+cpu         Intel(R) Core(TM) i7-10700K CPU @ 3.80GHz, 16 logical CPUs, trials pinned to CPU 6
+governor    powersave
+kernel      Linux 6.8.0-35-generic x86_64
+gcc         gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+cmake       cmake version 3.28.3
+venv-pyboy-rs   python 3.12.12 pyboy-rs 0.1.9
+venv-pyboy      python 3.12.12 pyboy 2.9.0 numpy 2.5.5
+sameboy         ea667ad79aa28409f034b1fd6da7304e1844750d
+mgba            26b7884bc25a5933960f3cdcd98bac1ae14d42e2
+gambatte-core   5a41a68c25402421fb1983ddadc9faf2418ddb0f
+sameboy_speed   sha256 65973749bb9e855c24bcee738851355020ba8d6cbf6d300c4abd3170cef63794
+mgba/mgba-perf  sha256 e86209780b0d82f5791b2d7743a67279e395e4fbd1106222c2dca63223e4f2cb
+gambatte_speed  sha256 30b98e7d0d949e0912a524824449017a0061b0c59b3649108ac4af70466fdc1c
+red             sha1 ea9bcae617fdf159b045185467ae58b2e4a48b9a
+crystal         sha1 f2f52230b536214ef7c9924f483392993e226cfb
+frames          36000 per trial, 9 trials per cell
+waits for       no process matching [t]imed_run.py|[p]ytest|[l]adder|scratchpad/[q]uiet-, load below 4.0, 120 s settle
+
+commands, run as: nice -n 10 taskset -c 6 COMMAND
+WORK is the build_rivals.sh folder, HERE is tools/emulator_speed
+  pyboy-rs         red     none    WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/red.gb 36000 0 sound
+  pyboy-rs         red     picture WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/red.gb 36000 1 sound
+  pyboy-rs         crystal none    WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/crystal.gbc 36000 0 sound
+  pyboy-rs         crystal picture WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/crystal.gbc 36000 1 sound
+  pyboy-rs-nosound red     none    WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/red.gb 36000 0 nosound
+  pyboy-rs-nosound red     picture WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/red.gb 36000 1 nosound
+  pyboy-rs-nosound crystal none    WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/crystal.gbc 36000 0 nosound
+  pyboy-rs-nosound crystal picture WORK/venv-pyboy-rs/bin/python -I HERE/python_speed.py pyboy_rs WORK/roms/crystal.gbc 36000 1 nosound
+  pyboy            red     none    WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/red.gb 36000 0 sound
+  pyboy            red     picture WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/red.gb 36000 1 sound
+  pyboy            crystal none    WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/crystal.gbc 36000 0 sound
+  pyboy            crystal picture WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/crystal.gbc 36000 1 sound
+  pyboy-nosound    red     none    WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/red.gb 36000 0 nosound
+  pyboy-nosound    red     picture WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/red.gb 36000 1 nosound
+  pyboy-nosound    crystal none    WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/crystal.gbc 36000 0 nosound
+  pyboy-nosound    crystal picture WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/crystal.gbc 36000 1 nosound
+  pyboy-fast       red     none    WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/red.gb 36000 0 fast
+  pyboy-fast       red     picture WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/red.gb 36000 1 fast
+  pyboy-fast       crystal none    WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/crystal.gbc 36000 0 fast
+  pyboy-fast       crystal picture WORK/venv-pyboy/bin/python -I HERE/python_speed.py pyboy WORK/roms/crystal.gbc 36000 1 fast
+  sameboy          red     none    WORK/build/sameboy_speed WORK/build/dmg_boot.bin WORK/roms/red.gb 36000 0 dmg
+  sameboy          red     picture WORK/build/sameboy_speed WORK/build/dmg_boot.bin WORK/roms/red.gb 36000 1 dmg
+  sameboy          crystal none    WORK/build/sameboy_speed WORK/build/cgb_boot.bin WORK/roms/crystal.gbc 36000 0 cgb
+  sameboy          crystal picture WORK/build/sameboy_speed WORK/build/cgb_boot.bin WORK/roms/crystal.gbc 36000 1 cgb
+  mgba             red     none    WORK/build/mgba/mgba-perf -P -F 36000 -N -C sgb.model=DMG WORK/roms/red.gb
+  mgba             red     picture WORK/build/mgba/mgba-perf -P -F 36000 -C sgb.model=DMG WORK/roms/red.gb
+  mgba             crystal none    WORK/build/mgba/mgba-perf -P -F 36000 -N WORK/roms/crystal.gbc
+  mgba             crystal picture WORK/build/mgba/mgba-perf -P -F 36000 WORK/roms/crystal.gbc
+  gambatte         red     none    WORK/build/gambatte_speed WORK/roms/red.gb 36000 0
+  gambatte         red     picture WORK/build/gambatte_speed WORK/roms/red.gb 36000 1
+  gambatte         crystal none    WORK/build/gambatte_speed WORK/roms/crystal.gbc 36000 0
+  gambatte         crystal picture WORK/build/gambatte_speed WORK/roms/crystal.gbc 36000 1
