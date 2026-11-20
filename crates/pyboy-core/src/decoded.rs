@@ -5,8 +5,10 @@
 //! decodes them on every instruction. When `Bus::fetch` reads those bytes
 //! straight from the ROM at some offset, the decoded instruction depends only
 //! on the ROM bytes from that offset, so it can be kept per offset. It stays
-//! valid until the ROM bytes change, which `Rom::generation` tracks. A bank
-//! switch only maps other offsets, so it needs no invalidation here.
+//! valid until the ROM bytes change, which `Rom::generation` tracks. A write
+//! of one byte through `DecodedRom::write` drops only the entries that read
+//! it, and any other change starts the table over. A bank switch only maps
+//! other offsets, so it needs no invalidation here.
 use crate::cartridge::Rom;
 use crate::opcodes::OPCODE_LENGTHS;
 
@@ -58,6 +60,31 @@ impl DecodedRom {
             // A new zeroed table, since clearing the old one would write,
             // and so back with memory, every page of it.
             self.entries = vec![0; rom.len()];
+        }
+    }
+
+    /// Write `value` to the ROM byte at `offset` and drop the entries that
+    /// read that byte: the ones starting at it and at the two bytes before
+    /// it, since every entry is decoded from three bytes. A breakpoint or a
+    /// patch then costs three stores instead of a new table and decoding
+    /// every instruction again. Panics when `offset` is not in `rom`.
+    pub fn write(&mut self, rom: &mut Rom, offset: usize, value: u8) {
+        let before = rom.generation();
+        rom[offset] = value;
+        if self.generation != before {
+            // Decoded from other bytes already, so the next sync starts the
+            // table over anyway.
+            return;
+        }
+        self.generation = rom.generation();
+        for start in offset.saturating_sub(2)..=offset {
+            if let Some(entry) = self.entries.get_mut(start) {
+                // Only nonzero entries are stored to, so a page no code ran
+                // from stays without memory.
+                if *entry != 0 {
+                    *entry = 0;
+                }
+            }
         }
     }
 
@@ -140,6 +167,71 @@ mod tests {
         rom[0x101] = 0x42;
         decoded.sync(&rom);
         assert_eq!(decoded.get(&rom, 0x100), Some((0x3e, 0x42)));
+    }
+
+    #[test]
+    fn a_byte_write_drops_exactly_the_entries_that_read_it() {
+        // One instruction start inside bank 0, and one whose three bytes run
+        // from the end of bank 0 into bank 1. Both hold a three-byte opcode,
+        // so a write to any of their bytes changes their decoding.
+        for start in [0x150, 16382] {
+            // The byte before the start, the start, the two operand bytes
+            // after it, and the byte after the instruction.
+            for written in start - 1..=start + 3 {
+                let mut bytes: Vec<u8> = (0..32768u32).map(|i| (i * 13 + i / 251) as u8).collect();
+                bytes[start] = 0xc3;
+                let mut rom = rom(bytes);
+                let mut decoded = DecodedRom::default();
+                decoded.sync(&rom);
+                let window = written - 4..written + 5;
+                for offset in window.clone() {
+                    decoded.get(&rom, offset);
+                }
+                let table = (decoded.entries.as_ptr(), decoded.entries.capacity());
+                let value = !rom[written];
+                decoded.write(&mut rom, written, value);
+                for offset in window.clone() {
+                    let reads_it = offset <= written && written < offset + 3;
+                    assert_eq!(
+                        decoded.entries[offset] == 0,
+                        reads_it,
+                        "write {written:#x}, entry {offset:#x}"
+                    );
+                }
+                decoded.sync(&rom);
+                assert_eq!(
+                    (decoded.entries.as_ptr(), decoded.entries.capacity()),
+                    table,
+                    "write {written:#x} made a new table"
+                );
+                for offset in window {
+                    let expected = decode([rom[offset], rom[offset + 1], rom[offset + 2]]);
+                    assert_eq!(
+                        decoded.get(&rom, offset),
+                        Some(expected),
+                        "write {written:#x}, entry {offset:#x}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_byte_write_after_another_change_still_starts_the_table_over() {
+        let mut rom = rom(vec![0; 32768]);
+        let copy = rom.clone();
+        let mut unsynced = DecodedRom::default();
+        unsynced.write(&mut rom, 0x100, 0x00);
+        assert_eq!(unsynced.heap_bytes(), 0);
+        assert_ne!(rom.generation(), copy.generation());
+        let mut decoded = DecodedRom::default();
+        decoded.sync(&rom);
+        assert_eq!(decoded.get(&rom, 0x200), Some((0x00, 0)));
+        // A write through the slice, which the table cannot follow.
+        rom[0x200] = 0x3e;
+        decoded.write(&mut rom, 0x300, 0x00);
+        decoded.sync(&rom);
+        assert_eq!(decoded.get(&rom, 0x200), Some((0x3e, 0)));
     }
 
     #[test]

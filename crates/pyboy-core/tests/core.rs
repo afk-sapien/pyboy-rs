@@ -690,50 +690,116 @@ fn the_instruction_cache_runs_the_same_frames_as_fetching() {
 #[test]
 #[cfg(feature = "instruction-cache-switch")]
 fn a_rom_patch_reaches_code_the_cache_already_decoded() {
+    // Each way to write ROM bytes: through the cartridge, through the ROM
+    // slice, and through the motherboard as the Python ROM writes do. Only
+    // the last keeps the decoded instructions that do not read the bytes.
+    for way in 0..3 {
+        let mut cached = new_machine(false, false, 48000);
+        run_frames(&mut cached, 120);
+        let mut fetched = fetching_copy(&cached);
+        let mut unpatched = cached.clone();
+        // The demo idles in a loop in ROM, so the frame ends inside code
+        // that ran, and was decoded, many times.
+        let pc = cached.cpu.pc as usize;
+        assert!(pc < 0x8000, "the demo idles at {pc:#x}");
+        let (bank, address) = if pc < 0x4000 {
+            (0, pc)
+        } else {
+            (cached.mb.cartridge.rombank_selected, pc - 0x4000)
+        };
+        for machine in [&mut cached, &mut fetched] {
+            for address in address.saturating_sub(8)..(address + 8).min(0x4000) {
+                let address16 = u16::try_from(address).unwrap();
+                match way {
+                    0 => machine
+                        .mb
+                        .cartridge
+                        .override_rom(bank, address16, 0)
+                        .unwrap(),
+                    1 => machine.mb.cartridge.rom[bank * 16384 + address] = 0,
+                    _ => machine.mb.override_rom(bank, address16, 0).unwrap(),
+                }
+            }
+        }
+        for frame in 0..60 {
+            let mut results = Vec::new();
+            for machine in [&mut cached, &mut fetched, &mut unpatched] {
+                machine.begin_frame(true, false);
+                results.push(machine.run_frame());
+            }
+            assert_eq!(results[0], results[1], "way {way}, frame {frame}");
+            assert_eq!(
+                cached.save_state().unwrap(),
+                fetched.save_state().unwrap(),
+                "way {way}, frame {frame}"
+            );
+            if results[0].is_err() {
+                break;
+            }
+        }
+        assert_ne!(
+            cached.save_state().unwrap(),
+            unpatched.save_state().unwrap(),
+            "way {way}: the patched code ran"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "instruction-cache-switch")]
+fn a_breakpoint_on_running_code_runs_as_fetching_does() {
+    // A breakpoint as the Python hooks set one, on a byte of code that runs
+    // every frame: write 0xdb, and on every stop put the byte back, run its
+    // instruction, and write 0xdb again. Every write goes through the
+    // motherboard, so only the decoded instructions that read it drop.
     let mut cached = new_machine(false, false, 48000);
     run_frames(&mut cached, 120);
     let mut fetched = fetching_copy(&cached);
-    let mut unpatched = cached.clone();
-    // The demo idles in a loop in ROM, so the frame ends inside code that
-    // ran, and was decoded, many times.
     let pc = cached.cpu.pc as usize;
-    assert!(pc < 0x8000, "the demo idles at {pc:#x}");
-    let (bank, address) = if pc < 0x4000 {
-        (0, pc)
-    } else {
-        (cached.mb.cartridge.rombank_selected, pc - 0x4000)
-    };
+    assert!(pc < 0x4000, "the demo idles at {pc:#x}");
+    let address = u16::try_from(pc).unwrap();
+    let original = cached.mb.cartridge.rom[pc];
+    // Stepping over the breakpoint runs the same instruction, so the states
+    // match even when a machine misses a stop. The stop counts tell.
+    let mut stops = [0; 2];
     for machine in [&mut cached, &mut fetched] {
-        // Half through the cartridge, half as the Python ROM writes do.
-        for address in address.saturating_sub(8)..address {
-            let address = u16::try_from(address).unwrap();
-            machine.mb.cartridge.override_rom(bank, address, 0).unwrap();
-        }
-        for address in address..(address + 8).min(0x4000) {
-            machine.mb.cartridge.rom[bank * 16384 + address] = 0;
-        }
+        machine.mb.override_rom(0, address, 0xdb).unwrap();
     }
     for frame in 0..60 {
-        let mut results = Vec::new();
-        for machine in [&mut cached, &mut fetched, &mut unpatched] {
-            machine.begin_frame(true, false);
-            results.push(machine.run_frame());
+        for (index, machine) in [&mut cached, &mut fetched].into_iter().enumerate() {
+            machine.begin_frame(frame % 4 == 0, false);
+            while !machine.run_frame().unwrap() {
+                assert_eq!(machine.cpu.pc as usize, pc, "frame {frame}");
+                machine.mb.override_rom(0, address, original).unwrap();
+                // As the Python step_instruction and clear_breakpoint do.
+                machine.mb.singlestep = false;
+                machine.cpu.bail = false;
+                machine.cpu.tick(&mut machine.mb, 4).unwrap();
+                let cycles = machine.cpu.cycles;
+                machine.mb.sound.tick(cycles);
+                if machine.mb.serial.tick(cycles) {
+                    machine.cpu.set_interruptflag(8);
+                }
+                if machine.mb.timer.tick(cycles) {
+                    machine.cpu.set_interruptflag(4);
+                }
+                let flags = machine.mb.lcd.tick(cycles);
+                machine.cpu.set_interruptflag(flags);
+                machine.mb.singlestep = false;
+                machine.mb.singlestep_latch = false;
+                machine.cpu.bail = false;
+                machine.mb.override_rom(0, address, 0xdb).unwrap();
+                stops[index] += 1;
+            }
         }
-        assert_eq!(results[0], results[1], "frame {frame}");
+        assert_eq!(stops[0], stops[1], "frame {frame}");
         assert_eq!(
             cached.save_state().unwrap(),
             fetched.save_state().unwrap(),
             "frame {frame}"
         );
-        if results[0].is_err() {
-            break;
-        }
     }
-    assert_ne!(
-        cached.save_state().unwrap(),
-        unpatched.save_state().unwrap(),
-        "the patched code ran"
-    );
+    assert!(stops[0] >= 60, "the breakpoint stopped {} times", stops[0]);
 }
 
 /// A 32 KiB cartridge that keeps changing what the LCD interrupts on, with
