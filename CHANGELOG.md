@@ -9,12 +9,13 @@ Draft for 0.2.0. Not released.
 - Save states carry a pyboy-rs section after the PyBoy state format 15 body.
   The body stays byte-identical with PyBoy 2.7.0. The section holds what
   format 15 has no field for: the cycles a VRAM transfer still holds the CPU
-  for, the LCD mode an HBlank transfer last saw and the cycles since a TIMA
-  overflow. So a state saved mid-transfer or just after an overflow
+  for, the LCD mode an HBlank transfer last saw, the cycles since a TIMA
+  overflow, and an EI or halt bug still to act on the next instruction. So
+  a state saved mid-transfer, just after an overflow or just after EI
   continues exactly like the run that saved it. Layout, versions and rules
   are in [docs/compatibility.md](docs/compatibility.md#save-states).
 - Execution checkpoints name the hardware state format
-  `pyboy-format-15+pyboy-rs-2`. Checkpoints and recordings from 0.1.9 and
+  `pyboy-format-15+pyboy-rs-3`. Checkpoints and recordings from 0.1.9 and
   older still restore and replay. A recording replays to the same states
   only while the game never reaches a case this release runs differently,
   such as the timer cases under Fixed. Otherwise the replay raises
@@ -33,6 +34,12 @@ Draft for 0.2.0. Not released.
   own cycle. PyBoy 2.7.0 keeps a TIMA counter of its own, apart from DIV,
   and reloads at once. Mooneye timer goes from 5 of 13 to 13 of 13 on DMG
   and CGB.
+- EI sets IME after the instruction that follows it, so exactly one
+  instruction runs before an interrupt is taken, and DI there takes none.
+  HALT with IME clear and an interrupt pending does not halt, and the next
+  instruction reads its first byte twice (the halt bug). After EI then
+  HALT the interrupt returns to the HALT. PyBoy 2.7.0 sets IME at once and
+  has no halt bug.
 
 ### Compatibility
 

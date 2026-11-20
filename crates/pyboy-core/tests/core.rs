@@ -132,13 +132,15 @@ fn every_state_carries_the_section_and_a_state_without_it_loads() {
     let mut header = b"PBRS".to_vec();
     header.extend(SECTION_VERSION.to_le_bytes());
     header.extend([major, minor, patch]);
-    header.extend(10u32.to_le_bytes());
+    header.extend(11u32.to_le_bytes());
     assert_eq!(section[..13], header);
     // Version 1 with no copy in progress: 8 bytes of stall, then the mode.
     assert_eq!(section[13..21], [0; 8]);
     // Version 2 with no TIMA reload due.
     assert_eq!(section[22], 0xff);
-    assert_eq!(section.len(), 23);
+    // Version 3 with no EI delay or halt bug.
+    assert_eq!(section[23], 0);
+    assert_eq!(section.len(), 24);
 
     // A state without the section, as PyBoy and pyboy-rs 0.1.9 save it,
     // loads with the section fields idle and saves the same body.
@@ -181,20 +183,24 @@ fn a_bad_or_newer_section_is_refused_without_mutation() {
     let mut longer = before.clone();
     longer.push(0);
     refused(&mut machine, &longer, "section length");
-    let overlong = edit(9, &11u32.to_le_bytes());
+    let overlong = edit(9, &12u32.to_le_bytes());
     refused(&mut machine, &overlong, "section length");
     let unversioned = edit(4, &0u16.to_le_bytes());
     refused(&mut machine, &unversioned, "section version");
     refused(&mut machine, &edit(20, &[4]), "VRAM transfer");
     refused(&mut machine, &edit(22, &[8]), "timer state");
-    // A version 1 section is one byte shorter, so with the version 2 byte
-    // it is refused, and without it loads with no reload due.
-    let mut first = edit(4, &1u16.to_le_bytes());
-    refused(&mut machine, &first, "section length");
-    first.pop();
-    first[at + 9..at + 13].copy_from_slice(&9u32.to_le_bytes());
-    machine.load_state(&first).unwrap();
-    assert_eq!(machine.save_state().unwrap(), before);
+    refused(&mut machine, &edit(23, &[4]), "CPU state");
+    // Older sections are shorter: version 2 has no CPU byte, and version 1
+    // no timer byte either. With the newer bytes they are refused, and
+    // without them they load with those fields idle.
+    for (version, length) in [(2u16, 10u32), (1, 9)] {
+        let mut older = edit(4, &version.to_le_bytes());
+        refused(&mut machine, &older, "section length");
+        older.truncate(at + 13 + length as usize);
+        older[at + 9..at + 13].copy_from_slice(&length.to_le_bytes());
+        machine.load_state(&older).unwrap();
+        assert_eq!(machine.save_state().unwrap(), before);
+    }
 
     // A newer version is refused with the release its header names.
     let mut newer = edit(4, &(SECTION_VERSION + 1).to_le_bytes());
@@ -203,6 +209,39 @@ fn a_bad_or_newer_section_is_refused_without_mutation() {
     // The body of a state with a newer section is still its format 15 bytes.
     assert_eq!(machine.state_body(&newer).unwrap(), &before[..at]);
     assert!(machine.state_body(&longer).is_err());
+}
+
+#[test]
+fn the_ei_delay_and_the_halt_bug_survive_a_state_and_conflicts_are_refused() {
+    let mut machine = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+    machine.begin_frame(false, false);
+    machine.run_frame().unwrap();
+    let at = |machine: &Machine, state: &[u8]| machine.state_body(state).unwrap().len() + 23;
+    for (ime_pending, halt_bug, flags) in [(true, false, 1), (false, true, 2), (true, true, 3)] {
+        machine.cpu.interrupt_master_enable = false;
+        machine.cpu.halted = false;
+        machine.cpu.ime_pending = ime_pending;
+        machine.cpu.halt_bug = halt_bug;
+        let state = machine.save_state().unwrap();
+        assert_eq!(state[at(&machine, &state)], flags);
+        let mut other = Machine::new(DEMO.to_vec(), None, None, false, 48000).unwrap();
+        other.load_state(&state).unwrap();
+        let cpu = &other.cpu;
+        assert_eq!((cpu.ime_pending, cpu.halt_bug), (ime_pending, halt_bug));
+        assert_eq!(other.save_state().unwrap(), state);
+    }
+    // An EI delay with IME already set, or the halt bug on a halted CPU.
+    machine.cpu.ime_pending = false;
+    machine.cpu.halt_bug = false;
+    for (ime, halted, flags) in [(true, false, 1), (false, true, 2)] {
+        machine.cpu.interrupt_master_enable = ime;
+        machine.cpu.halted = halted;
+        let mut state = machine.save_state().unwrap();
+        let offset = at(&machine, &state);
+        state[offset] = flags;
+        let error = machine.load_state(&state).unwrap_err();
+        assert!(error.contains("CPU state"), "{error}");
+    }
 }
 
 fn mbc3_rtc_demo() -> Vec<u8> {

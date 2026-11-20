@@ -67,6 +67,14 @@ pub struct Cpu {
     pub stopped: bool,
     pub bail: bool,
     pub cycles: i64,
+    /// Set by an EI that left IME clear, which the instruction after it then
+    /// sets. DI clears it.
+    pub ime_pending: bool,
+    /// Set by a HALT that found an interrupt pending with IME clear. The
+    /// next instruction reads its first byte twice.
+    pub halt_bug: bool,
+    /// The cycle count the slice `tick` runs ends at.
+    pub slice_end: i64,
     /// When set, every interrupt taken as (cycles, program counter, flag),
     /// for tests to check that interrupts land on the same instruction.
     #[cfg(feature = "instruction-cache-switch")]
@@ -108,6 +116,11 @@ impl Cpu {
                 self.pc = (self.pc + 1) & 0xffff;
             }
             if self.interrupt_master_enable {
+                if self.halt_bug {
+                    // EI then HALT: the interrupt returns to the HALT.
+                    self.halt_bug = false;
+                    self.pc = (self.pc - 1) & 0xffff;
+                }
                 let bit = pending.trailing_zeros();
                 self.handle_interrupt(bus, 1 << bit, 0x40 + i64::from(bit) * 8);
             }
@@ -136,10 +149,94 @@ impl Cpu {
         opcodes::execute(self, bus, opcode, value);
     }
 
-    /// Run the same interrupt and HALT scheduling as PyBoy CPU.tick.
+    /// Whether an interrupt is both requested and enabled.
+    #[inline(always)]
+    fn interrupt_pending(&self) -> bool {
+        self.interrupts_flag_register & self.interrupts_enabled_register & 0x1f != 0
+    }
+
+    /// EI. IME is set after the instruction that follows. Interrupts are
+    /// taken only between slices, so IME is set at once unless an interrupt
+    /// is pending or EI ends the slice. Then the slice ends here, and the
+    /// next one runs that instruction alone before IME is set.
+    #[inline(always)]
+    pub fn ei(&mut self) {
+        let pending = self.interrupt_pending();
+        if self.interrupt_master_enable {
+            self.bail |= pending;
+        } else if pending || self.cycles + 4 >= self.slice_end {
+            self.ime_pending = true;
+            self.bail = true;
+        } else {
+            self.interrupt_master_enable = true;
+        }
+        self.pc = (self.pc + 1) & 0xffff;
+        self.cycles += 4;
+    }
+
+    /// DI, which also cancels an EI not yet in effect.
+    #[inline(always)]
+    pub fn di(&mut self) {
+        self.interrupt_master_enable = false;
+        self.ime_pending = false;
+        self.pc = (self.pc + 1) & 0xffff;
+        self.cycles += 4;
+    }
+
+    /// HALT. With IME clear and an interrupt already pending it does not
+    /// halt, and the next instruction reads its first byte twice.
+    #[inline(always)]
+    pub fn halt(&mut self) {
+        if !self.interrupt_master_enable && self.interrupt_pending() {
+            self.halt_bug = true;
+            self.pc = (self.pc + 1) & 0xffff;
+        } else {
+            self.halted = true;
+        }
+        self.bail = true;
+        self.cycles += 4;
+    }
+
+    /// Execute one instruction, reading its first byte twice after the halt
+    /// bug, then set IME if an EI before it asked for that.
+    #[cold]
+    #[inline(never)]
+    pub fn step<B: Bus>(&mut self, bus: &mut B) -> Result<(), NoProgress> {
+        let promote = self.ime_pending;
+        let before = self.cycles;
+        if self.halt_bug {
+            self.halt_bug = false;
+            let [first, second, _] = bus.fetch(self);
+            let (opcode, value) = crate::decoded::decode([first, first, second]);
+            // The bodies add the full length to the program counter, which
+            // the halt bug leaves one byte short.
+            let pc = self.pc;
+            self.pc = (pc - 1) & 0xffff;
+            opcodes::execute(self, bus, opcode, i64::from(value));
+            if self.cycles == before {
+                self.pc = pc;
+                self.halt_bug = true;
+                return Err(self.no_progress(bus));
+            }
+        } else {
+            self.fetch_and_execute(bus);
+            if self.cycles == before {
+                return Err(self.no_progress(bus));
+            }
+        }
+        if promote && self.ime_pending {
+            self.ime_pending = false;
+            self.interrupt_master_enable = true;
+        }
+        Ok(())
+    }
+
+    /// Run the interrupt and HALT scheduling of PyBoy CPU.tick, with the EI
+    /// delay and the halt bug. The instruction after either runs alone.
     /// Unsupported opcodes report no progress instead of hanging the caller.
     pub fn tick<B: Bus>(&mut self, bus: &mut B, cycles_target: i64) -> Result<(), NoProgress> {
         let target = self.cycles + cycles_target;
+        self.slice_end = target;
         if self.check_interrupts(bus) {
             self.halted = false;
         }
@@ -151,6 +248,9 @@ impl Cpu {
         }
         self.interrupt_queued = false;
         self.bail = false;
+        if (self.ime_pending | self.halt_bug) && self.cycles < target {
+            return self.step(bus);
+        }
         bus.run(self, target)
     }
 

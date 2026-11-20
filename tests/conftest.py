@@ -67,10 +67,22 @@ class FlatBus:
         self.speed_switches += 1
 
 
-def compare_cpu(native, reference):
+def compare_cpu(native, reference, **expected):
+    """Compare every CPU field with PyBoy's, except those given in `expected`.
+
+    PyBoy has no EI delay and no halt bug, so their fields are expected clear
+    unless given.
+    """
     for key, value in native.state().items():
-        # PyBoy's Cython declaration makes bail a boolean.
-        actual = bool(getattr(reference, key, False)) if key == "bail" else getattr(reference, key)
+        if key in expected:
+            actual = expected[key]
+        elif key in ("ime_pending", "halt_bug"):
+            actual = 0
+        elif key == "bail":
+            # PyBoy's Cython declaration makes bail a boolean.
+            actual = bool(getattr(reference, key, False))
+        else:
+            actual = getattr(reference, key)
         assert value == actual, (key, value, actual)
     assert native.memory() == reference.mb.memory
     assert native.bus_state() == (
