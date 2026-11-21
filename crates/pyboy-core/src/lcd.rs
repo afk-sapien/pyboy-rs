@@ -28,6 +28,13 @@ fn rgba(rgb: u32) -> u32 {
     0xff000000 | ((rgb & 255) << 16) | (rgb & 0xff00) | ((rgb >> 16) & 255)
 }
 
+/// The STAT flag if the STAT line went from `before` to `after`. Only a
+/// rising edge requests the interrupt.
+#[inline(always)]
+fn stat_edge(before: bool, after: bool) -> u8 {
+    u8::from(!before && after) << 1
+}
+
 #[derive(Debug, Clone)]
 pub struct ColorPalette {
     pub index: u8,
@@ -247,13 +254,19 @@ impl Lcd {
     /// state restores it with no field of its own.
     #[inline]
     fn stat_line(&self) -> bool {
-        let mode = self.stat & 3;
-        let mode_source = match mode {
-            0 => self.next_stat_mode != 3,
-            3 => false,
-            _ => true,
+        let source = match self.stat & 3 {
+            0 if self.next_stat_mode == 3 => 0,
+            3 => 0,
+            mode => 8 << mode,
         };
-        (mode_source && self.stat & (8 << mode) != 0) || self.stat & 0x44 == 0x44
+        self.line_with(source)
+    }
+
+    /// The STAT line where the mode source enabled by STAT bit `source`
+    /// holds, or none for 0.
+    #[inline(always)]
+    fn line_with(&self, source: u8) -> bool {
+        self.stat & source != 0 || self.stat & 0x44 == 0x44
     }
 
     /// The STAT flag if the line went from `line` to high. Only a rising
@@ -262,8 +275,8 @@ impl Lcd {
     /// nothing is requested.
     #[inline]
     fn stat_rise(&self, line: bool) -> u8 {
-        if !line && self.lcdc & 128 != 0 && self.stat_line() {
-            2
+        if self.lcdc & 128 != 0 {
+            stat_edge(line, self.stat_line())
         } else {
             0
         }
@@ -356,8 +369,8 @@ impl Lcd {
         self.clock += elapsed >> self.speed_shift;
         let mut interrupt = 0;
         if self.clock >= self.clock_target {
-            let line = self.stat_line();
             if self.lcdc & 128 != 0 && (self.ly == 153 || self.reset) {
+                let line = self.stat_line();
                 if self.reset {
                     // The first line after the LCD turns on has no OAM
                     // search. It reads as mode 0, with no mode source, until
@@ -374,20 +387,33 @@ impl Lcd {
                 self.clock_target = 80;
                 self.next_stat_mode = 3;
                 self.compare_lyc();
+                interrupt |= self.stat_rise(line);
             } else if self.lcdc & 128 != 0 {
+                // Within a frame a step leaves mode 2 for 3, 3 for 0, 0 for 2
+                // or, at line 143, for 1, and 1 for 1. So the STAT line on
+                // each side of it is that of a known mode source, which gives
+                // what `stat_line` would with less work on every step. Only
+                // the mode bits and then LY=LYC change across the step.
                 self.set_mode(self.next_stat_mode);
                 match self.stat & 3 {
                     2 => {
+                        let line = self.line_with(0x08);
                         self.ly += 1;
                         self.clock_target += 80;
                         self.next_stat_mode = 3;
                         self.compare_lyc();
+                        interrupt |= stat_edge(line, self.line_with(0x20));
                     }
                     3 => {
+                        // Mode 3 has no source and LY stays, so the line
+                        // can only fall.
                         self.clock_target += 170;
                         self.next_stat_mode = 0;
                     }
                     0 => {
+                        // Mode 3 has no source and LY stays, so only the mode
+                        // 0 source can raise the line.
+                        interrupt |= stat_edge(self.line_with(0), self.line_with(0x08));
                         self.clock_target += 206;
                         self.scanline_parameters[usize::from(self.ly)] =
                             [self.scx, self.scy, self.wx, self.wy, self.lcdc & 16];
@@ -396,10 +422,12 @@ impl Lcd {
                         self.next_stat_mode = if self.ly < 143 { 2 } else { 1 };
                     }
                     _ => {
+                        let line = self.line_with(if self.ly == 143 { 0x08 } else { 0x10 });
                         self.clock_target += 456;
                         self.next_stat_mode = 1;
                         self.ly += 1;
                         self.compare_lyc();
+                        interrupt |= stat_edge(line, self.line_with(0x10));
                         if self.ly == 144 {
                             interrupt |= 1;
                             // The mode 2 source also holds for an instant as
@@ -420,7 +448,6 @@ impl Lcd {
                 self.clock_target = FRAME_CYCLES;
                 self.blank_screen();
             }
-            interrupt |= self.stat_rise(line);
         }
         self.cycles_to_interrupt = (self.clock_target - self.clock) << self.speed_shift;
         self.cycles_to_frame = (FRAME_CYCLES - self.clock) << self.speed_shift;
@@ -1063,6 +1090,33 @@ mod tests {
                 requests,
                 "sources {sources:#04x}, LYC {lyc}"
             );
+        }
+    }
+
+    /// A mode step works out the STAT line from the mode sources it leaves
+    /// and enters. Check that against `stat_line` on each step of the first
+    /// three frames after the LCD turns on, for every mix of sources and
+    /// LYC on each side of the lines where the steps differ.
+    #[test]
+    fn each_mode_step_requests_as_the_stat_line_rises() {
+        for sources in (0..16).map(|s| s << 3) {
+            for lyc in [0, 1, 10, 142, 143, 144, 145, 152, 153, 200] {
+                let mut lcd = lcd_on(sources, lyc);
+                let mut cycles = 0;
+                for _ in 0..3 * FRAME_CYCLES / 4 {
+                    let (line, ly) = (lcd.stat_line(), lcd.ly);
+                    cycles += 4;
+                    let flags = lcd.tick(cycles);
+                    // The mode 2 source also requests as line 144 starts.
+                    let vblank = ly == 143 && lcd.ly == 144 && sources & 0x20 != 0;
+                    assert_eq!(
+                        flags & 2 != 0,
+                        !line && (lcd.stat_line() || vblank),
+                        "sources {sources:#04x}, LYC {lyc}, LY {ly} to {}",
+                        lcd.ly
+                    );
+                }
+            }
         }
     }
 
