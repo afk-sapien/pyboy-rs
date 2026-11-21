@@ -9,7 +9,7 @@ starting point for picking accuracy fixes.
 ## Scores
 
 Run on 2026-11-20 with the interrupt dispatch fix of
-[#DISPNUM](https://github.com/afk-sapien/pyboy-rs/pull/DISPNUM), through a local
+[#55](https://github.com/afk-sapien/pyboy-rs/pull/55), through a local
 release build of the wheel. Each cell is passed tests out of tests run on that
 model.
 
@@ -36,7 +36,7 @@ revisions are left out of the counts (see [Method](#method)).
 | CGB VRAM transfers | [#42](https://github.com/afk-sapien/pyboy-rs/pull/42) | 78 of 145 | 88 of 200 |
 | Timer on the system counter | [#53](https://github.com/afk-sapien/pyboy-rs/pull/53) | 86 of 145 | 96 of 200 |
 | EI delay and the halt bug | [#54](https://github.com/afk-sapien/pyboy-rs/pull/54) | 92 of 145 | 102 of 200 |
-| Interrupt dispatch and the IE push | [#DISPNUM](https://github.com/afk-sapien/pyboy-rs/pull/DISPNUM) | 93 of 145 | 103 of 200 |
+| Interrupt dispatch and the IE push | [#55](https://github.com/afk-sapien/pyboy-rs/pull/55) | 93 of 145 | 103 of 200 |
 
 The interrupt dispatch fix makes Mooneye `acceptance/interrupts/ie_push`
 pass on each model. It checks that the high byte push of a dispatch can
