@@ -1,7 +1,7 @@
 //! The EI delay and the halt bug, run through `Cpu::tick` on a flat bus.
 //! Each case is the same at every slice length, since interrupts are taken
 //! only between slices. Dispatch runs on a machine, since a push onto IE
-//! needs the real IE register.
+//! needs the real IE register, and so do the requests IO writes make.
 use pyboy_core::{
     cpu::{Cpu, FlatBus},
     mb::Machine,
@@ -242,4 +242,36 @@ fn an_if_write_is_taken_before_the_next_instruction() {
     assert_eq!((m.cpu.pc, m.cpu.b), (0x204, 0));
     m.cpu.tick(&mut m.mb, 456).unwrap();
     assert_eq!((m.cpu.pc, m.cpu.sp, m.cpu.b), (0x205, 0xfffe, 1));
+}
+
+/// Mooneye stat_lyc_onoff: turning the LCD on compares LY 0 with LYC at the
+/// write, and a match with the LY=LYC source on requests the STAT interrupt
+/// there, so it is taken before the next instruction.
+#[test]
+fn a_write_that_raises_the_stat_line_requests_at_once() {
+    #[rustfmt::skip]
+    let mut m = machine_running(&[
+        0x3e, 0x91, // ld a, 0x91
+        0xe0, 0x40, // ldh (LCDC), a
+        0x04,       // inc b
+        0x18, 0xfe, // jr -2
+    ]);
+    // Clear the LY=LYC bit, which the LCD keeps while it is off.
+    m.write(0xff45, 1);
+    m.write(0xff40, 0x91);
+    m.write(0xff40, 0);
+    // With the LCD off, neither write compares or requests.
+    m.write(0xff45, 0);
+    m.write(0xff41, 0x40);
+    m.write(0xff0f, 0);
+    assert_eq!(m.read(0xff41) & 7, 0);
+    m.cpu.b = 0;
+    m.cpu.interrupt_master_enable = true;
+    m.write(0xffff, 0x02);
+    m.cpu.tick(&mut m.mb, 456).unwrap();
+    let requested = m.cpu.interrupts_flag_register & 0x1f;
+    assert_eq!((m.cpu.pc, requested), (0x204, 0x02));
+    m.cpu.tick(&mut m.mb, 456).unwrap();
+    let returns_to = u16::from_le_bytes([m.read(0xfffc), m.read(0xfffd)]);
+    assert_eq!((m.cpu.pc, returns_to, m.cpu.b), (0x48, 0x204, 0));
 }

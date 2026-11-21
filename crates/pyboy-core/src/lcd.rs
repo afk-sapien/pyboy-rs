@@ -178,7 +178,12 @@ impl Lcd {
         }
     }
 
-    pub fn set_lcdc(&mut self, value: u8) {
+    /// Write LCDC and give the STAT flag if the write raises the STAT line.
+    /// Turning the LCD off keeps STAT's LY=LYC bit. Turning it on compares
+    /// LY, which is 0, with LYC at once. Mode 0 with mode 3 next marks both
+    /// the LCD off and the first line after it turns on, where no mode
+    /// source holds the line.
+    pub fn set_lcdc(&mut self, value: u8) -> u8 {
         let old = self.lcdc & 128 != 0;
         self.lcdc = value;
         if old && value & 128 == 0 {
@@ -186,38 +191,82 @@ impl Lcd {
             self.clock_target = 0;
             self.cycles_to_frame = 0;
             self.set_mode(0);
+            self.next_stat_mode = 3;
             self.ly = 0;
         } else if !old && value & 128 != 0 {
             self.clock_target = 0;
             self.first_frame = true;
             self.reset = true;
+            self.next_stat_mode = 3;
+            let line = self.stat_line();
+            self.compare_lyc();
+            return self.stat_rise(line);
+        }
+        0
+    }
+
+    /// Write STAT, where only the source enables can be written, and give
+    /// the STAT flag if the write raises the STAT line.
+    pub fn set_stat(&mut self, value: u8) -> u8 {
+        let line = self.stat_line();
+        self.stat = (self.stat & 0x87) | (value & 0x78);
+        self.stat_rise(line)
+    }
+
+    /// Write LYC and give the STAT flag if the write raises the STAT line.
+    /// With the LCD on, LY is compared with the new value at once.
+    pub fn set_lyc(&mut self, value: u8) -> u8 {
+        let line = self.stat_line();
+        self.lyc = value;
+        self.compare_lyc();
+        self.stat_rise(line)
+    }
+
+    fn set_mode(&mut self, mode: u8) {
+        self.stat = (self.stat & 252) | mode;
+    }
+
+    /// Set STAT's LY=LYC bit from LY and LYC. With the LCD off the compare
+    /// does not run, and the bit keeps its value.
+    fn compare_lyc(&mut self) {
+        if self.lcdc & 128 == 0 {
+            return;
+        }
+        if self.lyc == self.ly {
+            self.stat |= 4;
+        } else {
+            self.stat &= !4;
         }
     }
 
-    pub fn set_stat(&mut self, value: u8) {
-        self.stat = (self.stat & 0x87) | (value & 0x78);
+    /// The STAT interrupt line, which is the OR of the STAT sources that are
+    /// on and hold now. Each mode source holds in its own mode, and the LY=LYC
+    /// source holds while STAT's LY=LYC bit is set. No mode source holds with
+    /// the LCD off or on the first line after it turns on, which read as mode
+    /// 0 with mode 3 next. It reads STAT and the next mode alone, so a save
+    /// state restores it with no field of its own.
+    #[inline]
+    fn stat_line(&self) -> bool {
+        let mode = self.stat & 3;
+        let mode_source = match mode {
+            0 => self.next_stat_mode != 3,
+            3 => false,
+            _ => true,
+        };
+        (mode_source && self.stat & (8 << mode) != 0) || self.stat & 0x44 == 0x44
     }
-    pub fn set_mode(&mut self, mode: u8) -> u8 {
-        if self.stat & 3 == mode {
-            return 0;
-        }
-        self.stat = (self.stat & 252) | mode;
-        if mode != 3 && self.stat & (1 << (mode + 3)) != 0 {
+
+    /// The STAT flag if the line went from `line` to high. Only a rising
+    /// edge requests the interrupt, so while one source holds the line high,
+    /// another that starts to hold requests nothing. With the LCD off
+    /// nothing is requested.
+    #[inline]
+    fn stat_rise(&self, line: bool) -> u8 {
+        if !line && self.lcdc & 128 != 0 && self.stat_line() {
             2
         } else {
             0
         }
-    }
-    pub fn update_lyc(&mut self) -> u8 {
-        if self.lyc == self.ly {
-            self.stat |= 4;
-            if self.stat & 64 != 0 {
-                return 2;
-            }
-        } else {
-            self.stat &= !4;
-        }
-        0
     }
 
     /// The cycle of the next mode change in single speed. A tick that ends
@@ -262,7 +311,11 @@ impl Lcd {
             if next > 3 {
                 return first;
             }
-            // set_mode flags entry to modes 0, 1 and 2 when their STAT source is on.
+            // A mode change raises the STAT line only by entering mode 0, 1
+            // or 2 with its source on, or by starting a line where LY
+            // matches LYC. Each of those is flagged, also where another
+            // source already holds the line high and nothing is requested.
+            // Line 144 is flagged for VBlank, which covers its mode 2 source.
             let mut flag = next != mode && next != 3 && self.stat & (8 << next) != 0;
             mode = next;
             let length = match mode {
@@ -303,28 +356,32 @@ impl Lcd {
         self.clock += elapsed >> self.speed_shift;
         let mut interrupt = 0;
         if self.clock >= self.clock_target {
+            let line = self.stat_line();
             if self.lcdc & 128 != 0 && (self.ly == 153 || self.reset) {
                 if self.reset {
+                    // The first line after the LCD turns on has no OAM
+                    // search. It reads as mode 0, with no mode source, until
+                    // mode 3 starts at its usual cycle.
                     self.clock = 0;
-                    self.clock_target = 0;
                     self.set_mode(0);
                     self.reset = false;
+                } else {
+                    self.clock %= FRAME_CYCLES;
+                    self.set_mode(2);
                 }
                 self.frame_done = true;
                 self.ly = 0;
-                self.clock %= FRAME_CYCLES;
                 self.clock_target = 80;
-                interrupt |= self.set_mode(2);
                 self.next_stat_mode = 3;
-                interrupt |= self.update_lyc();
+                self.compare_lyc();
             } else if self.lcdc & 128 != 0 {
-                interrupt |= self.set_mode(self.next_stat_mode);
+                self.set_mode(self.next_stat_mode);
                 match self.stat & 3 {
                     2 => {
                         self.ly += 1;
                         self.clock_target += 80;
                         self.next_stat_mode = 3;
-                        interrupt |= self.update_lyc();
+                        self.compare_lyc();
                     }
                     3 => {
                         self.clock_target += 170;
@@ -342,9 +399,14 @@ impl Lcd {
                         self.clock_target += 456;
                         self.next_stat_mode = 1;
                         self.ly += 1;
-                        interrupt |= self.update_lyc();
+                        self.compare_lyc();
                         if self.ly == 144 {
                             interrupt |= 1;
+                            // The mode 2 source also holds for an instant as
+                            // line 144 starts, at the cycle of VBlank on DMG.
+                            if !line && self.stat & 0x20 != 0 {
+                                interrupt |= 2;
+                            }
                             if self.first_frame {
                                 self.blank_screen();
                                 self.first_frame = false;
@@ -358,6 +420,7 @@ impl Lcd {
                 self.clock_target = FRAME_CYCLES;
                 self.blank_screen();
             }
+            interrupt |= self.stat_rise(line);
         }
         self.cycles_to_interrupt = (self.clock_target - self.clock) << self.speed_shift;
         self.cycles_to_frame = (FRAME_CYCLES - self.clock) << self.speed_shift;
@@ -925,5 +988,167 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// An LCD turned on with STAT's sources `sources` and LYC `lyc`.
+    fn lcd_on(sources: u8, lyc: u8) -> Lcd {
+        let mut lcd = Lcd::new(false, false);
+        lcd.disable_renderer = true;
+        lcd.set_stat(sources);
+        lcd.set_lyc(lyc);
+        lcd.set_lcdc(0x91);
+        lcd
+    }
+
+    /// Tick 4 cycles at a time from `cycles` until the LCD enters `mode` on
+    /// line `ly`, and give the flags of the tick that entered it.
+    fn tick_to(lcd: &mut Lcd, cycles: &mut i64, ly: u8, mode: u8) -> u8 {
+        for _ in 0..2 * FRAME_CYCLES / 4 {
+            let was = (lcd.ly, lcd.stat & 3);
+            *cycles += 4;
+            let flags = lcd.tick(*cycles);
+            if (lcd.ly, lcd.stat & 3) == (ly, mode) && was != (ly, mode) {
+                return flags;
+            }
+        }
+        panic!("the LCD never entered mode {mode} on line {ly}");
+    }
+
+    /// How many STAT interrupts the second frame after the LCD turns on
+    /// requests, with STAT's sources `sources` and LYC `lyc`.
+    fn stat_requests_per_frame(sources: u8, lyc: u8) -> u32 {
+        let mut lcd = lcd_on(sources, lyc);
+        let (mut cycles, mut frames, mut requests) = (0, 0, 0);
+        while frames < 3 {
+            cycles += 4;
+            let flags = lcd.tick(cycles);
+            if lcd.frame_done {
+                lcd.frame_done = false;
+                frames += 1;
+            }
+            if frames == 2 && flags & 2 != 0 {
+                requests += 1;
+            }
+        }
+        requests
+    }
+
+    /// Mooneye stat_irq_blocking: the sources are ORed into one line, and
+    /// only a rising edge requests the interrupt.
+    #[test]
+    fn the_stat_sources_share_one_line_that_requests_on_a_rising_edge() {
+        for (sources, lyc, requests) in [
+            // One per HBlank, one as VBlank starts.
+            (0x08, 200, 144),
+            (0x10, 200, 1),
+            // One per OAM search, and the mode 2 source at line 144.
+            (0x20, 200, 145),
+            // Mode 0 runs into mode 2, so only mode 3 drops the line. Line
+            // 0's OAM search requests too, since mode 1 is off.
+            (0x28, 200, 145),
+            // Mode 1 runs into line 0's OAM search, so lines 1 to 143 request
+            // in OAM search and line 144 requests once.
+            (0x30, 200, 144),
+            (0x38, 200, 144),
+            (0x40, 10, 1),
+            (0x40, 0, 1),
+            // Line 9's HBlank holds the line as LY matches, and the match
+            // holds it through mode 3 of line 10, so neither the match nor
+            // line 10's HBlank requests.
+            (0x48, 10, 143),
+            (0x78, 10, 143),
+        ] {
+            assert_eq!(
+                stat_requests_per_frame(sources, lyc),
+                requests,
+                "sources {sources:#04x}, LYC {lyc}"
+            );
+        }
+    }
+
+    /// Mooneye vblank_stat_intr-GS: the mode 2 source requests at the start
+    /// of line 144, on the tick that requests VBlank.
+    #[test]
+    fn the_mode_2_source_requests_as_vblank_starts() {
+        let mut lcd = lcd_on(0x20, 200);
+        assert_eq!(tick_to(&mut lcd, &mut 0, 144, 1), 3);
+        // With HBlank holding the line, only VBlank is requested.
+        let mut lcd = lcd_on(0x28, 200);
+        assert_eq!(tick_to(&mut lcd, &mut 0, 144, 1), 1);
+    }
+
+    /// Mooneye stat_irq_blocking round 1 and stat_lyc_onoff: STAT and LYC
+    /// writes raise the line at once, and LYC is compared at once.
+    #[test]
+    fn stat_and_lyc_writes_request_when_they_raise_the_line() {
+        let mut lcd = lcd_on(0, 200);
+        let mut cycles = 0;
+        tick_to(&mut lcd, &mut cycles, 144, 1);
+        // The mode 1 source turned on in VBlank requests, but not when the
+        // line is high already.
+        assert_eq!(lcd.set_stat(0x10), 2);
+        assert_eq!(lcd.set_stat(0x78), 0);
+        assert_eq!(lcd.set_stat(0), 0);
+        // LYC is compared at the write, and the match requests once.
+        assert_eq!(lcd.set_lyc(144), 0);
+        assert_eq!(lcd.stat & 4, 4);
+        assert_eq!(lcd.set_lyc(0), 0);
+        assert_eq!(lcd.stat & 4, 0);
+        assert_eq!(lcd.set_stat(0x40), 0);
+        assert_eq!(lcd.set_lyc(144), 2);
+        assert_eq!(lcd.set_lyc(144), 0);
+        // Mode 3 has no source of its own.
+        tick_to(&mut lcd, &mut cycles, 0, 3);
+        assert_eq!(lcd.set_stat(0x38), 0);
+    }
+
+    /// Mooneye stat_lyc_onoff: with the LCD off, the LY=LYC bit keeps its
+    /// value and LYC writes compare nothing. Turning the LCD on compares LY
+    /// 0 at once, and the first line reads as mode 0 until mode 3.
+    #[test]
+    fn turning_the_lcd_on_compares_at_once_and_starts_in_mode_0() {
+        let mut lcd = lcd_on(0x40, 144);
+        let mut cycles = 0;
+        tick_to(&mut lcd, &mut cycles, 144, 1);
+        assert_eq!(lcd.stat & 7, 5);
+        assert_eq!(lcd.set_lcdc(0x11), 0);
+        assert_eq!(lcd.stat & 7, 4);
+        assert_eq!(lcd.set_lyc(1), 0);
+        assert_eq!(lcd.stat & 7, 4);
+        // LY 0 against LYC 1 clears the bit, and nothing is requested.
+        assert_eq!(lcd.set_lcdc(0x91), 0);
+        assert_eq!(lcd.stat & 7, 0);
+        // A match as the LCD turns on requests at the write, unless the bit
+        // was set already.
+        lcd.set_lcdc(0x11);
+        assert_eq!(lcd.set_lyc(0), 0);
+        assert_eq!(lcd.set_lcdc(0x91), 2);
+        assert_eq!(lcd.stat & 7, 4);
+        lcd.set_lcdc(0x11);
+        assert_eq!(lcd.set_lcdc(0x91), 0);
+        // The first line has no OAM search, and no mode source holds the
+        // line until its HBlank.
+        lcd.set_stat(0);
+        assert_eq!(lcd.set_stat(0x28), 0);
+        let mut ticks = 0;
+        while lcd.stat & 3 != 3 {
+            cycles += 4;
+            assert_eq!(lcd.tick(cycles), 0);
+            assert!(lcd.stat & 3 == 0 || lcd.stat & 3 == 3);
+            ticks += 1;
+        }
+        assert_eq!((lcd.ly, ticks), (0, 21));
+        assert_eq!(tick_to(&mut lcd, &mut cycles, 0, 0), 2);
+        // With the LCD off, only a held LY=LYC bit holds the line, and an
+        // LY=LYC match as it turns on requests.
+        lcd.set_lcdc(0x11);
+        assert_eq!(lcd.set_stat(0x58), 0);
+        assert_eq!(lcd.set_lcdc(0x91), 0);
+        lcd.set_lcdc(0x11);
+        lcd.set_lyc(1);
+        lcd.set_lcdc(0x91);
+        lcd.set_lcdc(0x11);
+        lcd.set_lyc(0);
+        assert_eq!(lcd.set_lcdc(0x91), 2);
     }
 }

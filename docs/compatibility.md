@@ -156,6 +156,19 @@ selection. Deliberate differences:
   (0xFFFF) and clears the chosen bit, the next requested and enabled
   interrupt is taken, or with none left the CPU jumps to 0x0000 and IF
   keeps its bits. PyBoy 2.7.0 chooses the interrupt before the pushes.
+- The STAT interrupt has one line, the OR of the STAT sources that are on
+  and hold now, and only a rising edge of it requests the interrupt. So
+  while one source holds the line high, another that starts to hold
+  requests nothing. A STAT write, an LYC write or turning the LCD on that
+  raises the line requests at the write, and the mode 2 source also
+  requests as line 144 starts. LY is compared with LYC at an LYC write and
+  as the LCD turns on, but not while the LCD is off, where the LY=LYC bit
+  keeps its value. The first line after the LCD turns on reads as mode 0
+  until mode 3 starts, with no OAM search and no mode source. PyBoy 2.7.0
+  requests the interrupt as each source's mode starts whatever the other
+  sources do, requests none at STAT, LYC or LCDC writes, compares LY with
+  LYC only as a line starts, and starts the first line in mode 2. None of
+  this needs a save state field, since the line is worked out from STAT.
 - The format 15 save state holds PyBoy's TIMA counter, which pyboy-rs
   writes as the cycles since the selected bit last fell (0 with the timer
   stopped) and does not read.
