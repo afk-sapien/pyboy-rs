@@ -40,6 +40,10 @@ Draft for 0.2.0. Not released.
   instruction reads its first byte twice (the halt bug). After EI then
   HALT the interrupt returns to the HALT. PyBoy 2.7.0 sets IME at once and
   has no halt bug.
+- Interrupt dispatch chooses the interrupt after pushing the high byte of
+  the return address, so a push onto IE can move the dispatch to another
+  interrupt, or cancel it and jump to 0x0000. PyBoy 2.7.0 chooses the
+  interrupt first.
 
 ### Compatibility
 

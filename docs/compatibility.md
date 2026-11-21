@@ -73,8 +73,8 @@ register in closed form, and tests check it against the `tick` loops.
 
 ## Divergences
 
-Upstream quirks are preserved, including serial timing, joypad selection and
-CPU interrupt dispatch. Deliberate differences:
+Upstream quirks are preserved, including serial timing and joypad
+selection. Deliberate differences:
 
 - An instruction that makes no progress raises an error instead of hanging.
 - Memory accesses are validated.
@@ -151,6 +151,11 @@ CPU interrupt dispatch. Deliberate differences:
   HALT, as in SameBoy. PyBoy 2.7.0 halts and wakes at once without the bug.
   The format 15 save state has no field for either, so the pyboy-rs
   section keeps both, and a state without it loads with neither.
+- Interrupt dispatch chooses the interrupt after it pushes the high byte of
+  the return address, as on hardware. So when that push lands on IE
+  (0xFFFF) and clears the chosen bit, the next requested and enabled
+  interrupt is taken, or with none left the CPU jumps to 0x0000 and IF
+  keeps its bits. PyBoy 2.7.0 chooses the interrupt before the pushes.
 - The format 15 save state holds PyBoy's TIMA counter, which pyboy-rs
   writes as the cycles since the selected bit last fell (0 with the timer
   stopped) and does not read.

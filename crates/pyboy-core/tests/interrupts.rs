@@ -1,7 +1,13 @@
 //! The EI delay and the halt bug, run through `Cpu::tick` on a flat bus.
 //! Each case is the same at every slice length, since interrupts are taken
-//! only between slices.
-use pyboy_core::cpu::{Cpu, FlatBus};
+//! only between slices. Dispatch runs on a machine, since a push onto IE
+//! needs the real IE register.
+use pyboy_core::{
+    cpu::{Cpu, FlatBus},
+    mb::Machine,
+};
+
+const DEMO: &[u8] = include_bytes!("../../../reference/pyboy-2.7.0/pyboy/default_rom.gb");
 
 const START: usize = 0x100;
 const SLICES: [i64; 5] = [4, 8, 12, 456, 70224];
@@ -149,4 +155,91 @@ fn step_runs_one_instruction_with_the_delay_and_the_bug() {
     let error = cpu.step(&mut bus).unwrap_err();
     assert_eq!((error.pc, error.opcode), (0x101, 0xd3));
     assert!(cpu.halt_bug && cpu.pc == 0x101);
+}
+
+/// A ROM-only DMG machine past the boot ROM, with the LCD off, `code` at
+/// 0x0200 and a JR -2 loop at 0x0000 and at each interrupt vector.
+fn machine_running(code: &[u8]) -> Machine {
+    let mut rom = vec![0u8; 0x8000];
+    rom[0x100..0x150].copy_from_slice(&DEMO[0x100..0x150]);
+    rom[0x143] = 0;
+    rom[0x147..0x14a].fill(0);
+    rom[0x14d] = rom[0x134..0x14d]
+        .iter()
+        .fold(0u8, |sum, byte| sum.wrapping_sub(*byte).wrapping_sub(1));
+    for at in [0x00, 0x40, 0x48, 0x50, 0x58, 0x60] {
+        rom[at..at + 2].copy_from_slice(&[0x18, 0xfe]);
+    }
+    rom[0x200..0x200 + code.len()].copy_from_slice(code);
+    let mut m = Machine::new(rom, None, None, false, 48000).unwrap();
+    m.write(0xff50, 1);
+    m.write(0xff40, 0);
+    m.cpu.pc = 0x200;
+    m.cpu.sp = 0xfffe;
+    m
+}
+
+/// Take an interrupt from 0x0234 with SP at `sp` and IE and IF both
+/// `requested`, and give the PC, SP, IE and IF after it.
+fn dispatch(sp: i64, requested: u8) -> (i64, i64, i64, i64) {
+    let mut m = machine_running(&[]);
+    m.cpu.pc = 0x234;
+    m.cpu.sp = sp;
+    m.cpu.interrupt_master_enable = true;
+    m.write(0xffff, requested);
+    m.write(0xff0f, requested);
+    // The dispatch takes 20 cycles, so a 4 cycle slice runs nothing after it.
+    m.cpu.tick(&mut m.mb, 4).unwrap();
+    assert!(!m.cpu.interrupt_master_enable);
+    let cpu = &m.cpu;
+    let flags = cpu.interrupts_flag_register & 0x1f;
+    (cpu.pc, cpu.sp, cpu.interrupts_enabled_register, flags)
+}
+
+/// Mooneye ie_push: the vector is chosen after the high byte of the return
+/// address is pushed, so a push onto IE changes what is taken.
+#[test]
+fn a_push_onto_ie_moves_or_cancels_the_dispatch() {
+    // The high byte, 0x02, clears the timer bit in IE: the dispatch jumps to
+    // 0x0000 and leaves IF set.
+    assert_eq!(dispatch(0x0000, 0x04), (0x0000, 0xfffe, 0x02, 0x04));
+    // VBlank and STAT requested, and the high byte leaves only STAT enabled:
+    // STAT is taken and VBlank stays requested.
+    assert_eq!(dispatch(0x0000, 0x03), (0x0048, 0xfffe, 0x02, 0x01));
+    // The low byte, 0x34, lands on IE after the choice: serial is taken.
+    assert_eq!(dispatch(0x0001, 0x08), (0x0058, 0xffff, 0x34, 0x00));
+}
+
+/// An IF write ends the slice, as every IO write from FF00 to FF4B does, so
+/// an interrupt it makes takeable comes before the next instruction.
+#[test]
+fn an_if_write_is_taken_before_the_next_instruction() {
+    let run = |ime: bool| {
+        #[rustfmt::skip]
+        let mut m = machine_running(&[
+            0x3e, 0x04, // ld a, 4
+            0xe0, 0x0f, // ldh (IF), a
+            0x04,       // inc b
+            0x18, 0xfe, // jr -2
+        ]);
+        m.cpu.b = 0;
+        m.cpu.interrupt_master_enable = ime;
+        m.write(0xffff, 0x04);
+        m.write(0xff0f, 0);
+        m.cpu.tick(&mut m.mb, 456).unwrap();
+        m
+    };
+    // The slice ends after the write, and the next one takes the timer
+    // interrupt with INC B still to run.
+    let mut m = run(true);
+    assert_eq!((m.cpu.pc, m.cpu.b), (0x204, 0));
+    m.cpu.tick(&mut m.mb, 456).unwrap();
+    let returns_to = u16::from_le_bytes([m.read(0xfffc), m.read(0xfffd)]);
+    assert_eq!((m.cpu.pc, returns_to, m.cpu.b), (0x50, 0x204, 0));
+    // With IME clear the slice still ends there, and the next one takes
+    // nothing and runs INC B.
+    let mut m = run(false);
+    assert_eq!((m.cpu.pc, m.cpu.b), (0x204, 0));
+    m.cpu.tick(&mut m.mb, 456).unwrap();
+    assert_eq!((m.cpu.pc, m.cpu.sp, m.cpu.b), (0x205, 0xfffe, 1));
 }

@@ -92,16 +92,27 @@ impl Cpu {
         self.interrupts_flag_register |= i64::from(flag);
     }
 
-    pub fn handle_interrupt<B: Bus>(&mut self, bus: &mut B, flag: i64, address: i64) {
+    /// Take the highest priority interrupt in `pending`. As on hardware, the
+    /// vector is chosen after the high byte of the return address is pushed,
+    /// so a push onto IE (0xffff) can move the dispatch to another interrupt,
+    /// or cancel it and jump to 0x0000 with IF unchanged.
+    pub fn handle_interrupt<B: Bus>(&mut self, bus: &mut B, pending: i64) {
         #[cfg(feature = "instruction-cache-switch")]
         if let Some(log) = &mut self.interrupt_log {
-            log.push((self.cycles, self.pc, flag));
+            log.push((self.cycles, self.pc, 1 << pending.trailing_zeros()));
         }
-        self.interrupts_flag_register ^= flag;
-        bus.write((self.sp - 1) as u16, (self.pc >> 8) as u8, self);
-        bus.write((self.sp - 2) as u16, self.pc as u8, self);
+        let pc = self.pc;
+        bus.write((self.sp - 1) as u16, (pc >> 8) as u8, self);
+        let pending = self.interrupts_flag_register & self.interrupts_enabled_register & 0x1f;
+        self.pc = if pending == 0 {
+            0
+        } else {
+            let bit = pending.trailing_zeros();
+            self.interrupts_flag_register ^= 1 << bit;
+            0x40 + i64::from(bit) * 8
+        };
+        bus.write((self.sp - 2) as u16, pc as u8, self);
         self.sp = (self.sp - 2) & 0xffff;
-        self.pc = address;
         self.cycles += 20;
         self.interrupt_master_enable = false;
     }
@@ -121,8 +132,7 @@ impl Cpu {
                     self.halt_bug = false;
                     self.pc = (self.pc - 1) & 0xffff;
                 }
-                let bit = pending.trailing_zeros();
-                self.handle_interrupt(bus, 1 << bit, 0x40 + i64::from(bit) * 8);
+                self.handle_interrupt(bus, pending);
             }
             self.interrupt_queued = true;
             true

@@ -908,6 +908,7 @@ change smaller than that is noise.
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +3.4% to +9.6%, median +2.8% to +10.0% | +0.2% to +3.7%, median -0.2% to +3.8% | 2.3%, median 1.4% |
 | EI delay and the halt bug | #54 | 86 to 92 of 145 | 96 to 102 of 200 | +3.6% to +10.6%, median +3.7% to +11.2% | -1.2% to +2.0%, median -0.5% to +2.4% | 0.9%, median 1.2% |
+| Interrupt dispatch and the IE push | #55 | 92 to 93 of 145 | 102 to 103 of 200 | +4.6% to +10.3%, median +4.9% to +10.0% | -1.0% to +1.1%, median -1.3% to +1.4% | 1.2%, median 1.9% |
 
 Cells past their A/A against the parent, from the `examples/benchmark.rs`
 rounds that run beside the harness:
@@ -924,3 +925,9 @@ rounds that run beside the harness:
   -2.5% and -1.2% in an earlier run at load 6 too. The other nine cells
   are within 1% by median. Moving the EI and HALT bodies out of the opcode
   match made 10 of the 12 cells slower again, so that was dropped.
+- #55, Gold batch and Gold frame about 1% slower than its parent by
+  median, best then median: -0.1% and -1.1% (A/A 0.6% and 0.4%), -0.6%
+  and -1.0% (A/A 0.2% and 0.1%). The change runs only when an interrupt
+  is taken, and all 18 harness cells give the same state and frame hashes
+  as the parent over 216,000 frames. Gold audio was 2.6% and 1.4% faster
+  in the same rounds.
