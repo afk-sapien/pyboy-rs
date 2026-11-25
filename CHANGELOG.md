@@ -67,6 +67,15 @@ Draft for 0.2.0. Not released.
   in PyBoy when an LCD mode change came just before a timer or serial
   event, since the instruction cache skips mode changes that set no flag.
   The last mode change before such an event now stays a slice end.
+- `tools/pgo.sh record` writes the same profile on each run from the same
+  source and states, and the wheel built from it is the same byte for byte.
+  Crystal's cartridge clock read the host clock, so Crystal played
+  differently in each recording and the counters of 45 functions moved.
+  `tools/pgo_play.py` now locks a cartridge clock to a fixed date that moves
+  only with the frames played. The instrumented wheel is linked without a
+  build ID, which changed with the work directory. One pyo3 function that
+  sets up each Python class runs in a different order in each process and
+  is left out of the profile. It runs once per class at import.
 
 ### Compatibility
 

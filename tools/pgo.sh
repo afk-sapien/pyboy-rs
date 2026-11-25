@@ -12,6 +12,8 @@
 # profile was recorded from. Commit both files. ROMs and states stay local: the
 # profile holds function names and counters only, and record checks that no
 # 64-byte stretch of ROM or state data appears in it (tools/pgo_play.py --scan).
+# Two records from the same source, ROMs and states write the same profile byte
+# for byte, so a profile only changes when what it measures does.
 #
 # check compares that fingerprint and the workspace version with HEAD. It exits
 # 1 if the Rust source, a manifest, Cargo.lock or the version changed since the
@@ -122,8 +124,11 @@ record() {
   rm -rf "$work/raw" "$work/wheel" "$work/venv"
   mkdir -p "$work/raw" "$work/wheel"
   echo "== building an instrumented wheel with Rust $toolchain in $work"
+  # The instrumented wheel is linked without a build ID. The profile would
+  # store it, and it changes with the work directory.
   # shellcheck disable=SC2086
-  ${PGO_BUILD_PREFIX:-} env RUSTUP_TOOLCHAIN="$toolchain" RUSTFLAGS="-Cprofile-generate=$work/raw" \
+  ${PGO_BUILD_PREFIX:-} env RUSTUP_TOOLCHAIN="$toolchain" \
+    RUSTFLAGS="-Cprofile-generate=$work/raw -Clink-arg=-Wl,--build-id=none" \
     "$maturin" build --release --locked --target "$target" --target-dir "$work/target" --out "$work/wheel"
   "$python" -m venv "$work/venv"
   "$work/venv/bin/python" -m pip install --quiet --no-index --no-deps "$work"/wheel/*.whl
@@ -139,7 +144,10 @@ record() {
   echo "== merging"
   local out=${PGO_OUT:-pgo}
   mkdir -p "$out"
-  "$profdata" merge -o "$work/merged.profdata" "$work"/raw/*.profraw
+  # pyo3 sets up each Python class from a HashMap whose order changes with each
+  # process, so the counters of that one function differ between records. It
+  # runs once per class at import and is left out of the profile.
+  "$profdata" merge --no-function='create_type_object5inner$' -o "$work/merged.profdata" "$work"/raw/*.profraw
   local files=() roms=0
   for arg in "$@"
   do

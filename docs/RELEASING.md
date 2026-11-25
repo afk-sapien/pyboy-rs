@@ -155,6 +155,12 @@ refuses to run while the Rust source has uncommitted changes, because the
 profile must match what HEAD builds. The maturin version must equal the
 `wheels.yml` pin.
 
+Recording is repeatable: two records from the same source and states write
+the same profile byte for byte, so `cmp` against the committed file shows
+whether a record changed anything. A game's cartridge clock is locked to a
+fixed date during play. One pyo3 function that sets up the Python classes runs
+in a different order in each process and is left out of the profile.
+
 To move the wheel to a newer Rust, record once with `PGO_TOOLCHAIN=1.X.Y`. The
 new toolchain is written to `pgo/profile.txt` and the workflow uses it.
 
