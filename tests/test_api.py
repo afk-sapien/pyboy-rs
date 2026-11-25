@@ -15,44 +15,65 @@ def state(emulator):
     return emulator.state_body(data) if isinstance(emulator, PyBoy) else data
 
 
+def cross_load(ref, native):
+    """PyBoy 2.7.0 loads the state pyboy-rs saves and saves it back byte for
+    byte, and pyboy-rs loads that and saves the same state."""
+    body = state(native)
+    ref.load_state(io.BytesIO(body))
+    assert state(ref) == body
+    native.load_state(io.BytesIO(state(ref)))
+    assert state(native) == body
+
+
+# The demo ROM's boot polls LY, which pyboy-rs reads as on hardware, a few
+# cycles ahead of PyBoy 2.7.0, so the two runs split once the LCD is on
+# (docs/compatibility.md). These tests check the API shapes against PyBoy and
+# the output against digests of pyboy-rs's own runs (tests/digests).
+
+
 @pytest.mark.parametrize("cgb", [False, True])
-def test_python_facade_tick_input_memory_and_state(cgb):
+def test_python_facade_tick_input_memory_and_state(cgb, digests):
     with Reference(io.BytesIO(DEMO.read_bytes()), window="null", cgb=cgb) as ref, PyBoy(DEMO, cgb=cgb) as native:
         ref.set_emulation_speed(0)
         native.set_emulation_speed(0)
         live_screen = native.screen.ndarray
         assert native.screen.raw_buffer_dims == ref.screen.raw_buffer_dims
+        assert (native.screen.image.mode, native.screen.image.size) == (ref.screen.image.mode, ref.screen.image.size)
+        assert native.sound.ndarray.dtype == ref.sound.ndarray.dtype
         for count in (60, 1, 3, 1, 5):
-            for emulator in (ref, native):
-                emulator.button("a", delay=2)
-                emulator.memory[0xc120:0xc124] = [10, 20, 30, 40]
-                emulator.memory[0xc130:0xc134] = 9
-                emulator.tick(count)
-            assert native.memory[0xc100:0xc200] == ref.memory[0xc100:0xc200]
-            assert state(native) == state(ref)
-            assert live_screen.tobytes() == bytes(ref.screen.raw_buffer)
-            assert native.screen.image.tobytes() == ref.screen.image.tobytes()
-            assert native.sound.ndarray.tobytes() == bytes(ref.sound.raw_buffer[:ref.sound.raw_buffer_head])
-        native.load_state(io.BytesIO(state(ref)))
-        assert state(native) == state(ref)
+            native.button("a", delay=2)
+            native.memory[0xc120:0xc124] = [10, 20, 30, 40]
+            native.memory[0xc130:0xc134] = 9
+            native.tick(count)
+            screen = bytes(native.screen.raw_buffer)
+            assert live_screen.tobytes() == screen
+            assert native.screen.image.tobytes() == screen
+            sound = native.sound.ndarray
+            assert sound.ndim == 2 and sound.shape[1] == 2
+            digests.check(f"frame {native.frame_count}", native.memory[0xc100:0xc200], state(native),
+                          screen, sound.tobytes())
+        cross_load(ref, native)
 
 
 @pytest.mark.parametrize("redirect", [False, True])
-def test_hook_can_read_write_registers_and_memory(redirect):
+def test_hook_can_read_write_registers_and_memory(redirect, digests):
     with Reference(io.BytesIO(DEMO.read_bytes()), window="null") as ref, PyBoy(DEMO) as native:
         logs = [[], []]
         def callback(context):
             log, emulator = context
-            log.append("hit")
+            log.append(("hit", emulator.register_file.PC, emulator.memory[0x100]))
             if redirect:
                 emulator.register_file.PC = 0x101
                 emulator.register_file.A = 0x45
+                log.append(("redirected", emulator.register_file.PC, emulator.register_file.A))
         for i, emulator in enumerate((ref, native)):
             emulator.set_emulation_speed(0)
             emulator.hook_register(0, 0x100, callback, (logs[i], emulator))
             emulator.tick(90)
-        assert logs == [["hit"], ["hit"]]
-        assert state(native) == state(ref)
+        assert logs[1] == logs[0]
+        assert logs[1][0][0] == "hit" and len(logs[1]) == 1 + redirect
+        digests.check("frame 90", state(native))
+        cross_load(ref, native)
         for emulator in (ref, native):
             emulator.hook_deregister(0, 0x100)
         assert native.memory[0, 0x100] == ref.memory[0, 0x100]
