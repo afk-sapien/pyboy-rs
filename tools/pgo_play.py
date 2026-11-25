@@ -9,6 +9,8 @@ frame and a memory snapshot every 30 frames. A shorter stretch then runs one
 frame per call with rendering and sound on, as when someone listens. The
 buttons come from a seeded script (walking, A and B presses, the start menu
 and idle waits), so every run plays the same inputs from the same states.
+A cartridge clock is locked at CLOCK_AT and moves only with the frames played,
+since a game that reads the host clock plays differently in each recording.
 Gzip compressed states are read too.
 
 The second form checks that no ROM or state data from any FILE appears in
@@ -29,6 +31,9 @@ import time
 
 SNAPSHOT_EVERY = 30
 LISTEN_SHARE = 0.2
+# The Unix time a cartridge clock reads at the start of each run: 2026-12-01
+# 00:00 UTC, after the play states were made, so no game sees its clock go back.
+CLOCK_AT = 1796083200.0
 WINDOW = 32
 MIN_SPREAD = 8
 
@@ -81,6 +86,8 @@ def snapshot(emu, cgb):
 
 def run(emu, state, held, step, sound, cgb):
     emu.load_state(io.BytesIO(state))
+    if emu.has_rtc:
+        emu.lock_clock(at=CLOCK_AT, follow_frames=True)
     current = None
     frame = 0
     while frame < len(held):

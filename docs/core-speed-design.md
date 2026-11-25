@@ -336,7 +336,11 @@ placement. The i7-10700K these were measured on has the Skylake family's
 jump erratum fix, which makes speed depend on where jumps fall against
 32-byte boundaries. In the PGO build, recording the parent's profile again
 and rebuilding the unchanged parent changes 8 CPU and LCD functions and
-reads slower than the A/A control in 13 modes, by up to 2.7%.
+reads slower than the A/A control in 13 modes, by up to 2.7%. The cause was
+Crystal's cartridge clock, which read the host clock, so Crystal played
+differently in each recording. `tools/pgo_play.py` now locks that clock, and
+two records of the same source give the same profile and the same wheel byte
+for byte.
 
 ### B2. Less work per line (built)
 
