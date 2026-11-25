@@ -909,6 +909,7 @@ change smaller than that is noise.
 | Timer on the system counter | #53 | 78 to 86 of 145 | 88 to 96 of 200 | +3.4% to +9.6%, median +2.8% to +10.0% | +0.2% to +3.7%, median -0.2% to +3.8% | 2.3%, median 1.4% |
 | EI delay and the halt bug | #54 | 86 to 92 of 145 | 96 to 102 of 200 | +3.6% to +10.6%, median +3.7% to +11.2% | -1.2% to +2.0%, median -0.5% to +2.4% | 0.9%, median 1.2% |
 | Interrupt dispatch and the IE push | #55 | 92 to 93 of 145 | 102 to 103 of 200 | +4.6% to +10.3%, median +4.9% to +10.0% | -1.0% to +1.1%, median -1.3% to +1.4% | 1.2%, median 1.9% |
+| One STAT line | #56 | 93 to 96 of 145 | 103 to 105 of 200 | +2.6% to +9.6%, median +3.0% to +9.1% | -2.9% to +0.5%, median -2.4% to +0.8% | 0.9%, median 1.2% |
 
 Cells past their A/A against the parent, from the `examples/benchmark.rs`
 rounds that run beside the harness:
@@ -931,3 +932,13 @@ rounds that run beside the harness:
   is taken, and all 18 harness cells give the same state and frame hashes
   as the parent over 216,000 frames. Gold audio was 2.6% and 1.4% faster
   in the same rounds.
+- #56, 17 of the 18 harness cells slower than its parent past their A/A,
+  by up to 1.9% in Red, 2.4% in Gold and 2.9% in Crystal, and Gold render
+  in `benchmark.rs` -1.3% and -3.1%, best then median (A/A 0.1% and 0.9%).
+  All 18 cells give the same state and frame hashes as the parent over
+  216,000 frames. The added work is at most about 0.7% of a Red frame: the
+  halted check's fast path on 71 slices a frame and 3 to 5 operations per
+  mode step. The rest is code placement, since the new profile lays out
+  `opcodes::execute`, which the fix does not change, anew. A first version
+  that worked out the line in full on every mode step read up to 2.5%
+  slower in Red by median. The cost is taken for the five tests.

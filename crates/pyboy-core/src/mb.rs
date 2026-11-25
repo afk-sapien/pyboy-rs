@@ -394,7 +394,7 @@ impl Machine {
         } else if current {
             self.mb.slice_target()
         } else {
-            self.mb.lazy_slice_target(start)
+            self.mb.lazy_slice_target(start, self.cpu.halted)
         }
     }
 
@@ -697,8 +697,11 @@ impl Motherboard {
     /// so mode changes from the last one before that cycle on stay slice
     /// ends until the step lands. And PyBoy counts the sound deadline from
     /// the slice start, so no mode change is skipped while it could bind.
+    ///
+    /// A halted CPU sees slice ends as well, since it moves on by exactly
+    /// the slice length (see `halted_lcd_deadline`).
     #[inline]
-    fn next_lcd_deadline(&mut self, now: i64) -> i64 {
+    fn next_lcd_deadline(&mut self, now: i64, halted: bool) -> i64 {
         let next = self.lcd.next_mode_change();
         #[cfg(feature = "instruction-cache-switch")]
         if !self.instruction_cache {
@@ -719,7 +722,29 @@ impl Motherboard {
         if (self.sound.cycles_to_interrupt as u64) < (deadline - now) as u64 {
             return next;
         }
+        if halted {
+            return self.halted_lcd_deadline(now, deadline);
+        }
         deadline
+    }
+
+    /// `deadline` for a halted CPU, which moves on by exactly the slice
+    /// length, and by at least 4 cycles. So a slice end at a mode change
+    /// under 4 cycles before a timer or serial event takes the CPU past the
+    /// event, and it wakes up to 3 cycles later than with no slice end
+    /// there. The last mode change before the next such event therefore
+    /// stays a slice end, and from it the CPU moves to the event as in
+    /// PyBoy. Kept out of line, since a timer or serial event comes before
+    /// a flag on few halted slices.
+    #[inline(never)]
+    fn halted_lcd_deadline(&self, now: i64, deadline: i64) -> i64 {
+        // As in the slice length, a deadline already passed never binds.
+        let event = ((self.timer.due - now) as u64).min((self.serial.next_target() - now) as u64);
+        if event >= (deadline - now) as u64 {
+            return deadline;
+        }
+        let last = self.lcd.next_flag_change(now + event as i64);
+        if last > now { last } else { deadline }
     }
 
     /// Whether a slice end may skip the devices with no event due. Double
@@ -760,8 +785,8 @@ impl Motherboard {
     /// is a reading of the sound clock instead, so the sound is ticked
     /// whenever a tick could change the minimum.
     #[inline]
-    fn lazy_slice_target(&mut self, now: i64) -> i64 {
-        self.lcd_deadline = self.next_lcd_deadline(now);
+    fn lazy_slice_target(&mut self, now: i64, halted: bool) -> i64 {
+        self.lcd_deadline = self.next_lcd_deadline(now, halted);
         let lcd = &self.lcd;
         let lag = now - lcd.last_cycles;
         // A running timer's interrupt is under MAX_CYCLES away.
@@ -1307,12 +1332,14 @@ impl Motherboard {
                     0xff40..=0xff4b => {
                         self.tick_lcd(cpu);
                         match address {
-                            0xff40 => self.lcd.set_lcdc(value),
-                            0xff41 => self.lcd.set_stat(value),
+                            // A write that raises the STAT line requests
+                            // the interrupt at once.
+                            0xff40 => cpu.set_interruptflag(self.lcd.set_lcdc(value)),
+                            0xff41 => cpu.set_interruptflag(self.lcd.set_stat(value)),
                             0xff42 => self.lcd.scy = value,
                             0xff43 => self.lcd.scx = value,
                             0xff44 => return,
-                            0xff45 => self.lcd.lyc = value,
+                            0xff45 => cpu.set_interruptflag(self.lcd.set_lyc(value)),
                             0xff46 => {
                                 // Kept in the saved IO page for reads.
                                 self.ram[0xff46] = value;

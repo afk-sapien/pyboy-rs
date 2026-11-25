@@ -96,7 +96,7 @@ def test_vram_palettes_window_sprites_dma_and_speed(cgb, dma_mode):
             emulator.memory[0xffff] = 0
             emulator.memory[0xff0f] = 0
             emulator.memory[0xff40] = 0xff
-        for _ in range(5):
+        for tick in range(5):
             ref.tick()
             native.tick()
             assert bytes(native.screen.raw_buffer) == bytes(ref.screen.raw_buffer)
@@ -114,8 +114,11 @@ def test_vram_palettes_window_sprites_dma_and_speed(cgb, dma_mode):
                 assert native.memory[0xff55] == ref.memory[0xff55]
                 continue
             # pyboy-rs keeps the OAM DMA source in the saved IO page so that it
-            # reads back, and PyBoy 2.7.0 does not (docs/compatibility.md).
+            # reads back, and PyBoy 2.7.0 does not. The first tick ends as the
+            # first line after the LCD turns on starts, which reads as mode 0
+            # in pyboy-rs and as mode 2 in PyBoy 2.7.0 (docs/compatibility.md).
             ours, theirs = state(native), state(ref)
             differ = [i for i in range(len(ours)) if ours[i] != theirs[i]]
-            assert len(ours) == len(theirs) and len(differ) == 1, differ
-            assert (ours[differ[0]], theirs[differ[0]]) == (0xc0, 0)
+            assert len(ours) == len(theirs), differ
+            values = sorted((ours[i], theirs[i]) for i in differ)
+            assert values == ([(0x84, 0x86)] if tick == 0 else []) + [(0xc0, 0)], differ
