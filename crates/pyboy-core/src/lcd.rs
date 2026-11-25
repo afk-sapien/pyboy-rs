@@ -359,69 +359,112 @@ impl Lcd {
     }
 
     /// The cycle of the next mode change that sets an interrupt flag or ends
-    /// the frame, in single speed. It follows the mode changes `tick` would
-    /// take and reads only LCDC, the STAT sources and LYC besides the LCD's
+    /// the frame, in single speed. It works out the mode changes `tick`
+    /// would take from LCDC, the STAT sources, LYC and SCX besides the LCD's
     /// own position, so it holds until one of those registers is written.
     /// Where it cannot tell, it names an earlier mode change, never a later
     /// one. It stops early at the last mode change before `limit`, or at the
-    /// next one when none comes before `limit`. Kept out of line, since it
-    /// runs about once per sound frame step and the slice loop is hot.
+    /// next one when none comes before `limit`.
+    ///
+    /// A mode change raises the STAT line only by entering mode 0, 1 or 2
+    /// with its source on, or by starting a line where LY matches LYC. Each
+    /// of those is flagged, also where another source already holds the line
+    /// high and nothing is requested. Line 144 is flagged for VBlank, which
+    /// covers its mode 2 source. Past the current line every line has the
+    /// same mode changes at the same offsets from its start, so the first
+    /// flag and the last mode change before `limit` come out in closed form.
+    /// Kept out of line, since it runs about once per sound frame step and
+    /// the slice loop is hot.
     #[inline(never)]
     pub fn next_flag_change(&self, limit: i64) -> i64 {
-        let mut at = self.next_mode_change();
-        if self.lcdc & 128 == 0 || self.reset || at >= limit {
+        let at = self.next_mode_change();
+        let next = self.next_stat_mode;
+        let ly = i64::from(self.ly);
+        // Mode 2 next starts a visible line and mode 1 next a VBlank line.
+        // Line 153, and positions `tick` never reaches with a visible mode
+        // past the visible lines, name the next mode change, as with the
+        // LCD off.
+        let known = match next {
+            0 | 3 => ly <= 143,
+            1 => ly < 153,
+            2 => ly < 143,
+            _ => false,
+        };
+        if self.lcdc & 128 == 0 || self.reset || at >= limit || !known {
             return at;
         }
-        let first = at;
-        let lyc = (self.stat & 64 != 0).then_some(self.lyc);
-        let mut ly = self.ly;
-        let mut mode = self.stat & 3;
-        let mut next = self.next_stat_mode;
-        // The clock at `at`, which places mode 0's end on the line.
-        let mut end = self.clock_target;
-        // A frame has 442 mode changes.
-        for _ in 0..450 {
-            if ly == 153 {
-                return at;
-            }
-            if next > 3 {
-                return first;
-            }
-            // A mode change raises the STAT line only by entering mode 0, 1
-            // or 2 with its source on, or by starting a line where LY
-            // matches LYC. Each of those is flagged, also where another
-            // source already holds the line high and nothing is requested.
-            // Line 144 is flagged for VBlank, which covers its mode 2 source.
-            let mut flag = next != mode && next != 3 && self.stat & (8 << next) != 0;
-            mode = next;
-            let length = match mode {
-                2 => {
-                    ly = ly.wrapping_add(1);
-                    next = 3;
-                    flag |= lyc == Some(ly);
-                    80
-                }
-                3 => {
-                    next = 0;
-                    self.mode_3_cycles()
-                }
-                0 => {
-                    next = if ly < 143 { 2 } else { 1 };
-                    LINE_CYCLES * (i64::from(ly) + 1) - end
-                }
-                _ => {
-                    ly = ly.wrapping_add(1);
-                    flag |= ly == 144 || lyc == Some(ly);
-                    LINE_CYCLES
-                }
-            };
-            if flag || at + length >= limit {
-                return at;
-            }
-            at += length;
-            end += length;
+        let source = |mode: u8| self.stat & (8 << mode) != 0;
+        if next != 3 && next != self.stat & 3 && source(next) {
+            return at;
         }
-        first
+        let lyc = if self.stat & 64 != 0 {
+            i64::from(self.lyc)
+        } else {
+            -1
+        };
+        if next == 1 {
+            // Each VBlank mode change starts a line, a line apart, up to the
+            // frame end as line 154 would start.
+            let start = at - LINE_CYCLES * (ly + 1);
+            let mut flag = if ly < 144 { 144 } else { 154 };
+            if lyc > ly && lyc < flag {
+                flag = lyc;
+            }
+            let line = ((limit - 1 - start) / LINE_CYCLES).min(flag);
+            return start + LINE_CYCLES * line;
+        }
+        // The cycle of clock 0, where line 0 starts. The rest of the current
+        // line steps as `tick` takes it, with mode 0 to the line's end.
+        let start = at - self.clock_target;
+        let mode_3 = self.mode_3_cycles();
+        let mut at = at;
+        let mut ly = ly;
+        if next == 2 {
+            ly += 1;
+            if lyc == ly || at + 80 >= limit {
+                return at;
+            }
+            at += 80;
+        }
+        if next != 0 {
+            if at + mode_3 >= limit {
+                return at;
+            }
+            at += mode_3;
+        }
+        let first = ly + 1;
+        if (next != 0 && source(0)) || start + LINE_CYCLES * first >= limit {
+            return at;
+        }
+        // From line `first` on, which starts before `limit`. Each visible
+        // line enters mode 2, 3 and 0 at offsets 0, 80 and 80 plus mode 3,
+        // and line 144 starts VBlank.
+        let mut flag = start + LINE_CYCLES * 144;
+        if first < 144 {
+            if source(2) {
+                flag = start + LINE_CYCLES * first;
+            } else {
+                if (first..144).contains(&lyc) {
+                    flag = start + LINE_CYCLES * lyc;
+                }
+                if source(0) {
+                    flag = flag.min(start + LINE_CYCLES * first + 80 + mode_3);
+                }
+            }
+        }
+        if flag < limit {
+            return flag;
+        }
+        // The last mode change before `limit`, on a visible line.
+        let line = start + LINE_CYCLES * ((limit - 1 - start) / LINE_CYCLES);
+        let offset = limit - 1 - line;
+        if offset < 80 {
+            line
+        } else if offset < 80 + mode_3 {
+            line + 80
+        } else {
+            line + 80 + mode_3
+        }
     }
 
     pub fn tick(&mut self, cycles: i64) -> u8 {
@@ -1320,5 +1363,185 @@ mod tests {
         lcd.set_lcdc(0x11);
         lcd.set_lyc(0);
         assert_eq!(lcd.set_lcdc(0x91), 2);
+    }
+
+    /// `next_flag_change` as it first worked, one mode change at a time,
+    /// with each mode change it passes pushed to `passed`.
+    fn walk_flag_change(lcd: &Lcd, limit: i64, passed: &mut Vec<i64>) -> i64 {
+        let mut at = lcd.next_mode_change();
+        if lcd.lcdc & 128 == 0 || lcd.reset || at >= limit {
+            return at;
+        }
+        let first = at;
+        let lyc = (lcd.stat & 64 != 0).then_some(lcd.lyc);
+        let mut ly = lcd.ly;
+        let mut mode = lcd.stat & 3;
+        let mut next = lcd.next_stat_mode;
+        let mut end = lcd.clock_target;
+        for _ in 0..450 {
+            if ly == 153 {
+                return at;
+            }
+            if next > 3 {
+                return first;
+            }
+            passed.push(at);
+            let mut flag = next != mode && next != 3 && lcd.stat & (8 << next) != 0;
+            mode = next;
+            let length = match mode {
+                2 => {
+                    ly = ly.wrapping_add(1);
+                    next = 3;
+                    flag |= lyc == Some(ly);
+                    80
+                }
+                3 => {
+                    next = 0;
+                    lcd.mode_3_cycles()
+                }
+                0 => {
+                    next = if ly < 143 { 2 } else { 1 };
+                    LINE_CYCLES * (i64::from(ly) + 1) - end
+                }
+                _ => {
+                    ly = ly.wrapping_add(1);
+                    flag |= ly == 144 || lyc == Some(ly);
+                    LINE_CYCLES
+                }
+            };
+            if flag || at + length >= limit {
+                return at;
+            }
+            at += length;
+            end += length;
+        }
+        first
+    }
+
+    /// Whether `next_flag_change` works a position out in full, rather than
+    /// naming the next mode change.
+    fn worked_out(lcd: &Lcd) -> bool {
+        match lcd.next_stat_mode {
+            0 | 3 => lcd.ly <= 143,
+            1 => lcd.ly < 153,
+            2 => lcd.ly < 143,
+            _ => false,
+        }
+    }
+
+    /// Check `next_flag_change` against the walk at limits on and next to
+    /// the mode changes the walk passes, and past its flag. Where `exact` is
+    /// false it must name the next mode change, which is never later.
+    fn check_flag_change(lcd: &Lcd, exact: bool, rng: &mut Rng, passed: &mut Vec<i64>) {
+        passed.clear();
+        let at = lcd.next_mode_change();
+        let flag = walk_flag_change(lcd, i64::MAX, passed);
+        let mut limits = vec![i64::MAX, flag, flag + 1, at, at + 1];
+        limits.push(at + (rng.next() % 600) as i64);
+        limits.push(at + (rng.next() % 80_000) as i64);
+        for _ in 0..3 {
+            if let Some(&change) = passed.get((rng.next() % 450) as usize % passed.len().max(1)) {
+                limits.extend([change - 1, change, change + 1]);
+            }
+        }
+        for limit in limits {
+            passed.clear();
+            let walk = walk_flag_change(lcd, limit, passed);
+            let got = lcd.next_flag_change(limit);
+            let place = format!(
+                "LY {}, STAT {:#04x}, next {}, LYC {}, SCX {}, target {}, limit {}",
+                lcd.ly,
+                lcd.stat,
+                lcd.next_stat_mode,
+                lcd.lyc,
+                lcd.scx,
+                lcd.clock_target,
+                limit - at
+            );
+            if exact {
+                assert_eq!(got, walk, "{place}");
+            } else {
+                assert!(got == at && got <= walk, "{place}");
+            }
+        }
+    }
+
+    /// At each mode change of the frame after the LCD turns on and into the
+    /// next, for each mix of sources and LYC on each side of the lines where
+    /// the steps differ. SCX is written now and then between mode changes,
+    /// so mode 3 of the current line can differ from later lines'.
+    #[test]
+    fn the_flag_change_matches_the_walk_at_each_mode_change() {
+        let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+        let mut passed = Vec::new();
+        for sources in (0..16).map(|s| s << 3) {
+            for lyc in [0, 1, 10, 142, 143, 144, 145, 153, 200] {
+                let mut lcd = lcd_on(sources, lyc);
+                lcd.scx = rng.byte();
+                check_flag_change(&lcd, true, &mut rng, &mut passed);
+                let (mut cycles, mut at) = (0, i64::MIN);
+                while cycles < FRAME_CYCLES * 5 / 4 {
+                    cycles += 4;
+                    lcd.tick(cycles);
+                    if lcd.next_mode_change() == at {
+                        continue;
+                    }
+                    at = lcd.next_mode_change();
+                    if rng.next() % 4 == 0 {
+                        lcd.scx = rng.byte();
+                    }
+                    check_flag_change(&lcd, true, &mut rng, &mut passed);
+                }
+            }
+        }
+    }
+
+    /// From positions set at random, also ones `tick` never reaches. Those
+    /// with a visible mode next past the visible lines name the next mode
+    /// change. With clocks where `tick` puts them, that is never later than
+    /// the walk. With any other clocks only the positions worked out in full
+    /// are checked.
+    #[test]
+    fn the_flag_change_from_any_position_is_never_later_than_the_walk() {
+        let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+        let mut passed = Vec::new();
+        let mut lcd = Lcd::new(false, false);
+        for _ in 0..50_000 {
+            lcd.lcdc = if rng.next() % 16 == 0 { 0x11 } else { 0x91 };
+            lcd.reset = rng.next() % 16 == 0;
+            lcd.ly = match rng.next() % 4 {
+                0 => rng.byte() % 154,
+                1 => 140 + rng.byte() % 14,
+                _ => [0, 1, 142, 143, 144, 152, 153][(rng.next() % 7) as usize],
+            };
+            lcd.stat = rng.byte() & 0x7f;
+            lcd.next_stat_mode = if rng.next() % 32 == 0 {
+                4
+            } else {
+                rng.byte() % 4
+            };
+            lcd.lyc = if rng.next() % 3 == 0 {
+                rng.byte()
+            } else {
+                lcd.ly.wrapping_add(rng.byte() % 4)
+            };
+            lcd.scx = rng.byte();
+            let ly = i64::from(lcd.ly);
+            let placed = rng.next() % 8 != 0;
+            lcd.clock_target = if !placed {
+                (rng.next() % (2 * FRAME_CYCLES as u64)) as i64
+            } else {
+                match lcd.next_stat_mode {
+                    3 => LINE_CYCLES * ly + 80,
+                    0 => LINE_CYCLES * ly + 80 + MODE_3_CYCLES + (rng.next() % 8) as i64,
+                    _ => LINE_CYCLES * (ly + 1),
+                }
+            };
+            lcd.clock = lcd.clock_target - 1 - (rng.next() % 80) as i64;
+            lcd.last_cycles = (rng.next() % 1_000_000_000) as i64;
+            if placed || worked_out(&lcd) {
+                check_flag_change(&lcd, worked_out(&lcd), &mut rng, &mut passed);
+            }
+        }
     }
 }
