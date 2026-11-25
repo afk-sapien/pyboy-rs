@@ -44,6 +44,20 @@ Draft for 0.2.0. Not released.
   the return address, so a push onto IE can move the dispatch to another
   interrupt, or cancel it and jump to 0x0000. PyBoy 2.7.0 chooses the
   interrupt first.
+- The STAT sources share one line, and the interrupt is requested only as
+  the line rises. So while one source holds the line high, another that
+  starts to hold requests nothing. A STAT, LYC or LCDC write that raises
+  the line requests the interrupt at the write. The mode 2 source also
+  requests as line 144 starts. An LYC write and turning the LCD on compare
+  LY with LYC at once, and with the LCD off the LY=LYC bit keeps its value.
+  The first line after the LCD turns on reads as mode 0 until mode 3
+  starts. PyBoy 2.7.0 requests for each source on its own, only at mode
+  and line changes. Five Mooneye PPU results go from fail to pass, 3 on
+  DMG and 2 on CGB.
+- With the picture off, a halted CPU could wake up to 3 cycles later than
+  in PyBoy when an LCD mode change came just before a timer or serial
+  event, since the instruction cache skips mode changes that set no flag.
+  The last mode change before such an event now stays a slice end.
 
 ### Compatibility
 
