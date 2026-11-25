@@ -1222,10 +1222,10 @@ impl Motherboard {
                 self.tick_lcd(cpu);
                 match address {
                     0xff40 => self.lcd.lcdc,
-                    0xff41 => self.lcd.stat | 0x80,
+                    0xff41 => self.lcd.read_stat(cpu.cycles),
                     0xff42 => self.lcd.scy,
                     0xff43 => self.lcd.scx,
-                    0xff44 => self.lcd.ly,
+                    0xff44 => self.lcd.read_ly(cpu.cycles),
                     0xff45 => self.lcd.lyc,
                     0xff46 => self.ram[0xff46],
                     0xff47 => self.lcd.bgp,
@@ -1354,7 +1354,9 @@ impl Motherboard {
                             0xff4a => self.lcd.wy = value,
                             _ => self.lcd.wx = value,
                         }
-                        if matches!(address, 0xff40 | 0xff41 | 0xff45) {
+                        // The predicted flag change reads these, and SCX
+                        // through the length of mode 3.
+                        if matches!(address, 0xff40 | 0xff41 | 0xff43 | 0xff45) {
                             self.reset_lcd_deadline();
                         }
                     }

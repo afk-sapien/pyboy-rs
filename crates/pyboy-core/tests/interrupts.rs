@@ -141,6 +141,24 @@ fn halt_with_ime_clear_and_nothing_pending_halts_and_wakes_without_the_bug() {
     }
 }
 
+/// Mooneye intr_2_mode0_timing and hblank_ly_scx_timing-GS: a halted CPU
+/// wakes on a machine cycle, so an interrupt flagged partway through one is
+/// taken as that machine cycle ends.
+#[test]
+fn a_halted_cpu_wakes_on_a_machine_cycle() {
+    for (halted_for, taken) in [(5, 8), (6, 8), (7, 8), (8, 8), (9, 12)] {
+        let (mut cpu, mut bus) = cpu_running(&[0x76], true, false);
+        cpu.tick(&mut bus, 4).unwrap();
+        // The halted CPU moves on by the whole slice, here to the flag.
+        cpu.tick(&mut bus, halted_for - 4).unwrap();
+        assert!(cpu.halted && cpu.cycles == halted_for);
+        cpu.interrupts_flag_register = 1;
+        cpu.tick(&mut bus, 4).unwrap();
+        // The dispatch takes 20 cycles from the wake.
+        assert_eq!((cpu.pc, cpu.cycles - 20), (0x40, taken), "{halted_for}");
+    }
+}
+
 #[test]
 fn step_runs_one_instruction_with_the_delay_and_the_bug() {
     let (mut cpu, mut bus) = cpu_running(&[0xfb, 0x00, 0x76, 0x3c], false, false);

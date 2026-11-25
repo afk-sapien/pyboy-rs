@@ -125,6 +125,9 @@ impl Cpu {
         if pending != 0 {
             if self.halted {
                 self.pc = (self.pc + 1) & 0xffff;
+                // A halted CPU wakes on a machine cycle, so after the
+                // flag at the first multiple of 4 cycles.
+                self.cycles = (self.cycles + 3) & !3;
             }
             if self.interrupt_master_enable {
                 if self.halt_bug {

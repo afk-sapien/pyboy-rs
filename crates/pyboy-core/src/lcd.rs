@@ -1,6 +1,16 @@
 // Rust translation of PyBoy core/lcd.py timing and rendering, version 2.7.0.
 // SPDX-License-Identifier: LGPL-3.0-only
 pub const FRAME_CYCLES: i64 = 70224;
+/// The cycles of one line, and of mode 3 with no fine scroll. Mode 3 also
+/// takes `SCX & 7` cycles for the pixels the fine scroll drops, and mode 0
+/// takes the rest of the line.
+const LINE_CYCLES: i64 = 456;
+const MODE_3_CYCLES: i64 = 172;
+/// How many cycles before a mode change a STAT read shows the new mode,
+/// and before a line starts an LY read shows the new line (see `read_stat`
+/// and `read_ly`).
+const STAT_READ_AHEAD: i64 = 4;
+const LY_READ_AHEAD: i64 = 8;
 pub const WIDTH: usize = 160;
 pub const HEIGHT: usize = 144;
 /// Pixels of margin on each side of the line being drawn, so that every
@@ -282,6 +292,57 @@ impl Lcd {
         }
     }
 
+    /// The cycles of mode 3 from SCX as it starts. The fine scroll drops
+    /// `SCX & 7` pixels at the start of the line, and each takes a cycle.
+    #[inline(always)]
+    fn mode_3_cycles(&self) -> i64 {
+        MODE_3_CYCLES + i64::from(self.scx & 7)
+    }
+
+    /// Whether a read at `cycles` sees the next mode change, which a read
+    /// does up to `ahead` cycles before it. Only in single speed with the
+    /// LCD on and past the wait after it turns on.
+    #[inline(always)]
+    fn read_sees_next_mode(&self, cycles: i64, ahead: i64) -> bool {
+        self.lcdc & 128 != 0
+            && !self.reset
+            && self.speed_shift == 0
+            && self.next_mode_change() <= cycles + ahead
+    }
+
+    /// STAT as the CPU reads it at `cycles`. PyBoy makes each memory access
+    /// 4 cycles before the hardware does, so the mode bits show the next
+    /// mode from 4 cycles before it starts. The interrupt flags keep their
+    /// cycles. Mode 1 at line 153 goes on to mode 2 of the next frame.
+    #[inline]
+    pub fn read_stat(&self, cycles: i64) -> u8 {
+        let stat = self.stat | 0x80;
+        if !self.read_sees_next_mode(cycles, STAT_READ_AHEAD) {
+            return stat;
+        }
+        let mode = if self.ly == 153 {
+            2
+        } else {
+            self.next_stat_mode
+        };
+        (stat & !3) | mode
+    }
+
+    /// LY as the CPU reads it at `cycles`. LY moves on 4 cycles before the
+    /// line's mode 2 starts, and with the access 4 cycles early that makes
+    /// 8. A line starts as mode 0 or 1 ends. The first line after the LCD
+    /// turns on is the exception: it reads as mode 0 and goes on to its own
+    /// mode 3.
+    #[inline]
+    pub fn read_ly(&self, cycles: i64) -> u8 {
+        let mode = self.stat & 3;
+        let starts_line = mode == 1 || mode == 0 && self.next_stat_mode != 3;
+        if !starts_line || !self.read_sees_next_mode(cycles, LY_READ_AHEAD) {
+            return self.ly;
+        }
+        if self.ly == 153 { 0 } else { self.ly + 1 }
+    }
+
     /// The cycle of the next mode change in single speed. A tick that ends
     /// before it only advances the clock, so the scheduler can merge such
     /// ticks.
@@ -316,6 +377,8 @@ impl Lcd {
         let mut ly = self.ly;
         let mut mode = self.stat & 3;
         let mut next = self.next_stat_mode;
+        // The clock at `at`, which places mode 0's end on the line.
+        let mut end = self.clock_target;
         // A frame has 442 mode changes.
         for _ in 0..450 {
             if ly == 153 {
@@ -340,22 +403,23 @@ impl Lcd {
                 }
                 3 => {
                     next = 0;
-                    170
+                    self.mode_3_cycles()
                 }
                 0 => {
                     next = if ly < 143 { 2 } else { 1 };
-                    206
+                    LINE_CYCLES * (i64::from(ly) + 1) - end
                 }
                 _ => {
                     ly = ly.wrapping_add(1);
                     flag |= ly == 144 || lyc == Some(ly);
-                    456
+                    LINE_CYCLES
                 }
             };
             if flag || at + length >= limit {
                 return at;
             }
             at += length;
+            end += length;
         }
         first
     }
@@ -407,14 +471,16 @@ impl Lcd {
                     3 => {
                         // Mode 3 has no source and LY stays, so the line
                         // can only fall.
-                        self.clock_target += 170;
+                        self.clock_target += self.mode_3_cycles();
                         self.next_stat_mode = 0;
                     }
                     0 => {
                         // Mode 3 has no source and LY stays, so only the mode
                         // 0 source can raise the line.
                         interrupt |= stat_edge(self.line_with(0), self.line_with(0x08));
-                        self.clock_target += 206;
+                        // Mode 0 ends with the line, whatever SCX was as
+                        // mode 3 started.
+                        self.clock_target = LINE_CYCLES * (i64::from(self.ly) + 1);
                         self.scanline_parameters[usize::from(self.ly)] =
                             [self.scx, self.scy, self.wx, self.wy, self.lcdc & 16];
                         self.scanline();
@@ -423,7 +489,7 @@ impl Lcd {
                     }
                     _ => {
                         let line = self.line_with(if self.ly == 143 { 0x08 } else { 0x10 });
-                        self.clock_target += 456;
+                        self.clock_target += LINE_CYCLES;
                         self.next_stat_mode = 1;
                         self.ly += 1;
                         self.compare_lyc();
@@ -1117,6 +1183,56 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// Mooneye intr_2_mode0_timing, intr_2_mode3_timing and
+    /// hblank_ly_scx_timing-GS: a STAT read shows the mode 4 cycles ahead,
+    /// and an LY read shows the line 8 cycles ahead. Check every cycle of
+    /// the second and third frames against the LCD ticked to that cycle,
+    /// with mode 3 lengthened by each fine scroll.
+    #[test]
+    fn stat_and_ly_reads_see_the_lcd_ahead() {
+        for scx in 0..8 {
+            let mut lcd = lcd_on(0, 200);
+            lcd.scx = scx;
+            let end = 3 * FRAME_CYCLES;
+            let mut seen = Vec::with_capacity(end as usize + 1);
+            seen.push((0, 0));
+            for cycles in 1..=end {
+                lcd.tick(cycles);
+                seen.push((lcd.stat & 3, lcd.ly));
+            }
+            let mut lcd = lcd_on(0, 200);
+            lcd.scx = scx;
+            for cycles in 1..=end - LY_READ_AHEAD {
+                lcd.tick(cycles);
+                if cycles < FRAME_CYCLES {
+                    continue;
+                }
+                let at = |ahead: i64| seen[(cycles + ahead) as usize];
+                // Only the mode bits look ahead.
+                let stat = ((lcd.stat | 0x80) & !3) | at(STAT_READ_AHEAD).0;
+                let read = (lcd.read_stat(cycles), lcd.read_ly(cycles));
+                assert_eq!(read, (stat, at(LY_READ_AHEAD).1), "SCX {scx}, {cycles}");
+            }
+        }
+    }
+
+    /// Mode 3 takes 172 cycles and one more for each pixel of fine scroll,
+    /// and mode 0 takes the rest of the line.
+    #[test]
+    fn mode_3_lengthens_by_the_fine_scroll_and_mode_0_ends_the_line() {
+        for scx in [0, 1, 7, 8, 13] {
+            let mut lcd = lcd_on(0, 200);
+            lcd.scx = scx;
+            let mut cycles = 0;
+            tick_to(&mut lcd, &mut cycles, 5, 2);
+            let line = lcd.next_mode_change() - 80;
+            tick_to(&mut lcd, &mut cycles, 5, 3);
+            assert_eq!(lcd.next_mode_change() - line, 252 + i64::from(scx & 7));
+            tick_to(&mut lcd, &mut cycles, 5, 0);
+            assert_eq!(lcd.next_mode_change() - line, LINE_CYCLES);
         }
     }
 
