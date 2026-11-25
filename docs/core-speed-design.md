@@ -910,6 +910,7 @@ change smaller than that is noise.
 | EI delay and the halt bug | #54 | 86 to 92 of 145 | 96 to 102 of 200 | +3.6% to +10.6%, median +3.7% to +11.2% | -1.2% to +2.0%, median -0.5% to +2.4% | 0.9%, median 1.2% |
 | Interrupt dispatch and the IE push | #55 | 92 to 93 of 145 | 102 to 103 of 200 | +4.6% to +10.3%, median +4.9% to +10.0% | -1.0% to +1.1%, median -1.3% to +1.4% | 1.2%, median 1.9% |
 | One STAT line | #56 | 93 to 96 of 145 | 103 to 105 of 200 | +2.6% to +9.6%, median +3.0% to +9.1% | -2.9% to +0.5%, median -2.4% to +0.8% | 0.9%, median 1.2% |
+| Mode 3 and fine scroll | #58 | 96 to 99 of 145 | 105 to 107 of 200 | +4.0% to +10.1%, median +2.7% to +10.0% | -0.1% to +1.7%, median -0.6% to +2.9% | 1.5%, median 1.7% |
 
 Cells past their A/A against the parent, from the `examples/benchmark.rs`
 rounds that run beside the harness:
@@ -918,7 +919,13 @@ rounds that run beside the harness:
   median: -1.1% and -0.3% at d4f3759, -0.9% and -1.4% in a 15-round
   re-check, -1.4% and -0.9% at 5d5fd46 (A/A 0.4% and 0.2%). The cause is
   unknown. The cell is measured again after the last fix of this group,
-  and the loss is bisected only if it is still past its A/A then.
+  and the loss is bisected only if it is still past its A/A then. After
+  #58, against #52 in 15 rounds, best then median: -2.2% and -0.4% (A/A
+  1.5% and 0.5%), past its A/A by best and within it by median. In the
+  same rounds Red batch, frame and render read -1.2% to -2.4% best and
+  -1.4% to -1.8% median, so after the five fixes Red as a whole reads
+  slower in `benchmark.rs`, and audio no longer stands out. A bisect of
+  the audio cell alone would not find that, so it is not bisected.
 - #54, three cells more than 1% slower than its parent by median in a
   15-round run at load 1 to 3, best then median: Gold audio -2.5% and
   -2.3% (A/A 0.9% and 0.3%), Crystal batch -1.6% and -1.4% (A/A 0.6% and
@@ -942,3 +949,13 @@ rounds that run beside the harness:
   `opcodes::execute`, which the fix does not change, anew. A first version
   that worked out the line in full on every mode step read up to 2.5%
   slower in Red by median. The cost is taken for the five tests.
+- #58, 9 of the 12 `benchmark.rs` cells slower than its parent past their
+  A/A, best then median, by up to 2.5% and 2.3% in Gold batch (A/A 0.4%
+  and 1.1%), 2.3% and 2.0% in Crystal batch (A/A 0.8% and 0.8%) and 2.8%
+  and 2.4% in Crystal render (A/A 0.3% and 0.1%). All 18 harness cells
+  are within their A/A or faster, by up to 1.7% best and 2.9% median, on
+  the same three games. A STAT or LY read makes a few comparisons more,
+  and an SCX write resets the LCD deadline, so code placement from the
+  new profile is the likely cause, as in #56. The 9 idle harness cells
+  give the same state and frame hashes as the parent over 216,000
+  frames, and the 9 input cells do not.

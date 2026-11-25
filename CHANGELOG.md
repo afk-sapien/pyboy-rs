@@ -54,6 +54,15 @@ Draft for 0.2.0. Not released.
   starts. PyBoy 2.7.0 requests for each source on its own, only at mode
   and line changes. Five Mooneye PPU results go from fail to pass, 3 on
   DMG and 2 on CGB.
+- Mode 3 takes 172 cycles and one more for each pixel of fine scroll
+  (`SCX & 7`), and mode 0 takes the rest of the line. A STAT read shows a
+  new mode from 4 cycles before it starts, and an LY read shows a new line
+  from 8 cycles before it starts. That is because PyBoy makes each memory
+  access 4 cycles before the hardware does, and LY moves on 4 cycles
+  before mode 2. A halted CPU wakes on a machine cycle, so an interrupt
+  flagged partway through one is taken as it ends. PyBoy 2.7.0 gives mode
+  3 170 cycles and mode 0 206 whatever SCX is, and wakes at the flag.
+  Five Mooneye PPU results go from fail to pass, 3 on DMG and 2 on CGB.
 - With the picture off, a halted CPU could wake up to 3 cycles later than
   in PyBoy when an LCD mode change came just before a timer or serial
   event, since the instruction cache skips mode changes that set no flag.

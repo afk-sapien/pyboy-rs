@@ -169,6 +169,21 @@ selection. Deliberate differences:
   sources do, requests none at STAT, LYC or LCDC writes, compares LY with
   LYC only as a line starts, and starts the first line in mode 2. None of
   this needs a save state field, since the line is worked out from STAT.
+- Mode 3 takes 172 cycles and one more for each pixel of fine scroll
+  (`SCX & 7`), and mode 0 takes the rest of the 456-cycle line. A STAT read
+  shows a new mode from 4 cycles before it starts, and an LY read shows a
+  new line from 8 cycles before it starts. The cause is that pyboy-rs, as
+  PyBoy does, makes each memory access 4 cycles before the hardware does,
+  and LY moves on 4 cycles before mode 2. The interrupt flags keep their
+  cycles, and in double speed the reads do not look ahead. A halted CPU
+  wakes at the first cycle count that is a multiple of 4, from the flag on,
+  as the hardware wakes on a machine cycle. PyBoy 2.7.0 gives mode 3 170
+  cycles and mode 0 206 whatever SCX is, shows each mode and line from the
+  cycle it starts, and wakes at the flag. No save state field is needed,
+  since the reads work out what they show from the LCD clock. A program
+  that polls LY or STAT, such as the boot ROM, can run a few cycles apart
+  from PyBoy from then on, so the tests compare those runs with digests of
+  pyboy-rs's own output (see [Tests](#tests)).
 - The format 15 save state holds PyBoy's TIMA counter, which pyboy-rs
   writes as the cycles since the selected bit last fell (0 with the timer
   stopped) and does not read.
