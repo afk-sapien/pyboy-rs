@@ -1,0 +1,109 @@
+{
+ "test_api.py::test_hook_can_read_write_registers_and_memory[False]": {
+  "frame 90": "d3918726702c3be80634ff69ec616beaea6942295ac87fca08c96dad5f1418d3"
+ },
+ "test_api.py::test_hook_can_read_write_registers_and_memory[True]": {
+  "frame 90": "0d53d8727dc039851f8091f8d044eb035629fc5d5e49cb176b0692f6f0ea9e3e"
+ },
+ "test_api.py::test_python_facade_tick_input_memory_and_state[False]": {
+  "frame 60": "37efdf7df5c76a38245cadfe213a53bc706cfb9e3f981f91e2daa53fa408cd29",
+  "frame 61": "6d41f420ab142a68aeb3ec345ae3b6ca74da7308b35fb40f7b8b353947cb0b2f",
+  "frame 64": "ed25233248a6b8379616def0c4db59fe94ad6fccd2d5fdf2ed415c3224c1ae0b",
+  "frame 65": "613628876a9f1b8f08c74496781a700fd312d7d65daab3be015475f72be136f0",
+  "frame 70": "29b1ac8a7d95e98827d9f33547591806c6d0c42a5c32430dc949819eac62ec20"
+ },
+ "test_api.py::test_python_facade_tick_input_memory_and_state[True]": {
+  "frame 60": "128d8bb27f77fbcec4990b0d56a2bdf6e44af38baba9297875be16e384ecb8f3",
+  "frame 61": "c868cedf8014ecb2006e87a2fd39e538c6205e22691ff013de67a6cdf951ce7e",
+  "frame 64": "5f1f5c23874a750e72d079e1d93c5ebaf7946efab4a68a3a9138c77d6ad69328",
+  "frame 65": "97394950a4db12980b16ef9d758133182e87eaed8faafdd1575158b6ae157b80",
+  "frame 70": "5ccc537d117fca8071cd2a274166c378336058dff6a121bbc522c83f7d2846ae"
+ },
+ "test_machine.py::test_demo_frames[False-False-False-False]": {
+  "frame 0": "13ff29148ffe01fa44cf02d60e9b60cceea3b38bb12805d4e6cf21fd30df1370",
+  "frame 120": "b7f233c5eb6c77def0d100f78a161d9f35aeca1429fefa97300351531fb123f3",
+  "frame 149": "eb5e806b1dfb10c89fcff933d65ea16c57afadcc4ffa3ed505da141913191249",
+  "frame 30": "910598cbfd007ae301649f49e0a3e92efb2148c5087be520c4a14d1e6a23faf3",
+  "frame 60": "e930a7bf3180830aa15ce90cecdc34798d5252bf9cd95516b19381607ea2d2fa",
+  "frame 90": "f0e4d4b22b680bb654e3fbe2f65accf8ae0c9d108cda1730bba537be73d6e186"
+ },
+ "test_machine.py::test_demo_frames[False-False-False-True]": {
+  "frame 0": "27036f2099e4cad46f55d276a33b9f26800520d3ca50a067e9d1886bdd8dba50",
+  "frame 120": "91cb0fb0aaecbde50c3e468275781270610a15e4f98bb38b19186d160d4ec975",
+  "frame 149": "2f4eb1307d7422fba9a10981fa264f38ef2e4e38ed73a0c8245a14785a6ebe48",
+  "frame 30": "55c551561a55c368a2e41d4297eda9d8f7b1efa695f31dd94cb44c1954af0590",
+  "frame 60": "49a59b4cdbde9767d57258a5011efa034dd60bcdf3c72334b252093f2271fc85",
+  "frame 90": "7f9771ea3854489594a319fbb68d7541cec8c2335cd467a736fc91fa2ea4f2fa"
+ },
+ "test_machine.py::test_demo_frames[False-False-True-False]": {
+  "frame 0": "13ff29148ffe01fa44cf02d60e9b60cceea3b38bb12805d4e6cf21fd30df1370",
+  "frame 120": "b7f233c5eb6c77def0d100f78a161d9f35aeca1429fefa97300351531fb123f3",
+  "frame 149": "eb5e806b1dfb10c89fcff933d65ea16c57afadcc4ffa3ed505da141913191249",
+  "frame 30": "910598cbfd007ae301649f49e0a3e92efb2148c5087be520c4a14d1e6a23faf3",
+  "frame 60": "e930a7bf3180830aa15ce90cecdc34798d5252bf9cd95516b19381607ea2d2fa",
+  "frame 90": "f0e4d4b22b680bb654e3fbe2f65accf8ae0c9d108cda1730bba537be73d6e186"
+ },
+ "test_machine.py::test_demo_frames[False-False-True-True]": {
+  "frame 0": "c17e66cab2c06ae6896075b4aba07de2a3c85a15e914370d3a7588c06c0c9687",
+  "frame 120": "4bc38a213a5c2d4ce61b6e702e2262c33a82822d89a5a3e4f319861c89ced0f0",
+  "frame 149": "64aaf1dcc6aac3bf7b3514e0d3b5f7828699119a9819c89848fcf022c383da1b",
+  "frame 30": "b0617051d8ac905cf7ef1daeed9ab9f93043c98665b7fd337c30a52b2562c69c",
+  "frame 60": "a0d94677a3e7e5d76f64ba5c93c78812df5032a7d3857c0d5f5bfa36ea1c83a2",
+  "frame 90": "239df0541aa5c2007807d3b4b549313386eaf753d9c7d4061b69a451ed77e729"
+ },
+ "test_machine.py::test_demo_frames[True-True-False-False]": {
+  "frame 0": "b95aca971c1134740c918a05108dd715db47fd4ef1f3bffe359cd8f3b824e04b",
+  "frame 120": "af646e881789720d29d94e13cbf905472ebee8c429d93a36ade22f1d5543d77a",
+  "frame 149": "9ad389010018396a78a0996c4a13dfae36b6a51aaf894158e84f92f1ea0bb1e6",
+  "frame 30": "7624f5875438d9c65d2b0709e0a68e0412e65e019d44b14035f931a08952043e",
+  "frame 60": "e51f9270eb7711bf3216d052c35b02adf18c66d30b662250e30bd92e74ce0516",
+  "frame 90": "26f91ab4ac502dec0a39229aecdd61f1a47669aced22fed967f2e4c10130555e"
+ },
+ "test_machine.py::test_demo_frames[True-True-False-True]": {
+  "frame 0": "f83b6c5901c59996aaaf653b7c94c744caf99aa5db3b97229340d3683eb2ee96",
+  "frame 120": "5e3fc8313bc0d7b1397379c351f03ba56744d1d6619be6d3752d2828e7c18fb8",
+  "frame 149": "fa813530adbc9bcda2a4d2cf3583c38ba31ecb802a8e46d6596fc60c5fb65a4a",
+  "frame 30": "250ba1008e99c3873613e1094251258e1247c1a801c106c049bc964b6ef45da0",
+  "frame 60": "c46cf2aa458c7317bbdf3d9a0ddfa7362c882f6b11d880cca6d0aa71f9dfdd2e",
+  "frame 90": "fb70d4719908ffb7abf416d360fa36cb0679582fdbc04ec6496c8a13d3e9aa1a"
+ },
+ "test_machine.py::test_demo_frames[True-True-True-False]": {
+  "frame 0": "b95aca971c1134740c918a05108dd715db47fd4ef1f3bffe359cd8f3b824e04b",
+  "frame 120": "af646e881789720d29d94e13cbf905472ebee8c429d93a36ade22f1d5543d77a",
+  "frame 149": "9ad389010018396a78a0996c4a13dfae36b6a51aaf894158e84f92f1ea0bb1e6",
+  "frame 30": "7624f5875438d9c65d2b0709e0a68e0412e65e019d44b14035f931a08952043e",
+  "frame 60": "e51f9270eb7711bf3216d052c35b02adf18c66d30b662250e30bd92e74ce0516",
+  "frame 90": "26f91ab4ac502dec0a39229aecdd61f1a47669aced22fed967f2e4c10130555e"
+ },
+ "test_machine.py::test_demo_frames[True-True-True-True]": {
+  "frame 0": "dea1b41f02e35999e1886940344bd558084669a7f084d7e8b7174407e0e2f317",
+  "frame 120": "62f043e54894b4e364b28ecc8545a51eadd5d8f3830f6e3c01e1f865b87181b1",
+  "frame 149": "3cc9b9f1feb4c82d3ab44ee920ab9978a926bba8f8ef072736d8c21735fa9231",
+  "frame 30": "447afd1e827883a86b0b08fba5be40672c20a85d867c3cd75a8b3d4ba64fbc97",
+  "frame 60": "7b28819afe95a4b982af88ef3d7301cb9b86b3ef009b25251571f266fdef0829",
+  "frame 90": "5abd0d421b9943337de6ade0377659fb9439fec5cbdef2798f1a2eae65a03c35"
+ },
+ "test_native_run.py::test_hooks_inside_a_run_match_the_one_frame_path": {
+  "frame 200": "2a721950f43d50b987b1cd1c53834429fd7bc2a55adee77433691cb7ad85c793"
+ },
+ "test_native_run.py::test_queued_input_inside_and_across_runs[False]": {
+  "after frame 1351": "a9545dfe37cf0ec5e080839a762c436f95931bffd15b59cedce2242323ced60d",
+  "queued frame 1320": "daf6325b87e9c279db95bc42a6f5f157274dedda911c93093e3c51a45152f083"
+ },
+ "test_native_run.py::test_queued_input_inside_and_across_runs[True]": {
+  "after frame 1351": "b4affffef6af81ee2bbae82c0b6abbc63ff6fc50d95795069e87f3c747d1bee5",
+  "queued frame 1320": "dc66a2d93746bd79b3bb58f701817014be3c150ba5bf2d516f249e0a8151fcdf"
+ },
+ "test_state.py::test_state_bytes_and_cross_loading[False]": {
+  "frame 0": "de12e3ff35b1a0250320e97cb23ba14db4b8709e0283b2e37d97f576da06e093",
+  "frame 10": "cc8fb6d4471b328b078148e19d53b7633853f5eb2aeb8ea9208eea937bf22db2",
+  "frame 60": "cf3c5f4d582eaf4bf16917a9e4e0950daa2d9bad5ae307ee7f93efb26130d86b",
+  "frame 89": "d3918726702c3be80634ff69ec616beaea6942295ac87fca08c96dad5f1418d3"
+ },
+ "test_state.py::test_state_bytes_and_cross_loading[True]": {
+  "frame 0": "a9e946fe752e2ff2b59f7ecc2123dd3b91f6d333d4fcec7378a48c5ba01b450a",
+  "frame 10": "c78801dd7ea9fe4b936c1d47a434c917ca96604f0a9b72dc8a1eba5949462410",
+  "frame 60": "8c334143e68befda52426de73c3beb4cb252b687299bf1285d7ae80b210d819a",
+  "frame 89": "f7294b651e034b69fc68d392a17c339cf84e4d121d1a8f5e46c81583c2c19acf"
+ }
+}

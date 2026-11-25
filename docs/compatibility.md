@@ -259,6 +259,18 @@ rendering, sprite and window priority, palettes, DMA, HDMA, double speed, hooks,
 input scheduling, and save states with byte-identical format 15 bodies and
 cross-loading.
 
+Where pyboy-rs follows the hardware and PyBoy does not, PyBoy cannot say what
+is right. The demo ROM's boot polls LY, so once the LCD is on its runs split
+from PyBoy's. Tests over those runs compare PyBoy only where timing cannot
+matter: the boot frames with the LCD off, the API shapes, and the state format,
+which PyBoy loads and saves back byte for byte. They check the rest against
+SHA-256 digests of pyboy-rs's own output in `tests/digests/digests.json`, and
+against pyboy-rs itself, such as native runs against the one-frame path. Runs
+that start from one shared PyBoy state and read no LCD register, such as the
+rendering tests, still compare everything with PyBoy. A pull request that
+changes a digest names the test ROM or hardware fact that justifies it
+([tests/digests/README.md](../tests/digests/README.md)).
+
 Tests use the demo and synthetic data, not commercial ROMs. Passing them does
 not establish full game compatibility. The separate PokeSim Core integration
 validates gameplay, audio, state restoration, cartridge export, and Red-to-Red

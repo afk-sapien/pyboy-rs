@@ -8,6 +8,17 @@ from test_machine import DEMO
 from test_api import state
 
 
+def start(ref, native):
+    """Puts both emulators at PyBoy's state at the end of frame 90. The boot
+    ROM polls LY, and pyboy-rs reads LY as on hardware, a few cycles ahead of
+    PyBoy 2.7.0 (docs/compatibility.md), so a boot of its own ends on another
+    cycle. From one shared state the CPU loops below read no LCD register."""
+    for emulator in (ref, native):
+        emulator.set_emulation_speed(0)
+    ref.tick(90)
+    native.load_state(io.BytesIO(state(ref)))
+
+
 @pytest.mark.parametrize("cgb", [False, True])
 def test_scrolling_window_edges_and_palette_changes_match_reference(cgb):
     rom = bytearray(DEMO.read_bytes())
@@ -20,9 +31,8 @@ def test_scrolling_window_edges_and_palette_changes_match_reference(cgb):
     oam = [byte for n in range(40) for byte in
            (16 + n % 4, (n * 17) % 176, (n * 13) % 256, (n * 29) % 256)]
     with Reference(io.BytesIO(rom), window="null", cgb=cgb) as ref, PyBoy(io.BytesIO(rom), cgb=cgb) as native:
+        start(ref, native)
         for emulator in (ref, native):
-            emulator.set_emulation_speed(0)
-            emulator.tick(90)
             emulator.memory[0xff40] = 0
             for bank in range(2 if cgb else 1):
                 emulator.memory[0xff4f] = bank
@@ -71,9 +81,8 @@ def test_vram_palettes_window_sprites_dma_and_speed(cgb, dma_mode):
         for index, sprite in enumerate(sprites):
             sprite[0] = 16 + index * 3
             sprite[1] = 4 + index * 4
+        start(ref, native)
         for emulator in (ref, native):
-            emulator.set_emulation_speed(0)
-            emulator.tick(90)
             emulator.memory[0xff40] = 0
             for bank in range(2 if cgb else 1):
                 emulator.memory[0xff4f] = bank

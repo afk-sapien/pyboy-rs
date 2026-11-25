@@ -1,14 +1,12 @@
 """tick runs frames that need no Python between them in one native call.
 
 These tests check the edges of those runs (queued input, hooks, pausing, reads
-and the run limit) against PyBoy 2.7.0, and against the one-frame path that
-tick took before and still takes for recordings and the last frame of a read.
+and the run limit) against the one-frame path that tick took before and still
+takes for recordings and the last frame of a read, and against digests of
+pyboy-rs's own runs (tests/digests).
 """
 
-import io
-
 import pytest
-from pyboy import PyBoy as Reference
 from pyboy.utils import WindowEvent
 from pyboy_rs import PyBoy
 from pyboy_rs import pyboy as module
@@ -24,12 +22,6 @@ EARLY = 0x17b
 LATE = 0x1a0
 
 
-def reference(cgb=False):
-    emulator = Reference(io.BytesIO(DEMO.read_bytes()), window="null", cgb=cgb)
-    emulator.set_emulation_speed(0)
-    return emulator
-
-
 def native(cgb=False):
     emulator = PyBoy(DEMO, cgb=cgb)
     emulator.set_emulation_speed(0)
@@ -41,16 +33,14 @@ def observed(emulator):
             emulator.sound.ndarray.tobytes())
 
 
-def assert_same(ref, emulator):
-    assert observed(emulator) == (ref.frame_count, state(ref), bytes(ref.screen.raw_buffer),
-                                  bytes(ref.sound.raw_buffer[:ref.sound.raw_buffer_head]))
+def one_frame_path(monkeypatch):
+    """From here on tick runs one frame at a time, as before native runs."""
+    monkeypatch.setattr(module.PyBoy, "_native_run", lambda self, remaining, read_range: 0)
 
 
 def settle(machine, frames):
-    # PyBoy draws the window one line low on the first rendered frame after
-    # frames that were not rendered since boot (compatibility.md,
-    # Divergences). One rendered frame once the demo shows its window puts both
-    # emulators in step for later frames.
+    # Unrendered frames, then one rendered frame once the demo shows its
+    # window, as a caller that renders only some frames does.
     machine.tick(frames - 1, False, True)
     machine.tick(1, True, False)
 
@@ -70,59 +60,64 @@ class CountingMachine:
         return getattr(self.machine, name)
 
 
+def queued_input(cgb):
+    with native(cgb) as machine:
+        settle(machine, 70)
+        # Due inside the first run, at the end of the first full run, one
+        # frame later, and in the third run.
+        machine.button("a", delay=3)
+        machine.send_input(int(WindowEvent.PRESS_ARROW_RIGHT), NATIVE_RUN)
+        machine.send_input(int(WindowEvent.RELEASE_ARROW_RIGHT), NATIVE_RUN + 1)
+        machine.button("start", delay=2 * NATIVE_RUN + 7)
+        machine.tick(2 * NATIVE_RUN + 50, render=True, sound=True)
+        inside = observed(machine)
+        machine.tick(31, render=True, sound=True)
+        return inside, observed(machine)
+
+
 @pytest.mark.parametrize("cgb", [False, True])
-def test_queued_input_inside_and_across_runs(cgb):
-    with reference(cgb) as ref, native(cgb) as emulator:
-        for machine in (ref, emulator):
-            settle(machine, 70)
-            # Due inside the first run, at the end of the first full run, one
-            # frame later, and in the third run.
-            machine.button("a", delay=3)
-            machine.send_input(int(WindowEvent.PRESS_ARROW_RIGHT), NATIVE_RUN)
-            machine.send_input(int(WindowEvent.RELEASE_ARROW_RIGHT), NATIVE_RUN + 1)
-            machine.button("start", delay=2 * NATIVE_RUN + 7)
-            machine.tick(2 * NATIVE_RUN + 50, render=True, sound=True)
-        assert_same(ref, emulator)
-        for machine in (ref, emulator):
-            machine.tick(31, render=True, sound=True)
-        assert_same(ref, emulator)
+def test_queued_input_inside_and_across_runs(cgb, monkeypatch, digests):
+    runs = queued_input(cgb)
+    one_frame_path(monkeypatch)
+    assert queued_input(cgb) == runs
+    for name, seen in zip(("queued", "after"), runs):
+        digests.check(f"{name} frame {seen[0]}", *seen)
 
 
-def test_hooks_inside_a_run_match_reference():
-    # PyBoy drops input that a hook sends without a delay, so these hooks
-    # send only delayed input.
-    with reference() as ref, native() as emulator:
-        logs = []
+def hooked():
+    with native() as machine:
+        hits = []
 
-        def handover(context):
-            machine, hits = context
+        def handover(machine):
             hits.append(("handover", machine.frame_count))
             machine.send_input(int(WindowEvent.PRESS_BUTTON_SELECT), 4)
             machine.send_input(int(WindowEvent.RELEASE_BUTTON_SELECT), 6)
 
-        def early(context):
-            machine, hits = context
+        def early(machine):
             hits.append(machine.frame_count)
             if len(hits) % 9 == 0:
                 machine.send_input(int(WindowEvent.PRESS_BUTTON_B), 2)
                 machine.send_input(int(WindowEvent.RELEASE_BUTTON_B), 7)
 
-        def late(context):
-            machine, hits = context
+        def late(machine):
             hits.append(("late", machine.frame_count))
 
-        for machine in (ref, emulator):
-            hits = []
-            logs.append(hits)
-            machine.hook_register(0, HANDOVER, handover, (machine, hits))
-            machine.hook_register(0, EARLY, early, (machine, hits))
-            machine.hook_register(0, LATE, late, (machine, hits))
-            settle(machine, 150)
-            machine.tick(50, True, True)
-        assert logs[0] == logs[1]
-        assert logs[1][0] == ("handover", 64)
-        assert ("late", 89) in logs[1]
-        assert_same(ref, emulator)
+        machine.hook_register(0, HANDOVER, handover, machine)
+        machine.hook_register(0, EARLY, early, machine)
+        machine.hook_register(0, LATE, late, machine)
+        settle(machine, 150)
+        machine.tick(50, True, True)
+        return hits, observed(machine)
+
+
+def test_hooks_inside_a_run_match_the_one_frame_path(monkeypatch, digests):
+    runs = hooked()
+    one_frame_path(monkeypatch)
+    assert hooked() == runs
+    hits, seen = runs
+    assert hits[0] == ("handover", 64)
+    assert ("late", 89) in hits
+    digests.check(f"frame {seen[0]}", hits, *seen)
 
 
 def scenario():
@@ -163,7 +158,7 @@ def scenario():
 
 def test_runs_match_the_one_frame_path(monkeypatch):
     runs = scenario()
-    monkeypatch.setattr(module.PyBoy, "_native_run", lambda self, remaining, read_range: 0)
+    one_frame_path(monkeypatch)
     one = scenario()
     # The hook paused inside the first run, and the second loop ran after.
     assert one[1] < 80

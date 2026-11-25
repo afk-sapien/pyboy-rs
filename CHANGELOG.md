@@ -84,6 +84,16 @@ Draft for 0.2.0. Not released.
 - A release fails if its version is below the release that the newest
   section version names.
 
+### Tests
+
+- Tests over demo ROM runs no longer expect PyBoy 2.7.0's output once the
+  LCD is on, where pyboy-rs may follow the hardware instead. They compare
+  PyBoy in the boot frames with the LCD off, in API shapes and in the state
+  format, and check the rest against digests of pyboy-rs's own output.
+  `python -m pytest --update-digests` rewrites the digests and lists those
+  that moved. A pull request that changes one names the test ROM or hardware
+  fact behind it ([tests/digests/README.md](tests/digests/README.md)).
+
 ## 0.1.9
 
 0.1.8 with one fix: a hook no longer slows the emulator down. The same save
