@@ -31,9 +31,9 @@ macOS x86_64 and arm64, Windows amd64), the sdist and `SHA256SUMS.txt`. Pin the
 URL and hash, and pip refuses a file whose hash differs:
 
 ```sh
-base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.1.9
+base=https://github.com/afk-sapien/pyboy-rs/releases/download/v0.2.0
 curl -fsSLO "$base/SHA256SUMS.txt"
-wheel=pyboy_rs-0.1.9-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+wheel=pyboy_rs-0.2.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha=$(grep " $wheel\$" SHA256SUMS.txt | cut -d' ' -f1)
 python -m pip install "pyboy-rs @ $base/$wheel#sha256=$sha"
 ```
@@ -75,7 +75,8 @@ cargo run --release -p pyboy-core --example headless -- game.gb 120
 ## Features
 
 - CPU, timer, joypad, serial, LCD (DMG and CGB) and four-channel sound,
-  translated from PyBoy 2.7.0 and checked against it by differential tests
+  translated from PyBoy 2.7.0, then fixed to follow the hardware where the
+  two differ ([test ROM scores](docs/conformance.md))
 - Cartridges: ROM-only, MBC1, MBC2, MBC3 with real-time clock, MBC5
 - Save states whose PyBoy state format 15 body is byte-identical with PyBoy,
   followed by a small pyboy-rs section that PyBoy leaves unread.
@@ -219,7 +220,7 @@ result for Gambatte-speedrun on 57 of the 66 ROMs. The pyboy-rs tool does not
 run one Mooneye ROM that a person has to judge. Per-ROM verdicts are in
 [data/profiles/2026-11-19-emulator-accuracy](data/profiles/2026-11-19-emulator-accuracy).
 
-pyboy-rs is well behind SameBoy, which passes every ROM here, and behind
+0.1.9 is well behind SameBoy, which passes every ROM here, and behind
 Gambatte-speedrun and mGBA on Mooneye and Blargg. It is level with the PyBoy
 in the shootout, close to the 2.7.0 it was ported from, and by PyBoy's own
 notes well behind PyBoy 2.8.0 and later. On the tool's full ROM list, 0.1.9 passes 75 of 145
@@ -228,11 +229,11 @@ tests on DMG and 80 of 200 on CGB ([per suite](docs/conformance.md)).
 What the project is doing about it: the target is now real hardware, not
 PyBoy parity ([direction](docs/compatibility.md#direction)). Failing tests are
 fixed one at a time, each with its measured score change in
-[conformance.md](docs/conformance.md). The IO register fixes in
-[#41](https://github.com/afk-sapien/pyboy-rs/pull/41) are on main but not yet
-released, and raise the totals to 78 of 145 and 84 of 200. CGB VRAM transfer
-timing ([#42](https://github.com/afk-sapien/pyboy-rs/pull/42)) is in review.
-A fix to how the tool sets the clock for rtc3test comes next.
+[conformance.md](docs/conformance.md). 0.2.0 fixes IO register reads, CGB
+VRAM transfers, the timer, EI and the halt bug, interrupt dispatch, the STAT
+interrupt line and the length of mode 3. On the tool's full ROM list it passes
+99 of 145 tests on DMG and 107 of 200 on CGB, and fails no test that 0.1.9
+passes.
 
 ### Speed
 
