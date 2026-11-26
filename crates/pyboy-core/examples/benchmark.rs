@@ -38,9 +38,14 @@ fn advance(machine: &mut Machine, frames: usize, mode: &str) -> Result<(), Strin
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.len() != 6 {
-        return Err("Usage: benchmark ROM STATE MODE FRAMES INSTANCES OUTPUT_PREFIX".into());
+    if !(6..=7).contains(&args.len()) {
+        return Err(
+            "Usage: benchmark ROM STATE MODE FRAMES INSTANCES OUTPUT_PREFIX [CLOCK]".into(),
+        );
     }
+    // CLOCK locks a cartridge clock at that Unix time, moving only with the
+    // frames played, so a run never reads the host clock (tools/icount.py).
+    let clock: Option<f64> = args.get(6).map(|at| at.parse()).transpose()?;
     let mode = &args[2];
     if !["batch", "frame", "render", "audio", "memory", "profile"].contains(&mode.as_str()) {
         return Err("Unknown benchmark mode".into());
@@ -54,6 +59,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut machines = Vec::with_capacity(count);
     for _ in 0..count {
         let mut machine = Machine::new(fs::read(&args[0])?, None, None, true, 48000)?;
+        if let (Some(at), Ok(rtc)) = (clock, machine.rtc_mut()) {
+            rtc.lock_clock(at, true)?;
+        }
         machine.load_state(&fs::read(&args[1])?)?;
         advance(&mut machine, 120, "audio")?;
         machines.push(machine);

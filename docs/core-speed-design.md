@@ -858,6 +858,12 @@ noise, the unchanged cache build, rebuilt from a newly recorded profile, read
 -0.9% to +1.5% in these cells and down to -2.7% in `benchmark.rs`. A gain
 under about 1.5% cannot be told apart from a rebuild.
 
+Instruction counts do not have that floor. `tools/icount.py` counts the work
+of each `benchmark.rs` cell under Cachegrind, exact to a few hundred
+instructions, and fails a change that adds more than 1% to any cell
+([Benchmarks](benchmarks.md#instruction-counts)). From 0.2.0 on, a change to
+the core gives those counts next to its wall time.
+
 | Change | Picture | Red idle | Red input | Gold idle | Gold input | Crystal idle | Crystal input |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | A, the cache (#30) | off | +9.9% | +7.0% | +3.1% | +6.1% | +6.8% | +7.0% |
@@ -994,3 +1000,25 @@ Red audio and render stay slower than #52, as they were at #58, and this
 change leaves them where #58 had them. All 18 harness cells give the same
 state and frame hashes as #58 over 216,000 frames, and each of the 440
 conformance results is the same.
+
+`tools/icount.py` shows that loss is not work. In the default build main
+counts 0.32% more instructions than #52 in Red audio and 0.41% more in
+render, and 3.29% fewer in batch and frame, where #60's closed form applies.
+The rise comes from two fixes, each counted against its parent:
+
+- #53, +0.15% and +0.19%: the timer's interrupt check at each slice end in
+  `run_frame`, about 3 instructions a slice over about 480 slices a frame.
+- #54, +0.26% and +0.33%: the slice end store and the EI and halt bug test
+  at each slice start in `Cpu::tick`, about 4.5 instructions a slice.
+
+#55 and #56 take back about 0.17 points. Each part is a store or a test the
+fix needs once a slice, and no cheaper form with the same output was found.
+On the PGO build, each with its profile recorded by the tools of
+#59, main counts fewer instructions than #52 in every Red mode: -0.56% in
+audio, -0.50% in render and -4.41% in batch. D1 misses fall 6.5% in audio
+and render and mispredicts 1.5% to 1.8%. Simulated I1 misses rise, from 9
+to 25 a frame in render and from 15 to 16 in audio, against 679,000 and
+899,000 instructions a frame. Both builds give the same outputs. Cachegrind
+models neither the micro-op cache nor branch target alignment, so the 0.7%
+to 1.5% in wall time is code placement, and no change to the code is made
+for it.

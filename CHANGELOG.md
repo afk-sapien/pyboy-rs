@@ -120,6 +120,12 @@ Draft for 0.2.0. Not released.
   `python -m pytest --update-digests` rewrites the digests and lists those
   that moved. A pull request that changes one names the test ROM or hardware
   fact behind it ([tests/digests/README.md](tests/digests/README.md)).
+- `tools/icount.py` counts the instructions `examples/benchmark.rs` retires
+  in each game and mode under Valgrind's Cachegrind, which repeats to a few
+  hundred instructions in billions, and fails a change that adds more than
+  1% to any cell ([docs/benchmarks.md](docs/benchmarks.md#instruction-counts)).
+  `examples/benchmark.rs` takes an optional last argument that locks a
+  cartridge clock at that Unix time.
 
 ## 0.1.9
 
