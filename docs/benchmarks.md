@@ -123,4 +123,63 @@ from the pokesim pattern.
 Save states and audio matched the build without PGO on 44 scenario states
 over 40,000 frames each, with sound sampling off and on.
 
+## Instruction counts
+
+Two builds of one source differ in wall time by up to about 1.5% on this
+machine ([core speed design](core-speed-design.md#measured-gains)), so
+timing cannot show a smaller change. `tools/icount.py` counts the
+instructions `benchmark.rs` retires instead, under Valgrind's Cachegrind. The
+emulator is deterministic, so two counts of one binary agree to a few hundred
+instructions in billions, whatever else the machine runs.
+
+A cell is one game in one of the four modes of `tools/benchmark.py`, at its
+frame budget: batch 24,000 frames, frame 12,000, render 6,000 and audio
+6,000. Each cell runs twice, for its budget and for no frames, and keeps the
+difference, which leaves out loading the ROM and state. The cartridge clock
+is locked at the instant `tools/pgo_play.py` uses and moves only with the
+frames played, so no run reads the host clock.
+
+Build both sides as the default release build (no PGO) with the toolchain in
+`pgo/profile.txt`, count them on the same ROMs and states, and compare:
+
+```sh
+python -I tools/icount.py build origin/main /tmp/base
+python -I tools/icount.py build . /tmp/head
+python -I tools/icount.py count /tmp/base --jobs 6 --out /tmp/base.json \
+    --game red red.gb red.state --game gold gold.gbc gold.state \
+    --game crystal crystal.gbc crystal.state
+python -I tools/icount.py count /tmp/head --jobs 6 --out /tmp/head.json \
+    --game red red.gb red.state --game gold gold.gbc gold.state \
+    --game crystal crystal.gbc crystal.state
+python -I tools/icount.py compare /tmp/base.json /tmp/head.json
+```
+
+`build` builds every REF with this checkout's `benchmark.rs`, so both sides
+run the same driver, and the same source builds to the same binary byte for
+byte. `.` builds the checkout with its local changes. Three games take about
+90 seconds to count at 6 jobs on this machine. `--cache` adds Cachegrind's
+cache and branch simulation and takes about 1.5 times as long. `--keep DIR`
+keeps each Cachegrind output file for `cg_annotate`. Valgrind builds from
+its release tarball without root (`./configure --prefix=$HOME/valgrind &&
+make && make install`). The numbers here were counted with Valgrind 3.28.0.
+Results hold counts and SHA-256 hashes of the binary, ROMs, states and
+outputs, never ROM or state data.
+
+The bar for a change to the Rust core:
+
+- A cell within 0.01% of the base is marked `same`. Two counts of one binary
+  differ by under 0.0001%.
+- `compare` exits 1 when any cell rises by more than 1% (`--limit`). Such a
+  change needs a reason the pull request states, such as an accuracy fix
+  that does more work.
+- A smaller rise in any cell is named in the pull request.
+- Outputs that differ from the base mean the change is not output-neutral.
+  `compare` shows it in the last column.
+
+Counts measure work, not time. The same count can run at another speed when
+code moves, and fewer instructions can run slower. A pull request that
+claims a speed change still gives wall time on the PGO build with an A/A
+control, as in the [core speed design](core-speed-design.md#measured-gains).
+CI does not count, since the speed fixtures are commercial ROMs.
+
 Benchmark results contain ROM hashes, never ROM, save or checkpoint data.

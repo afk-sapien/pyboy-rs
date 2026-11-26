@@ -79,7 +79,10 @@ Nothing is registered or published by the repository itself.
    is green (run it with `workflow_dispatch` if needed).
 4. Do a dry run (above) on the merge commit and check that every job passes
    and that the Linux x86_64 job shows no stale profile warning. A tag build
-   would fail on that warning.
+   would fail on that warning. Count the merge commit against the last
+   release tag with `tools/icount.py`
+   ([Benchmarks](benchmarks.md#instruction-counts)) and give the table in the
+   release notes.
 5. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. The `release` job
    attaches the files and publishes the release (drafted first, published after
    the upload, so it is never public without its assets).
