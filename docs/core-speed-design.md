@@ -845,8 +845,18 @@ Each of these needs its own measurement and proof before it is built.
    slower in 17 of 18 harness cells. On the PGO build the same commit is
    within A/A or faster in 26 of 30 cells. Since Red runs none of the transfer
    code, this is a code layout or inlining effect, not the transfer itself.
-   It is to be settled before the next emulator release, together with the
-   default-build numbers for full LTO in item 8.
+
+   Settled for 0.2.0 by `tools/icount.py`, which counts the work and not the
+   time. In the default build #42 retires 0.92% to 5.70% fewer instructions
+   than 5ac0ed6 in each of the 12 `benchmark.rs` cells, 3.17% fewer over
+   all of them, with the same outputs. So the slower wall time is code
+   placement, and no change to the code is made for it.
+
+   | Game | Batch | Frame | Audio | Render |
+   | --- | ---: | ---: | ---: | ---: |
+   | Red | -5.70% | -5.70% | -1.15% | -0.92% |
+   | Gold | -4.93% | -4.92% | -2.28% | -2.18% |
+   | Crystal | -2.68% | -2.68% | -1.41% | -1.17% |
 
 ## Measured gains
 

@@ -8,21 +8,19 @@ starting point for picking accuracy fixes.
 
 ## Scores
 
-Run on 2026-11-20 with the STAT line fix of
-[#56](https://github.com/afk-sapien/pyboy-rs/pull/56), through a local
-release build of the wheel. Each cell is passed tests out of tests run on that
-model.
+Run on 2026-11-25 on 0.2.0, through the Linux x86_64 wheel of the release.
+Each cell is passed tests out of tests run on that model.
 
 | Suite | DMG | CGB |
 | --- | --- | --- |
-| Mooneye (automatic tests) | 64 of 94 | 60 of 86 |
+| Mooneye (automatic tests) | 67 of 94 | 62 of 86 |
 | SameSuite | not run on DMG | 11 of 69 |
 | Blargg, the ROM's own report | 25 of 39 | 26 of 32 |
 | Blargg, c-sp screenshots | 6 of 8 | 6 of 8 |
 | dmg-acid2 | 1 of 1 | 1 of 1 |
 | cgb-acid2 | not a DMG test | 1 of 1 |
 | rtc3test | 0 of 3 | 0 of 3 |
-| All | 96 of 145 | 105 of 200 |
+| All | 99 of 145 | 107 of 200 |
 
 No test timed out or raised an error. Tests made for other models or
 revisions are left out of the counts (see [Method](#method)).
@@ -38,6 +36,17 @@ revisions are left out of the counts (see [Method](#method)).
 | EI delay and the halt bug | [#54](https://github.com/afk-sapien/pyboy-rs/pull/54) | 92 of 145 | 102 of 200 |
 | Interrupt dispatch and the IE push | [#55](https://github.com/afk-sapien/pyboy-rs/pull/55) | 93 of 145 | 103 of 200 |
 | STAT line | [#56](https://github.com/afk-sapien/pyboy-rs/pull/56) | 96 of 145 | 105 of 200 |
+| Mode 3 and fine scroll | [#58](https://github.com/afk-sapien/pyboy-rs/pull/58) | 99 of 145 | 107 of 200 |
+| Release 0.2.0 | v0.2.0 | 99 of 145 | 107 of 200 |
+
+0.2.0 passes 51 tests more than 0.1.9 (the first run) and fails none that
+0.1.9 passes. #60 and the release commit give the same 440 results as #58.
+
+The mode 3 fix makes Mooneye `acceptance/ppu/intr_2_mode0_timing` and
+`intr_2_mode3_timing` pass on each model, and `hblank_ly_scx_timing-GS` on
+DMG. Mode 3 now takes 172 cycles plus `SCX & 7`, and in single speed a STAT
+read sees the mode 4 cycles ahead and an LY read sees the line 8 cycles
+ahead. No test changed from pass to fail.
 
 The STAT line fix makes Mooneye `acceptance/ppu/stat_irq_blocking` and
 `stat_lyc_onoff` pass on each model, and `vblank_stat_intr-GS` on DMG. The
@@ -87,7 +96,7 @@ the values it prints, and `cgb_sound` test 09 prints other wave bytes.
 | --- | --- | --- |
 | Instruction, interrupt and OAM DMA timing (top-level `acceptance`) | 12 of 29 | 10 of 27 |
 | Timer (`acceptance/timer`) | 13 of 13 | 13 of 13 |
-| PPU (`acceptance/ppu`, `misc/ppu`) | 5 of 12 | 3 of 8 |
+| PPU (`acceptance/ppu`, `misc/ppu`) | 8 of 12 | 5 of 8 |
 | OAM DMA (`acceptance/oam_dma`) | 2 of 3 | 2 of 2 |
 | Register bits, DAA, IE push (`acceptance/bits`, `instr`, `interrupts`, `misc/bits`) | 5 of 5 | 5 of 5 |
 | State after boot (`boot_*`, `serial/boot_sclk_align`) | 0 of 4 | 0 of 3 |
@@ -259,5 +268,7 @@ are cached. `--only` runs some suites. The output folder gets
 and model, with the frames run and the reason for each verdict) and the
 compared pictures. The first run is kept in `data/conformance/2026-11-18` in
 the maintainer checkout, the runs before and after #41 in
-`data/conformance/2026-11-18-f020652` and `2026-11-18-io-reads`, and the run
-after #42 in `2026-11-18-hdma`. `data/` is not part of the repository.
+`data/conformance/2026-11-18-f020652` and `2026-11-18-io-reads`, the run
+after #42 in `2026-11-18-hdma`, and the runs of the 0.1.9 and 0.2.0 wheels in
+`2026-11-19-v0.1.9` and `2026-11-25-v0.2.0`. `data/` is not part of the
+repository.
