@@ -1,8 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-Draft for 0.2.0. Not released.
+pyboy-rs now follows the Game Boy hardware where it and PyBoy differ. Up to
+0.1.9 it followed PyBoy 2.7.0, and its tests checked its output against
+PyBoy's. This release fixes the timer, EI and the halt bug, interrupt
+dispatch, the STAT interrupt line and the length of mode 3, and also IO
+register reads and CGB VRAM transfers. These change when timer,
+interrupt and LCD events happen, so after the same input a game can show
+other screens, play other audio and save other states than in PyBoy 2.7.0 or
+in pyboy-rs 0.1.9. The save state body keeps PyBoy's format 15 layout, and a
+pyboy-rs section after it holds what format 15 has no field for.
+
+On the test ROM suites of `tools/conformance.py`, this release passes 99 of
+145 tests on DMG and 107 of 200 on CGB, where 0.1.9 passes 75 and 80
+([docs/conformance.md](docs/conformance.md)). No test passes in 0.1.9 and
+fails here.
+
+It also has the 0.1.9 fix for hooks and ROM writes and the 0.1.9 PGO
+profile scan rule, which reached main as #46 and #47.
 
 ### Changed
 
@@ -20,9 +36,33 @@ Draft for 0.2.0. Not released.
   only while the game never reaches a case this release runs differently,
   such as the timer cases under Fixed. Otherwise the replay raises
   `ReplayDivergence` at the first checksum that differs.
+- `PyBoy.tick(count)` runs its frames in native calls of up to 600 frames
+  with the GIL released, where it made two native calls a frame and took
+  the GIL back after each. A recording, the last frame of `tick_read`, the
+  frame where queued input comes due and a frame a hook stops keep one call
+  a frame, so every frame runs as before. On one thread this is level
+  within noise, on two and four threads total frames per second rise 2.2%
+  and 3.5%, and one-frame ticks with the picture off lose up to 2.8% on
+  Crystal.
+- Release builds use full LTO (`lto = "fat"`, one codegen unit) and keep
+  unwinding, so a core panic still reaches Python as an exception. The
+  native module is about 70 kB smaller.
 
 ### Fixed
 
+- IO registers read back as on hardware. The unused bits of SC, TAC, IF and
+  STAT read 1, FF46 reads the last OAM DMA source, FF50 reads 0xFE until the
+  boot ROM is off, and unmapped IO, and the CGB-only registers outside CGB
+  mode, read 0xFF. A KEY1 write sets only the speed switch request, so the
+  combined CGB `cpu_instrs` ROM runs every subtest in double speed. CGB wave
+  RAM access during playback goes to the byte of the current sample. Three
+  more tests pass on DMG and four more on CGB.
+- CGB VRAM transfers (GDMA and HDMA) run as in SameBoy. A general transfer
+  holds the CPU for the copy. An HBlank transfer copies one block as each
+  visible line enters mode 0, or one block when started with the LCD off,
+  and a halted CPU takes a block only as it wakes in mode 0. The counters
+  keep their place, the addresses are masked as on hardware, and HDMA1 to
+  HDMA4 read 0xFF. SameSuite `dma` goes from 0 of 4 to 4 of 4.
 - The timer counts as on hardware. TIMA counts on each falling edge of the
   system counter bit that TAC selects, the counter whose high byte is DIV.
   So a DIV write, or a TAC write that stops the timer or selects another
@@ -55,14 +95,15 @@ Draft for 0.2.0. Not released.
   and line changes. Five Mooneye PPU results go from fail to pass, 3 on
   DMG and 2 on CGB.
 - Mode 3 takes 172 cycles and one more for each pixel of fine scroll
-  (`SCX & 7`), and mode 0 takes the rest of the line. A STAT read shows a
-  new mode from 4 cycles before it starts, and an LY read shows a new line
-  from 8 cycles before it starts. That is because PyBoy makes each memory
-  access 4 cycles before the hardware does, and LY moves on 4 cycles
-  before mode 2. A halted CPU wakes on a machine cycle, so an interrupt
-  flagged partway through one is taken as it ends. PyBoy 2.7.0 gives mode
-  3 170 cycles and mode 0 206 whatever SCX is, and wakes at the flag.
-  Five Mooneye PPU results go from fail to pass, 3 on DMG and 2 on CGB.
+  (`SCX & 7`), and mode 0 takes the rest of the line. In single speed a
+  STAT read shows a new mode from 4 cycles before it starts, and an LY read
+  shows a new line from 8 cycles before it starts. That is because PyBoy
+  makes each memory access 4 cycles before the hardware does, and LY moves
+  on 4 cycles before mode 2. A halted CPU wakes on a machine cycle, so an
+  interrupt flagged partway through one is taken as it ends. PyBoy 2.7.0
+  gives mode 3 170 cycles and mode 0 206 whatever SCX is, and wakes at the
+  flag. Five Mooneye PPU results go from fail to pass, 3 on DMG and 2 on
+  CGB.
 - With the picture off, a halted CPU could wake up to 3 cycles later than
   in PyBoy when an LCD mode change came just before a timer or serial
   event, since the instruction cache skips mode changes that set no flag.
@@ -79,12 +120,64 @@ Draft for 0.2.0. Not released.
 
 ### Speed
 
+Frames per second of the emulator core alone, without Python, each side built
+as its Linux x86_64 wheel is (with PGO from its own profile). 0.1.9 (5751e26)
+against 0.2.0 (ae4769d, the same core code as this release), best of 9
+rounds of 43,200 frames on one core. Both profiles were recorded by the
+same tools (#59) from the same states. Each round ran 0.1.9, 0.2.0 and 0.1.9
+again, and the two 0.1.9 runs agreed within 2.4%. "Input" presses a seeded
+random button for 1 to 16 frames, then waits 1 to 30 frames. The two
+releases end in different states, since the accuracy fixes change what the
+games do.
+
+| Game | Input | Picture off | Every 30th frame | Every frame |
+| --- | --- | ---: | ---: | ---: |
+| Red | idle | +4.5% | +7.4% | +3.5% |
+| Red | input | +11.4% | +9.7% | +4.8% |
+| Gold | idle | +8.0% | +9.1% | +9.8% |
+| Gold | input | +7.8% | +7.3% | +8.8% |
+| Crystal | idle | +5.3% | +4.6% | +9.5% |
+| Crystal | input | +5.3% | +5.3% | +6.6% |
+
+`examples/benchmark.rs` on the same builds and rounds, one driver on both
+sides, where the two 0.1.9 runs agreed within 1.8%:
+
+| Game | Batch | Frame | Audio | Render |
+| --- | ---: | ---: | ---: | ---: |
+| Red | +4.5% | +8.1% | +2.7% | +5.1% |
+| Gold | +6.9% | +6.8% | +5.6% | +7.9% |
+| Crystal | +4.6% | +8.5% | +7.5% | +7.3% |
+
+Peak resident memory fell by 128 to 132 kB. Time spent in Python is not in
+these numbers. The other four wheels are built without PGO and were not
+timed.
+
+Instructions retired in `examples/benchmark.rs` on the default release build
+(no PGO), counted by `tools/icount.py` under Cachegrind, 0.2.0 against
+v0.1.9:
+
+| Game | Batch | Frame | Audio | Render |
+| --- | ---: | ---: | ---: | ---: |
+| Red | -3.24% | -3.24% | -4.87% | -6.00% |
+| Gold | -1.84% | -1.84% | -4.45% | -5.31% |
+| Crystal | -1.60% | -1.60% | -4.36% | -5.11% |
+
+Counts measure work, not time. Full LTO alone made Red batch and frame mode
+4.7% to 5.4% slower on the default build (#43), so the counts do not give
+the speed of the four wheels without PGO.
+
+Where the gain comes from:
+
 - The next LCD mode change that sets an interrupt flag is worked out in
   closed form, where it was found one mode change at a time, and an SCX
   write forgets it only when the fine scroll changes outside VBlank. The
   output is the same. On the Red, Gold and Crystal speed fixtures in
   `examples/benchmark.rs`, batch and frame mode run 1.4% to 3.3% faster
   than before by median, and audio and render mode within 1% of before.
+- Background and window tiles are drawn whole into a padded line buffer.
+  Cells that draw every frame gain 2.6% to 5.1% on the PGO build.
+- Full LTO (under Changed) gains 0.0% to 2.9% in the 18 cells and 0.9% to
+  5.0% in `examples/benchmark.rs` on the PGO build.
 
 ### Compatibility
 
@@ -103,6 +196,12 @@ Draft for 0.2.0. Not released.
 
 ### Added
 
+- `tools/conformance.py` runs the Mooneye, SameSuite, Blargg, dmg-acid2,
+  cgb-acid2 and rtc3test suites against the installed core and writes a
+  pass table per suite and model. It is a report, not a CI gate. No test
+  ROM is stored in the repository. The tool downloads each file and refuses
+  one whose sha256 differs from the pinned value. Scores and method are in
+  [docs/conformance.md](docs/conformance.md).
 - `PyBoy.state_body(state)` and `Machine.state_body(state)` return the
   format 15 body of a saved state. `pyboy_rs.STATE_SECTION_VERSION` and
   `pyboy_rs.STATE_SECTION_SINCE` give the section version this build writes
