@@ -77,6 +77,15 @@ Draft for 0.2.0. Not released.
   sets up each Python class runs in a different order in each process and
   is left out of the profile. It runs once per class at import.
 
+### Speed
+
+- The next LCD mode change that sets an interrupt flag is worked out in
+  closed form, where it was found one mode change at a time, and an SCX
+  write forgets it only when the fine scroll changes outside VBlank. The
+  output is the same. On the Red, Gold and Crystal speed fixtures in
+  `examples/benchmark.rs`, batch and frame mode run 1.4% to 3.3% faster
+  than before by median, and audio and render mode within 1% of before.
+
 ### Compatibility
 
 - pyboy-rs 0.1.9 and older refuse a state saved by this release, with

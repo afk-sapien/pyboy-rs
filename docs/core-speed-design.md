@@ -963,3 +963,34 @@ rounds that run beside the harness:
   new profile is the likely cause, as in #56. The 9 idle harness cells
   give the same state and frame hashes as the parent over 216,000
   frames, and the 9 input cells do not.
+
+#60 takes back the work #58 added, with the same output.
+`Lcd::next_flag_change` stepped through each mode change up to the next one
+that sets a flag, and #58's SCX write reset sent games that scroll in VBlank
+through it once more a frame. It now works the answer out in closed form,
+since past the current line every visible line has its mode changes at the
+same offsets from its start. An SCX write resets the deadline only when it
+changes `SCX & 7` with the LCD on outside VBlank. Resetting only while the
+current line's mode 3 is still to end would not be enough, since the
+prediction can reach later lines, whose mode 3 moves with SCX too. A cached
+mode 3 length would save nothing, since it is 172 plus `SCX & 7`. Counted
+over the four modes of the Red `benchmark.rs` scene, the function ran 94.0
+million blocks at #58 and 73.1 million at #56 and #52, and runs 6.6 million,
+in 967,788 calls against 1,002,948 at #58 and 965,675 at #56. All pyboy-core
+work falls 2.71% against #58, 2.07% against #56 and 3.20% against #52, so
+the 0.66% that #58 added came back, and the older cost of the walk with it.
+
+Timed with each build's profile recorded by the tools of #59, by median over
+100 rounds on Red and 50 on Gold and Crystal, against #58 and then against
+#52, with A/A at most 0.3% on Red and 0.5% on Gold and Crystal:
+
+| Game | Batch | Frame | Audio | Render |
+| --- | ---: | ---: | ---: | ---: |
+| Red | +3.3%, +1.4% | +3.3%, +1.7% | +0.1%, -0.7% | -0.2%, -1.5% |
+| Gold | +2.5%, +1.3% | +1.8%, +0.4% | -0.1%, +0.1% | -0.5%, +0.4% |
+| Crystal | +1.4%, +0.4% | +1.7%, +1.3% | +0.7%, +1.1% | +0.7%, +0.8% |
+
+Red audio and render stay slower than #52, as they were at #58, and this
+change leaves them where #58 had them. All 18 harness cells give the same
+state and frame hashes as #58 over 216,000 frames, and each of the 440
+conformance results is the same.

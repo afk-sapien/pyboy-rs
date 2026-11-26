@@ -1331,6 +1331,11 @@ impl Motherboard {
                     }
                     0xff40..=0xff4b => {
                         self.tick_lcd(cpu);
+                        // The predicted flag change reads SCX only through
+                        // the length of mode 3, and in VBlank not at all.
+                        let mode_3_moves = self.lcd.lcdc & 128 != 0
+                            && self.lcd.next_stat_mode != 1
+                            && (self.lcd.scx ^ value) & 7 != 0;
                         match address {
                             // A write that raises the STAT line requests
                             // the interrupt at once.
@@ -1354,9 +1359,10 @@ impl Motherboard {
                             0xff4a => self.lcd.wy = value,
                             _ => self.lcd.wx = value,
                         }
-                        // The predicted flag change reads these, and SCX
-                        // through the length of mode 3.
-                        if matches!(address, 0xff40 | 0xff41 | 0xff43 | 0xff45) {
+                        // The predicted flag change reads these.
+                        if matches!(address, 0xff40 | 0xff41 | 0xff45)
+                            || (address == 0xff43 && mode_3_moves)
+                        {
                             self.reset_lcd_deadline();
                         }
                     }
